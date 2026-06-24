@@ -22,10 +22,19 @@ interface PlaceRepository {
         limit: Int = 300,
     ): List<Place>
 
-    /** 목록: 이름/주소 검색 + 카테고리 필터 */
+    /** 목록: 이름/주소 검색 + 카테고리 필터 (이름순) */
     suspend fun search(
         query: String,
         category: PlaceCategory? = null,
+        limit: Int = 200,
+    ): List<Place>
+
+    /** 목록: 이름/주소 검색 + 카테고리 필터, 사용자 위치에서 가까운 순 (각 항목에 거리 채움) */
+    suspend fun searchNearby(
+        query: String,
+        category: PlaceCategory?,
+        userLat: Double,
+        userLng: Double,
         limit: Int = 200,
     ): List<Place>
 

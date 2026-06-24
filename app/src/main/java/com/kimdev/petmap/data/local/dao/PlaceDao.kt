@@ -53,6 +53,24 @@ interface PlaceDao {
     )
     suspend fun search(query: String, category: String?, limit: Int): List<PlaceEntity>
 
+    /** 이름/주소 검색 + 카테고리 필터, 지정 좌표에서 가까운 순 */
+    @Query(
+        """
+        SELECT * FROM places
+        WHERE (:query = '' OR name LIKE '%' || :query || '%' OR roadAddress LIKE '%' || :query || '%')
+          AND (:category IS NULL OR category = :category)
+        ORDER BY ((lat - :lat) * (lat - :lat) + (lng - :lng) * (lng - :lng)) ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun searchByDistance(
+        query: String,
+        category: String?,
+        lat: Double,
+        lng: Double,
+        limit: Int,
+    ): List<PlaceEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(places: List<PlaceEntity>)
 

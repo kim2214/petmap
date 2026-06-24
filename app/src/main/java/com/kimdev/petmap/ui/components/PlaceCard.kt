@@ -1,5 +1,6 @@
 package com.kimdev.petmap.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.domain.util.OpeningHours
+import java.time.LocalDateTime
+import kotlin.math.roundToInt
 
 @Composable
 fun PlaceCard(
@@ -45,11 +49,18 @@ fun PlaceCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                AssistChip(
-                    onClick = onClick,
-                    label = { Text(place.category.label) },
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(top = 6.dp),
-                )
+                ) {
+                    AssistChip(
+                        onClick = onClick,
+                        label = { Text(place.category.label) },
+                    )
+                    place.distanceMeters?.let { Text(formatDistance(it), style = MaterialTheme.typography.labelMedium) }
+                    OpenBadge(place)
+                }
             }
             IconButton(onClick = onToggleFavorite) {
                 Icon(
@@ -60,3 +71,24 @@ fun PlaceCard(
         }
     }
 }
+
+@Composable
+private fun OpenBadge(place: Place) {
+    val open = OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())
+    when (open) {
+        true -> Text(
+            "영업중",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        false -> Text(
+            "영업종료",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        null -> Unit
+    }
+}
+
+private fun formatDistance(m: Double): String =
+    if (m < 1000) "${m.roundToInt()}m" else "${(m / 100).roundToInt() / 10.0}km"

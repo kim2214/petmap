@@ -57,6 +57,16 @@ class PlaceRepositoryImpl @Inject constructor(
     override suspend fun search(query: String, category: PlaceCategory?, limit: Int): List<Place> =
         placeDao.search(query.trim(), category?.name, limit).map { it.toDomain() }
 
+    override suspend fun searchNearby(
+        query: String,
+        category: PlaceCategory?,
+        userLat: Double,
+        userLng: Double,
+        limit: Int,
+    ): List<Place> =
+        placeDao.searchByDistance(query.trim(), category?.name, userLat, userLng, limit)
+            .map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
+
     override suspend fun getPlace(id: String): Place? = placeDao.getById(id)?.toDomain()
 
     override fun observeFavorites(): Flow<List<Place>> =
@@ -96,3 +106,11 @@ class PlaceRepositoryImpl @Inject constructor(
 /** 장소 목록에 즐겨찾기 상태를 결합 (ViewModel 에서 사용) */
 fun List<Place>.withFavorites(favoriteIds: Set<String>): List<Place> =
     map { it.copy(isFavorite = it.id in favoriteIds) }
+
+/** 두 좌표 간 근사 거리(m). 정렬/표시용 등거리 근사. */
+fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+    val r = 6_371_000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLng = Math.toRadians(lng2 - lng1) * cos(Math.toRadians((lat1 + lat2) / 2))
+    return r * kotlin.math.sqrt(dLat * dLat + dLng * dLng)
+}

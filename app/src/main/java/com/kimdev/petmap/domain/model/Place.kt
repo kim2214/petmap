@@ -18,6 +18,8 @@ data class Place(
     val homepage: String?,
     val petInfo: PetInfo,
     val isFavorite: Boolean = false,
+    /** 사용자 위치 기준 거리(m). 위치를 모르면 null */
+    val distanceMeters: Double? = null,
 )
 
 /** 반려동물 동반 관련 정보 */
