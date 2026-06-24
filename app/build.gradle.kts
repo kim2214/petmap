@@ -17,11 +17,11 @@ val localProps = Properties().apply {
 fun prop(key: String, default: String = "") = localProps.getProperty(key) ?: default
 
 android {
-    namespace = "com.example.petmap"
+    namespace = "com.kimdev.petmap"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.petmap"
+        applicationId = "com.kimdev.petmap"
         minSdk = 30
         targetSdk = 36
         versionCode = 1
