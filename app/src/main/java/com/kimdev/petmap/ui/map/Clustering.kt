@@ -10,14 +10,26 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.pow
 
-/** 지도에 그릴 항목: 단일 장소(place != null) 또는 묶인 클러스터 */
+/** 지도에 그릴 항목: 단일 장소(single != null) 또는 여러 장소가 묶인 클러스터 */
 data class MapCluster(
     val id: String,
     val lat: Double,
     val lng: Double,
-    val count: Int,
-    val place: Place?,
-)
+    val members: List<Place>,
+) {
+    val count: Int get() = members.size
+    val single: Place? get() = if (members.size == 1) members[0] else null
+
+    /** 멤버들이 차지하는 대략적 범위(m). 0에 가까우면 사실상 같은 좌표 → 줌해도 안 쪼개짐 */
+    fun spanMeters(): Double {
+        if (members.size < 2) return 0.0
+        val avgLat = members.sumOf { it.lat } / members.size
+        val dLat = (members.maxOf { it.lat } - members.minOf { it.lat }) * 111_320.0
+        val dLng = (members.maxOf { it.lng } - members.minOf { it.lng }) *
+            111_320.0 * max(0.01, cos(Math.toRadians(avgLat)))
+        return max(dLat, dLng)
+    }
+}
 
 /** 줌 레벨에 따른 장소 조회 반경(km) 근사 */
 fun radiusForZoom(zoom: Double): Double = when {
@@ -52,13 +64,13 @@ fun clusterPlaces(places: List<Place>, zoom: Double, cellPx: Double = 72.0): Lis
     return groups.values.map { members ->
         if (members.size == 1) {
             val p = members[0]
-            MapCluster(id = p.id, lat = p.lat, lng = p.lng, count = 1, place = p)
+            MapCluster(id = p.id, lat = p.lat, lng = p.lng, members = members)
         } else {
             val cLat = members.sumOf { it.lat } / members.size
             val cLng = members.sumOf { it.lng } / members.size
             MapCluster(
                 id = "c_${members.first().id}_${members.size}",
-                lat = cLat, lng = cLng, count = members.size, place = null,
+                lat = cLat, lng = cLng, members = members,
             )
         }
     }

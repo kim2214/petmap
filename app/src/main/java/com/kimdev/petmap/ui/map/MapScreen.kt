@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -32,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.ui.components.CategoryFilterRow
+import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlacePreviewSheet
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -47,8 +53,15 @@ import com.naver.maps.map.compose.NaverMap
 import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.compose.rememberFusedLocationSource
 import com.naver.maps.map.overlay.OverlayImage
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 
-@OptIn(ExperimentalNaverMapApi::class, ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
+@OptIn(
+    ExperimentalNaverMapApi::class,
+    ExperimentalPermissionsApi::class,
+    ExperimentalMaterial3Api::class,
+    FlowPreview::class,
+)
 @Composable
 fun MapScreen(
     onPlaceClick: (String) -> Unit,
@@ -58,6 +71,8 @@ fun MapScreen(
 
     // 마커 탭 시 미리보기할 장소
     var previewPlace by remember { mutableStateOf<Place?>(null) }
+    // 더 못 쪼개는 클러스터를 탭했을 때 펼쳐 보여줄 장소 목록
+    var clusterList by remember { mutableStateOf<List<Place>?>(null) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition(
@@ -78,12 +93,15 @@ fun MapScreen(
         trackingMode = if (granted) LocationTrackingMode.Follow else LocationTrackingMode.NoFollow
     }
 
-    // 카메라가 멈출 때마다 보이는 영역을 다시 조회 + 클러스터링
-    LaunchedEffect(cameraPositionState.isMoving, state.isSeeding) {
-        if (!cameraPositionState.isMoving && !state.isSeeding) {
-            val pos = cameraPositionState.position
-            viewModel.onCameraIdle(pos.target.latitude, pos.target.longitude, pos.zoom)
-        }
+    // 카메라 위치/줌이 바뀔 때마다(드래그·줌·프로그램적 이동 포함) 영역 재조회 + 클러스터링.
+    // isMoving 대신 position 을 직접 관찰해야 클러스터 탭으로 인한 프로그램적 줌도 반영된다.
+    LaunchedEffect(state.isSeeding) {
+        if (state.isSeeding) return@LaunchedEffect
+        snapshotFlow { cameraPositionState.position }
+            .debounce(180)
+            .collect { pos ->
+                viewModel.onCameraIdle(pos.target.latitude, pos.target.longitude, pos.zoom)
+            }
     }
 
     // 클러스터 아이콘 캐시 (개수별)
@@ -102,13 +120,13 @@ fun MapScreen(
             uiSettings = MapUiSettings(isLocationButtonEnabled = false),
         ) {
             state.clusters.forEach { cluster ->
-                val place = cluster.place
-                if (place != null) {
+                val single = cluster.single
+                if (single != null) {
                     Marker(
-                        state = MarkerState(position = LatLng(place.lat, place.lng)),
-                        captionText = place.name,
+                        state = MarkerState(position = LatLng(single.lat, single.lng)),
+                        captionText = single.name,
                         onClick = {
-                            previewPlace = place
+                            previewPlace = single
                             true
                         },
                     )
@@ -118,10 +136,16 @@ fun MapScreen(
                         icon = clusterIcon(cluster.count),
                         anchor = Offset(0.5f, 0.5f),
                         onClick = {
-                            // 클러스터 탭 → 해당 위치로 줌인
-                            val z = (cameraPositionState.position.zoom + 2.0).coerceAtMost(18.0)
-                            cameraPositionState.position =
-                                CameraPosition(LatLng(cluster.lat, cluster.lng), z)
+                            val z = cameraPositionState.position.zoom
+                            // 더 줌인해도 안 쪼개지면(같은 좌표/최대 줌) 목록으로 펼친다
+                            if (z >= MAX_CLUSTER_ZOOM || cluster.spanMeters() < CO_LOCATED_M) {
+                                clusterList = cluster.members
+                            } else {
+                                cameraPositionState.position = CameraPosition(
+                                    LatLng(cluster.lat, cluster.lng),
+                                    (z + 2.0).coerceAtMost(MAX_CLUSTER_ZOOM),
+                                )
+                            }
                             true
                         },
                     )
@@ -178,7 +202,43 @@ fun MapScreen(
             )
         }
     }
+
+    // 겹쳐 있어 줌으로 못 펼치는 클러스터 → 장소 목록 바텀시트
+    clusterList?.let { places ->
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { clusterList = null },
+            sheetState = sheetState,
+        ) {
+            Text(
+                text = "이 위치의 장소 ${places.size}곳",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp),
+            ) {
+                items(places, key = { it.id }) { p ->
+                    PlaceCard(
+                        place = p.copy(isFavorite = p.id in state.favoriteIds),
+                        onClick = {
+                            clusterList = null
+                            onPlaceClick(p.id)
+                        },
+                        onToggleFavorite = { viewModel.toggleFavorite(p) },
+                    )
+                }
+            }
+        }
+    }
 }
+
+// 네이버 지도 최대 줌(21) 직전. 이 이상에선 줌인 대신 목록으로 펼친다.
+private const val MAX_CLUSTER_ZOOM = 19.0
+// 멤버들이 이 거리(m) 이내면 사실상 같은 좌표로 보고 목록으로 펼친다.
+private const val CO_LOCATED_M = 25.0
 
 @Composable
 private fun SeedingOverlay() {
