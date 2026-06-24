@@ -40,7 +40,7 @@ fun ListScreen(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(state.visiblePlaces, key = { it.id }) { place ->
+            items(state.places, key = { it.id }) { place ->
                 PlaceCard(
                     place = place,
                     onClick = { onPlaceClick(place.id) },

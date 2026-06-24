@@ -7,9 +7,13 @@ import com.example.petmap.domain.model.Place
 import com.example.petmap.domain.model.PlaceCategory
 import com.example.petmap.domain.repository.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -19,13 +23,9 @@ data class ListUiState(
     val places: List<Place> = emptyList(),
     val query: String = "",
     val selectedCategory: PlaceCategory? = null,
-) {
-    val visiblePlaces: List<Place>
-        get() = places
-            .filter { selectedCategory == null || it.category == selectedCategory }
-            .filter { query.isBlank() || it.name.contains(query, true) || it.roadAddress.contains(query, true) }
-}
+)
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class ListViewModel @Inject constructor(
     private val repository: PlaceRepository,
@@ -34,21 +34,30 @@ class ListViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ListUiState())
     val uiState: StateFlow<ListUiState> = _uiState.asStateFlow()
 
+    private var favoriteIds: Set<String> = emptySet()
+
     init {
-        load()
+        // 검색어/카테고리 변경을 디바운스하여 조회
+        viewModelScope.launch {
+            repository.ensureSeeded()
+            _uiState
+                .map { it.query to it.selectedCategory }
+                .distinctUntilChanged()
+                .debounce(250)
+                .collect { (query, category) -> runSearch(query, category) }
+        }
         viewModelScope.launch {
             repository.observeFavoriteIds().collect { ids ->
+                favoriteIds = ids
                 _uiState.update { it.copy(places = it.places.withFavorites(ids)) }
             }
         }
     }
 
-    private fun load() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val places = runCatching { repository.getPlaces() }.getOrDefault(emptyList())
-            _uiState.update { it.copy(isLoading = false, places = places) }
-        }
+    private suspend fun runSearch(query: String, category: PlaceCategory?) {
+        _uiState.update { it.copy(isLoading = true) }
+        val results = repository.search(query, category).withFavorites(favoriteIds)
+        _uiState.update { it.copy(isLoading = false, places = results) }
     }
 
     fun onQueryChange(q: String) = _uiState.update { it.copy(query = q) }

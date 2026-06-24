@@ -1,10 +1,16 @@
 package com.example.petmap.ui.map
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,13 +43,25 @@ fun MapScreen(
         )
     }
 
+    // 카메라가 멈출 때마다 보이는 영역을 다시 조회
+    LaunchedEffect(cameraPositionState.isMoving, state.isSeeding) {
+        if (!cameraPositionState.isMoving && !state.isSeeding) {
+            val pos = cameraPositionState.position
+            viewModel.onCameraIdle(
+                centerLat = pos.target.latitude,
+                centerLng = pos.target.longitude,
+                radiusKm = radiusForZoom(pos.zoom),
+            )
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         NaverMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = MapProperties(),
         ) {
-            state.visiblePlaces.forEach { place ->
+            state.places.forEach { place ->
                 Marker(
                     state = MarkerState(position = LatLng(place.lat, place.lng)),
                     captionText = place.name,
@@ -63,8 +81,40 @@ fun MapScreen(
                 .padding(12.dp),
         )
 
-        if (state.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        when {
+            state.isSeeding -> SeedingOverlay()
+            state.isLoading -> CircularProgressIndicator(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            )
         }
     }
+}
+
+@Composable
+private fun SeedingOverlay() {
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+            Text(
+                "장소 데이터를 준비하고 있어요…",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+    }
+}
+
+/** 줌 레벨에 따른 조회 반경(km) 근사 */
+private fun radiusForZoom(zoom: Double): Double = when {
+    zoom >= 15.0 -> 1.5
+    zoom >= 13.0 -> 4.0
+    zoom >= 11.0 -> 12.0
+    zoom >= 9.0 -> 40.0
+    else -> 120.0
 }

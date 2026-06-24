@@ -30,28 +30,49 @@ data class PetInfo(
     val outdoorAllowed: Boolean,
 )
 
+/**
+ * 한국문화정보원 "반려동물 동반가능 문화시설" 데이터셋의 카테고리3 기준.
+ * (동물약국·동물병원·반려동물용품·미용·카페·식당·펜션/호텔·박물관/미술관/문예회관·여행지·위탁관리)
+ */
 enum class PlaceCategory(val label: String) {
+    HOSPITAL("동물병원"),
+    PHARMACY("동물약국"),
+    SHOP("용품"),
+    GROOMING("미용"),
     CAFE("카페"),
     RESTAURANT("식당"),
     ACCOMMODATION("숙박"),
     CULTURE("문화시설"),
-    PARK("공원/야외"),
-    HOSPITAL("동물병원"),
-    SHOP("펫샵/용품"),
+    TRAVEL("여행지"),
+    CARE("위탁관리"),
     ETC("기타");
 
     companion object {
-        /** 공공데이터 카테고리 문자열을 앱 카테고리로 매핑 */
-        fun fromRaw(raw: String?): PlaceCategory = when {
-            raw == null -> ETC
-            raw.contains("카페") -> CAFE
-            raw.contains("음식") || raw.contains("식당") || raw.contains("레스토랑") -> RESTAURANT
-            raw.contains("숙박") || raw.contains("펜션") || raw.contains("호텔") -> ACCOMMODATION
-            raw.contains("문화") || raw.contains("미술") || raw.contains("박물") -> CULTURE
-            raw.contains("공원") || raw.contains("야외") -> PARK
-            raw.contains("병원") -> HOSPITAL
-            raw.contains("펫") || raw.contains("용품") -> SHOP
-            else -> ETC
+        /** 카테고리3 문자열을 앱 카테고리로 매핑 (정확 일치 우선, 그 외 키워드 폴백) */
+        fun fromRaw(raw: String?): PlaceCategory = when (raw?.trim()) {
+            null, "" -> ETC
+            "동물병원" -> HOSPITAL
+            "동물약국" -> PHARMACY
+            "반려동물용품" -> SHOP
+            "미용" -> GROOMING
+            "카페" -> CAFE
+            "식당" -> RESTAURANT
+            "펜션", "호텔" -> ACCOMMODATION
+            "박물관", "미술관", "문예회관" -> CULTURE
+            "여행지" -> TRAVEL
+            "위탁관리" -> CARE
+            else -> when {
+                raw.contains("병원") -> HOSPITAL
+                raw.contains("약국") -> PHARMACY
+                raw.contains("용품") -> SHOP
+                raw.contains("미용") -> GROOMING
+                raw.contains("카페") -> CAFE
+                raw.contains("식당") || raw.contains("음식") -> RESTAURANT
+                raw.contains("펜션") || raw.contains("호텔") || raw.contains("숙박") -> ACCOMMODATION
+                raw.contains("박물") || raw.contains("미술") || raw.contains("문예") -> CULTURE
+                raw.contains("여행") -> TRAVEL
+                else -> ETC
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.petmap.data.mapper
 
 import com.example.petmap.data.local.entity.FavoriteEntity
+import com.example.petmap.data.local.entity.PlaceEntity
 import com.example.petmap.data.remote.dto.PlaceDto
 import com.example.petmap.domain.model.PetInfo
 import com.example.petmap.domain.model.Place
@@ -34,6 +35,47 @@ fun PlaceDto.toDomain(): Place? {
             indoorAllowed = indoorAllowed.toBool(),
             outdoorAllowed = outdoorAllowed.toBool(),
         ),
+    )
+}
+
+/** 로컬 places Entity → 도메인 (category 컬럼엔 PlaceCategory.name 이 저장돼 있음) */
+fun PlaceEntity.toDomain(): Place = Place(
+    id = id,
+    name = name,
+    category = runCatching { PlaceCategory.valueOf(category) }.getOrDefault(PlaceCategory.ETC),
+    roadAddress = roadAddress,
+    lotAddress = lotAddress,
+    lat = lat,
+    lng = lng,
+    phone = phone,
+    operatingTime = operatingTime,
+    closedDays = closedDays,
+    homepage = homepage,
+    petInfo = PetInfo(allowedPetSize, restriction, indoorAllowed, outdoorAllowed),
+)
+
+/** 원격 DTO → 로컬 places Entity (하이브리드 갱신용) */
+fun PlaceDto.toEntity(): PlaceEntity? {
+    val lat = latitude ?: return null
+    val lng = longitude ?: return null
+    val placeName = name ?: return null
+    fun String?.bool() = this?.let { it == "Y" || it == "가능" } ?: false
+    return PlaceEntity(
+        id = "${placeName}_${lat}_${lng}",
+        name = placeName,
+        category = PlaceCategory.fromRaw(category).name,
+        roadAddress = roadAddress ?: lotAddress.orEmpty(),
+        lotAddress = lotAddress.orEmpty(),
+        lat = lat,
+        lng = lng,
+        phone = phone?.takeIf { it.isNotBlank() },
+        operatingTime = operatingTime?.takeIf { it.isNotBlank() },
+        closedDays = closedDays?.takeIf { it.isNotBlank() },
+        homepage = homepage?.takeIf { it.isNotBlank() },
+        allowedPetSize = allowedPetSize?.takeIf { it.isNotBlank() },
+        restriction = restriction?.takeIf { it.isNotBlank() },
+        indoorAllowed = indoorAllowed.bool(),
+        outdoorAllowed = outdoorAllowed.bool(),
     )
 }
 

@@ -1,24 +1,40 @@
 package com.example.petmap.domain.repository
 
 import com.example.petmap.domain.model.Place
+import com.example.petmap.domain.model.PlaceCategory
 import kotlinx.coroutines.flow.Flow
 
 /**
- * 장소 데이터 접근 추상화. 구현체(data 계층)는 원격 API + 로컬 DB 를 조합한다.
- * UI/ViewModel 은 이 인터페이스에만 의존한다.
+ * 장소 데이터 접근 추상화.
+ * 데이터는 내장 CSV로 시딩된 Room 을 단일 소스로 사용하고, API 로 주기적 갱신(하이브리드)한다.
  */
 interface PlaceRepository {
 
-    /** 지정 영역(또는 전체) 의 반려동물 동반 가능 장소 조회 */
-    suspend fun getPlaces(query: String? = null): List<Place>
+    /** 내장 데이터가 비어 있으면 최초 1회 시딩 */
+    suspend fun ensureSeeded()
 
-    /** 단일 장소 상세 */
+    /** 지도 뷰포트: 중심 좌표 기준 반경 박스 내 장소 (가까운 순, 개수 제한) */
+    suspend fun getPlacesInBounds(
+        centerLat: Double,
+        centerLng: Double,
+        radiusKm: Double,
+        category: PlaceCategory? = null,
+        limit: Int = 300,
+    ): List<Place>
+
+    /** 목록: 이름/주소 검색 + 카테고리 필터 */
+    suspend fun search(
+        query: String,
+        category: PlaceCategory? = null,
+        limit: Int = 200,
+    ): List<Place>
+
     suspend fun getPlace(id: String): Place?
 
-    /** 즐겨찾기한 장소 목록 (실시간 관찰) */
     fun observeFavorites(): Flow<List<Place>>
-
+    fun observeFavoriteIds(): Flow<Set<String>>
     suspend fun toggleFavorite(place: Place)
 
-    fun observeFavoriteIds(): Flow<Set<String>>
+    /** 하이브리드: 마지막 동기화가 오래됐고 키가 설정돼 있으면 API 로 갱신. 갱신 수행 시 true */
+    suspend fun refreshFromRemoteIfStale(now: Long): Boolean
 }

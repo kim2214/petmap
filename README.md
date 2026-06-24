@@ -64,7 +64,7 @@ naver.map.clientId=YOUR_NAVER_MAP_CLIENT_ID
 public.data.serviceKey=YOUR_PUBLIC_DATA_SERVICE_KEY
 ```
 
-- 두 키가 없어도 앱은 **샘플 데이터**로 실행됩니다. 단, **지도 타일 렌더링에는 네이버 키가 필요**합니다.
+- **장소 데이터는 앱에 내장**되어 있어 두 키가 없어도 목록/지도 마커가 표시됩니다. 단, **지도 타일 렌더링에는 네이버 키가 필요**하고, `public.data.serviceKey`는 하이브리드 갱신에만 쓰입니다.
 - 네이버 SDK 버전에 따라 매니페스트의 메타데이터 키 이름이 다릅니다
   (신규 콘솔: `com.naver.maps.map.NCP_KEY_ID` / 구형 콘솔: `com.naver.maps.map.CLIENT_ID`).
 
@@ -74,23 +74,28 @@ public.data.serviceKey=YOUR_PUBLIC_DATA_SERVICE_KEY
 # 또는 Android Studio에서 Sync 후 Run ▶
 ```
 
-## 🔌 데이터 연동 메모
+## 🗃️ 데이터 전략 (내장 CSV + 하이브리드 갱신)
 
-실제 공공데이터 연동 시 아래 두 파일을 사용하는 데이터셋에 맞게 수정하세요.
+API 통신 부담을 최소화하기 위해 **내장 CSV를 단일 소스로** 사용한다.
 
+- `app/src/main/assets/places.csv` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" 데이터셋(약 7만 행). APK 패키징 시 zip 압축되어 용량 영향은 ~2.4MB.
+- **최초 실행 시 1회** Room(`places` 테이블)에 시딩. 원본에 동일 레코드가 대량 중복돼 있어 `이름+좌표` 기준으로 정제하면 **약 23,925개 고유 장소**가 된다.
+- 지도/목록/검색은 모두 **로컬 Room 쿼리**로 처리 → 위치 기반 조회 시 네트워크 호출 0.
+- **하이브리드 갱신**: 마지막 동기화가 오래됐고(`SyncPreferences`, 기본 7일) 서비스 키가 있으면 백그라운드에서 공공데이터 API로 Room을 upsert.
+
+데이터셋을 새로 받으면 `places.csv`만 교체하면 된다(헤더명 기반 매핑이라 견고). API 연동부를 실제로 쓰려면:
 - `data/remote/api/PublicDataApi.kt` — 엔드포인트(데이터셋 UUID), 쿼리 파라미터
 - `data/remote/dto/PlaceResponse.kt` — 응답 컬럼명(`@SerialName`)
 
-현재는 "전국 반려동물 동반가능 문화시설" 표준 데이터셋을 기준으로 한 예시값이 들어 있습니다.
-
 ## 🗺️ 로드맵
 
+- [x] 내장 CSV 시딩 + Room 단일 소스
+- [x] 지도 뷰포트(반경) 기반 로컬 조회
+- [x] 하이브리드 갱신 plumbing (`refreshFromRemoteIfStale`)
 - [ ] 실제 공공데이터 API 연동 (엔드포인트/필드 확정)
 - [ ] 위치 권한 요청 + 내 위치로 카메라 이동
-- [ ] 마커 클릭 시 바텀시트 미리보기
-- [ ] 지도 영역(bounds) 기반 서버 페이징
+- [ ] 마커 클릭 시 바텀시트 미리보기 + 마커 클러스터링
 - [ ] 거리순 정렬, 영업중 필터
-- [ ] 다중 데이터셋(카페/식당/숙박) 통합
 
 ## 📄 라이선스
 

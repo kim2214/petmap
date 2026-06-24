@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.petmap.data.local.PetMapDatabase
 import com.example.petmap.data.local.dao.FavoriteDao
+import com.example.petmap.data.local.dao.PlaceDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,4 +25,7 @@ object DatabaseModule {
 
     @Provides
     fun provideFavoriteDao(db: PetMapDatabase): FavoriteDao = db.favoriteDao()
+
+    @Provides
+    fun providePlaceDao(db: PetMapDatabase): PlaceDao = db.placeDao()
 }
