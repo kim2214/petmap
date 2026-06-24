@@ -19,6 +19,7 @@ data class MapUiState(
     val isLoading: Boolean = false,
     val clusters: List<MapCluster> = emptyList(),
     val selectedCategory: PlaceCategory? = null,
+    val favoriteIds: Set<String> = emptySet(),
 )
 
 @HiltViewModel
@@ -41,6 +42,15 @@ class MapViewModel @Inject constructor(
             reload()
             if (repository.refreshFromRemoteIfStale(System.currentTimeMillis())) reload()
         }
+        viewModelScope.launch {
+            repository.observeFavoriteIds().collect { ids ->
+                _uiState.update { it.copy(favoriteIds = ids) }
+            }
+        }
+    }
+
+    fun toggleFavorite(place: Place) {
+        viewModelScope.launch { repository.toggleFavorite(place) }
     }
 
     /** 지도 카메라가 멈출 때마다 호출: 보이는 영역의 장소를 조회하고 클러스터링 */

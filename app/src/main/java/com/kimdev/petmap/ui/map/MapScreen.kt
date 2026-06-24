@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.common.Constants
+import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.ui.components.CategoryFilterRow
+import com.kimdev.petmap.ui.components.PlacePreviewSheet
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.naver.maps.geometry.LatLng
@@ -43,13 +48,16 @@ import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.compose.rememberFusedLocationSource
 import com.naver.maps.map.overlay.OverlayImage
 
-@OptIn(ExperimentalNaverMapApi::class, ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalNaverMapApi::class, ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
     onPlaceClick: (String) -> Unit,
     viewModel: MapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 마커 탭 시 미리보기할 장소
+    var previewPlace by remember { mutableStateOf<Place?>(null) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition(
@@ -100,7 +108,7 @@ fun MapScreen(
                         state = MarkerState(position = LatLng(place.lat, place.lng)),
                         captionText = place.name,
                         onClick = {
-                            onPlaceClick(place.id)
+                            previewPlace = place
                             true
                         },
                     )
@@ -147,6 +155,26 @@ fun MapScreen(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(16.dp)
+            )
+        }
+    }
+
+    // 마커 미리보기 바텀시트
+    previewPlace?.let { place ->
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { previewPlace = null },
+            sheetState = sheetState,
+        ) {
+            PlacePreviewSheet(
+                place = place,
+                isFavorite = place.id in state.favoriteIds,
+                onToggleFavorite = { viewModel.toggleFavorite(place) },
+                onDetail = {
+                    val id = place.id
+                    previewPlace = null
+                    onPlaceClick(id)
+                },
             )
         }
     }
