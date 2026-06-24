@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,6 +41,7 @@ import com.naver.maps.map.compose.MarkerState
 import com.naver.maps.map.compose.NaverMap
 import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.compose.rememberFusedLocationSource
+import com.naver.maps.map.overlay.OverlayImage
 
 @OptIn(ExperimentalNaverMapApi::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -64,22 +66,22 @@ fun MapScreen(
     var trackingMode by remember { mutableStateOf(LocationTrackingMode.NoFollow) }
     val granted = locationPermissions.allPermissionsGranted
 
-    // 권한이 막 허용되면 현재 위치로 따라가기 시작
     LaunchedEffect(granted) {
         trackingMode = if (granted) LocationTrackingMode.Follow else LocationTrackingMode.NoFollow
     }
 
-    // 카메라가 멈출 때마다 보이는 영역을 다시 조회
+    // 카메라가 멈출 때마다 보이는 영역을 다시 조회 + 클러스터링
     LaunchedEffect(cameraPositionState.isMoving, state.isSeeding) {
         if (!cameraPositionState.isMoving && !state.isSeeding) {
             val pos = cameraPositionState.position
-            viewModel.onCameraIdle(
-                centerLat = pos.target.latitude,
-                centerLng = pos.target.longitude,
-                radiusKm = radiusForZoom(pos.zoom),
-            )
+            viewModel.onCameraIdle(pos.target.latitude, pos.target.longitude, pos.zoom)
         }
     }
+
+    // 클러스터 아이콘 캐시 (개수별)
+    val iconCache = remember { mutableMapOf<Int, OverlayImage>() }
+    fun clusterIcon(count: Int): OverlayImage =
+        iconCache.getOrPut(count) { OverlayImage.fromBitmap(makeClusterBitmap(count)) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         NaverMap(
@@ -91,15 +93,31 @@ fun MapScreen(
             ),
             uiSettings = MapUiSettings(isLocationButtonEnabled = false),
         ) {
-            state.places.forEach { place ->
-                Marker(
-                    state = MarkerState(position = LatLng(place.lat, place.lng)),
-                    captionText = place.name,
-                    onClick = {
-                        onPlaceClick(place.id)
-                        true
-                    },
-                )
+            state.clusters.forEach { cluster ->
+                val place = cluster.place
+                if (place != null) {
+                    Marker(
+                        state = MarkerState(position = LatLng(place.lat, place.lng)),
+                        captionText = place.name,
+                        onClick = {
+                            onPlaceClick(place.id)
+                            true
+                        },
+                    )
+                } else {
+                    Marker(
+                        state = MarkerState(position = LatLng(cluster.lat, cluster.lng)),
+                        icon = clusterIcon(cluster.count),
+                        anchor = Offset(0.5f, 0.5f),
+                        onClick = {
+                            // 클러스터 탭 → 해당 위치로 줌인
+                            val z = (cameraPositionState.position.zoom + 2.0).coerceAtMost(18.0)
+                            cameraPositionState.position =
+                                CameraPosition(LatLng(cluster.lat, cluster.lng), z)
+                            true
+                        },
+                    )
+                }
             }
         }
 
@@ -111,7 +129,6 @@ fun MapScreen(
                 .padding(12.dp),
         )
 
-        // 내 위치 버튼: 권한 없으면 요청, 있으면 현재 위치로 따라가기
         FloatingActionButton(
             onClick = {
                 if (granted) trackingMode = LocationTrackingMode.Follow
@@ -151,13 +168,4 @@ private fun SeedingOverlay() {
             )
         }
     }
-}
-
-/** 줌 레벨에 따른 조회 반경(km) 근사 */
-private fun radiusForZoom(zoom: Double): Double = when {
-    zoom >= 15.0 -> 1.5
-    zoom >= 13.0 -> 4.0
-    zoom >= 11.0 -> 12.0
-    zoom >= 9.0 -> 40.0
-    else -> 120.0
 }

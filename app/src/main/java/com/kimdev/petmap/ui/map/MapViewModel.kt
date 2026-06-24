@@ -2,7 +2,7 @@ package com.kimdev.petmap.ui.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kimdev.petmap.data.repository.withFavorites
+import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -17,7 +17,7 @@ import javax.inject.Inject
 data class MapUiState(
     val isSeeding: Boolean = true,
     val isLoading: Boolean = false,
-    val places: List<Place> = emptyList(),
+    val clusters: List<MapCluster> = emptyList(),
     val selectedCategory: PlaceCategory? = null,
 )
 
@@ -29,32 +29,25 @@ class MapViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
-    private var favoriteIds: Set<String> = emptySet()
-    private var lastCenterLat = com.kimdev.petmap.core.common.Constants.DEFAULT_LAT
-    private var lastCenterLng = com.kimdev.petmap.core.common.Constants.DEFAULT_LNG
-    private var lastRadiusKm = 12.0
+    private var lastCenterLat = Constants.DEFAULT_LAT
+    private var lastCenterLng = Constants.DEFAULT_LNG
+    private var lastZoom = Constants.DEFAULT_ZOOM
+    private var places: List<Place> = emptyList()
 
     init {
         viewModelScope.launch {
             repository.ensureSeeded()
             _uiState.update { it.copy(isSeeding = false) }
             reload()
-            // 하이브리드: 오래됐으면 백그라운드 갱신 후 재조회
-            if (repository.refreshFromRemoteIfStale(nowMillis())) reload()
-        }
-        viewModelScope.launch {
-            repository.observeFavoriteIds().collect { ids ->
-                favoriteIds = ids
-                _uiState.update { it.copy(places = it.places.withFavorites(ids)) }
-            }
+            if (repository.refreshFromRemoteIfStale(System.currentTimeMillis())) reload()
         }
     }
 
-    /** 지도 카메라가 멈출 때마다 호출: 보이는 영역의 장소를 다시 조회 */
-    fun onCameraIdle(centerLat: Double, centerLng: Double, radiusKm: Double) {
+    /** 지도 카메라가 멈출 때마다 호출: 보이는 영역의 장소를 조회하고 클러스터링 */
+    fun onCameraIdle(centerLat: Double, centerLng: Double, zoom: Double) {
         lastCenterLat = centerLat
         lastCenterLng = centerLng
-        lastRadiusKm = radiusKm
+        lastZoom = zoom
         reload()
     }
 
@@ -67,15 +60,15 @@ class MapViewModel @Inject constructor(
         if (_uiState.value.isSeeding) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val places = repository.getPlacesInBounds(
+            places = repository.getPlacesInBounds(
                 centerLat = lastCenterLat,
                 centerLng = lastCenterLng,
-                radiusKm = lastRadiusKm,
+                radiusKm = radiusForZoom(lastZoom),
                 category = _uiState.value.selectedCategory,
-            ).withFavorites(favoriteIds)
-            _uiState.update { it.copy(isLoading = false, places = places) }
+                limit = 500,
+            )
+            val clusters = clusterPlaces(places, lastZoom)
+            _uiState.update { it.copy(isLoading = false, clusters = clusters) }
         }
     }
-
-    private fun nowMillis(): Long = System.currentTimeMillis()
 }
