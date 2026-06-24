@@ -22,7 +22,7 @@ kotlinxSerialization = "1.7.3"
 room = "2.6.1"
 coil = "2.7.0"
 
-naverMapCompose = "1.7.3"
+naverMapCompose = "1.9.0"
 playServicesLocation = "21.3.0"
 coroutinesPlayServices = "1.8.1"
 accompanistPermissions = "0.36.0"
