@@ -40,6 +40,14 @@ android {
         manifestPlaceholders["naverMapClientId"] = prop("naver.map.clientId", "PLACEHOLDER")
         // 공공데이터포털 서비스 키
         buildConfigField("String", "PUBLIC_DATA_SERVICE_KEY", "\"${prop("public.data.serviceKey")}\"")
+
+        // AdMob (기본값은 Google 공식 테스트 ID — 출시 시 local.properties 에서 실제 ID 로 교체)
+        manifestPlaceholders["admobAppId"] =
+            prop("admob.appId", "ca-app-pub-3940256099942544~3347511713")
+        buildConfigField(
+            "String", "ADMOB_BANNER_UNIT_ID",
+            "\"${prop("admob.bannerUnitId", "ca-app-pub-3940256099942544/6300978111")}\"",
+        )
     }
 
     signingConfigs {
@@ -101,6 +109,7 @@ dependencies {
     // AndroidX core / lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.play.services.ads)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

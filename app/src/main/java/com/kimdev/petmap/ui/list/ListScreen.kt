@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.PlaceCard
@@ -84,6 +85,7 @@ fun ListScreen(
             )
         }
 
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         when {
             state.isLoading && state.places.isEmpty() ->
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -113,6 +115,9 @@ fun ListScreen(
                 }
             }
         }
+        }
+
+        BannerAd()
     }
 }
 
