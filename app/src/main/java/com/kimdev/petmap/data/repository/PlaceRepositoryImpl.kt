@@ -2,7 +2,6 @@ package com.kimdev.petmap.data.repository
 
 import android.util.Log
 import com.kimdev.petmap.BuildConfig
-import com.kimdev.petmap.data.csv.AssetPlaceSeeder
 import com.kimdev.petmap.data.local.SyncPreferences
 import com.kimdev.petmap.data.local.dao.FavoriteDao
 import com.kimdev.petmap.data.local.dao.PlaceDao
@@ -25,12 +24,15 @@ class PlaceRepositoryImpl @Inject constructor(
     private val api: PublicDataApi,
     private val placeDao: PlaceDao,
     private val favoriteDao: FavoriteDao,
-    private val seeder: AssetPlaceSeeder,
     private val syncPrefs: SyncPreferences,
 ) : PlaceRepository {
 
+    /**
+     * DB 는 에셋(미리 시딩됨)에서 로드되므로 별도 시딩이 필요 없다.
+     * 첫 접근 시 에셋 복사가 일어나도록 가벼운 쿼리로 워밍업만 한다.
+     */
     override suspend fun ensureSeeded() {
-        seeder.seedIfEmpty()
+        runCatching { placeDao.count() }
     }
 
     override suspend fun getPlacesInBounds(

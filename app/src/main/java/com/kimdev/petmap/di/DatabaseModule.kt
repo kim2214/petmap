@@ -20,6 +20,8 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): PetMapDatabase =
         Room.databaseBuilder(context, PetMapDatabase::class.java, PetMapDatabase.NAME)
+            // 미리 시딩된 DB(에셋)를 사용 → 첫 실행 시 CSV 파싱 없이 즉시 사용
+            .createFromAsset("petmap.db")
             .fallbackToDestructiveMigration()
             .build()
 
