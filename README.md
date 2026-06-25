@@ -96,22 +96,36 @@ keyAlias=petmap
 keyPassword=...
 ```
 
-## 🗃️ 데이터 전략 (내장 CSV + 하이브리드 갱신)
+## 🗃️ 데이터 전략 (프리빌트 Room DB)
 
-API 통신 부담을 최소화하기 위해 **내장 CSV를 단일 소스로** 사용한다.
+API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 소스로** 사용한다.
 
-- `app/src/main/assets/places.csv` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" 데이터셋(약 7만 행). APK 패키징 시 zip 압축되어 용량 영향은 ~2.4MB.
-- **최초 실행 시 1회** Room(`places` 테이블)에 시딩. 원본에 동일 레코드가 대량 중복돼 있어 `이름+좌표` 기준으로 정제하면 **약 23,925개 고유 장소**가 된다.
-- 지도/목록/검색은 모두 **로컬 Room 쿼리**로 처리 → 위치 기반 조회 시 네트워크 호출 0.
-- **하이브리드 갱신**: 마지막 동기화가 오래됐고(`SyncPreferences`, 기본 7일) 서비스 키가 있으면 백그라운드에서 공공데이터 API로 Room을 upsert.
+- `app/src/main/assets/petmap.db` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" 데이터셋을 정제해 넣은 SQLite DB. 원본에 동일 레코드가 대량 중복돼 있어 `이름+좌표` 기준으로 정제하면 **약 23,925개 고유 장소**가 된다.
+- 첫 실행 시 Room `createFromAsset` 로 에셋 DB를 즉시 로드(파싱/시딩 없음).
+- 지도/목록/검색은 모두 **로컬 Room 쿼리** → 위치 기반 조회 시 네트워크 호출 0.
+- **하이브리드 갱신(미가동)**: `refreshFromRemoteIfStale` 뼈대만 존재. 서비스 키와 실제 엔드포인트를 채우면 주기적 갱신 가능.
 
-데이터셋을 새로 받으면 `places.csv`만 교체하면 된다(헤더명 기반 매핑이라 견고). API 연동부를 실제로 쓰려면:
+### 📦 데이터 갱신 절차
+데이터셋이 갱신되면 아래로 프리빌트 DB를 다시 만든다.
+
+1. [공공데이터포털](https://www.data.go.kr)에서 "전국 반려동물 동반 가능 문화시설" CSV(UTF-8)를 새로 받는다.
+2. 빌드 스크립트 실행 → `assets/petmap.db` 재생성:
+   ```bash
+   python3 tools/build_db.py "<새 CSV 경로>"
+   # 출력: app/src/main/assets/petmap.db (고유 장소 N건)
+   ```
+3. 앱을 다시 빌드/설치하면 새 데이터가 반영된다.
+
+> 스크립트는 앱의 Room 스키마(테이블·인덱스·`room_master_table` identity_hash·`user_version`)를 그대로 재현하므로 `createFromAsset` 가 그대로 로드한다.
+> **주의**: 엔티티(`PlaceEntity`/`FavoriteEntity`) 스키마를 바꾸면 `@Database` version 과 identity_hash 가 달라진다. 그때는 앱을 한 번 빌드·실행해 만들어진 DB의 `room_master_table` 값을 `tools/build_db.py` 의 `ROOM_IDENTITY_HASH`(및 `DB_VERSION`)에 반영해야 한다.
+
+API 연동부를 실제로 쓰려면:
 - `data/remote/api/PublicDataApi.kt` — 엔드포인트(데이터셋 UUID), 쿼리 파라미터
 - `data/remote/dto/PlaceResponse.kt` — 응답 컬럼명(`@SerialName`)
 
 ## 🗺️ 로드맵
 
-- [x] 내장 CSV 시딩 + Room 단일 소스
+- [x] 프리빌트 Room DB(createFromAsset) 단일 소스 — 첫 실행 즉시 로드
 - [x] 지도 뷰포트(반경) 기반 로컬 조회
 - [x] 하이브리드 갱신 plumbing (`refreshFromRemoteIfStale`)
 - [x] 위치 권한 요청 + 내 위치로 카메라 이동(네이버 위치 오버레이 + Follow)
