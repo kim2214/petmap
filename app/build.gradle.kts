@@ -71,10 +71,14 @@ android {
     }
 
     // ABI 별 APK 분리(네이티브 라이브러리 4종 → 기기별 1종)로 APK 용량 대폭 축소.
+    // release 빌드에만 적용(debug 는 유니버설 app-debug.apk 유지해 개발 설치 편의).
     // 스토어 배포는 bundleRelease(.aab) 권장.
     splits {
         abi {
-            isEnable = true
+            val isReleaseBuild = gradle.startParameter.taskNames.any {
+                it.contains("Release", ignoreCase = true)
+            }
+            isEnable = isReleaseBuild
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
             isUniversalApk = false
@@ -96,6 +100,7 @@ android {
 dependencies {
     // AndroidX core / lifecycle
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

@@ -2,4 +2,11 @@
 <resources>
 
     <style name="Theme.PetMap" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- 런치 스플래시: 인디고 배경 + 발바닥 아이콘, 이후 본 테마로 전환 -->
+    <style name="Theme.PetMap.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_indigo</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.PetMap</item>
+    </style>
 </resources>
