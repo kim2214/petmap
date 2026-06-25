@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -160,13 +161,20 @@ fun MapScreen(
             }
         }
 
-        CategoryFilterRow(
-            selected = state.selectedCategory,
-            onSelect = viewModel::selectCategory,
+        Surface(
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+            shape = RoundedCornerShape(24.dp),
+            shadowElevation = 3.dp,
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(12.dp),
-        )
+                .align(Alignment.TopCenter)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            CategoryFilterRow(
+                selected = state.selectedCategory,
+                onSelect = viewModel::selectCategory,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
 
         FloatingActionButton(
             onClick = {

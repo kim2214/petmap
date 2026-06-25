@@ -1,34 +1,51 @@
 package com.kimdev.petmap.ui.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -39,6 +56,9 @@ import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sharePlace
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.domain.util.OpeningHours
+import com.kimdev.petmap.ui.components.icon
+import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,7 +72,7 @@ fun DetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(place?.name ?: "상세") },
+                title = { Text(place?.name ?: "상세", maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
@@ -64,83 +84,193 @@ fun DetailScreen(
                             Icon(
                                 imageVector = if (place.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                                 contentDescription = "즐겨찾기",
+                                tint = if (place.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
             )
         },
     ) { padding ->
         when {
-            state.isLoading -> CircularProgressIndicator(Modifier.padding(padding))
-            place == null -> Text("장소를 찾을 수 없습니다", Modifier.padding(padding).padding(16.dp))
+            state.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+            place == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("장소를 찾을 수 없습니다") }
             else -> DetailContent(place, Modifier.padding(padding))
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DetailContent(place: Place, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .verticalScroll(rememberScrollState()),
     ) {
-        // 액션 버튼: 전화 / 길찾기 / 공유
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            place.phone?.let { phone ->
-                FilledTonalButton(onClick = { context.dialPhone(phone) }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Phone, contentDescription = null)
-                    Text("전화", modifier = Modifier.padding(start = 4.dp))
+        Header(place)
+
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 액션: 길찾기(주) + 전화/공유(보조)
+            Button(
+                onClick = { context.openNaverDirections(place) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Directions, contentDescription = null)
+                Text("길찾기", modifier = Modifier.padding(start = 6.dp))
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                place.phone?.let { phone ->
+                    FilledTonalButton(onClick = { context.dialPhone(phone) }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Filled.Phone, contentDescription = null)
+                        Text("전화", modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+                FilledTonalButton(onClick = { context.sharePlace(place) }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Filled.Share, contentDescription = null)
+                    Text("공유", modifier = Modifier.padding(start = 6.dp))
                 }
             }
-            FilledTonalButton(onClick = { context.openNaverDirections(place) }, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Filled.Directions, contentDescription = null)
-                Text("길찾기", modifier = Modifier.padding(start = 4.dp))
-            }
-            FilledTonalButton(onClick = { context.sharePlace(place) }, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Filled.Share, contentDescription = null)
-                Text("공유", modifier = Modifier.padding(start = 4.dp))
-            }
-        }
 
-        InfoRow("카테고리", place.category.label)
-        InfoRow("도로명주소", place.roadAddress)
-        place.phone?.let { InfoRow("전화", it) }
-        place.operatingTime?.let { InfoRow("운영시간", it) }
-        place.closedDays?.let { InfoRow("휴무일", it) }
-        place.homepage?.let { homepage ->
-            Column(modifier = Modifier.padding(vertical = 4.dp).clickable { context.openUrl(homepage) }) {
-                Text("홈페이지", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Text(
-                    homepage,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    textDecoration = TextDecoration.Underline,
+            SectionTitle("정보")
+            InfoRow(Icons.Filled.Place, place.roadAddress)
+            place.operatingTime?.let { InfoRow(Icons.Filled.Schedule, it) }
+            place.closedDays?.let { InfoRow(Icons.Filled.CalendarMonth, "휴무 $it") }
+            place.phone?.let { InfoRow(Icons.Filled.Phone, it) }
+            place.homepage?.let { hp ->
+                InfoRow(
+                    Icons.Filled.Language,
+                    hp,
+                    valueColor = MaterialTheme.colorScheme.primary,
+                    underline = true,
+                    onClick = { context.openUrl(hp) },
                 )
             }
-        }
 
-        HorizontalDivider(Modifier.padding(vertical = 12.dp))
-        Text("반려동물 정보", style = MaterialTheme.typography.titleMedium)
-        place.petInfo.allowedPetSize?.let { InfoRow("입장 가능 크기", it) }
-        place.petInfo.restriction?.let { InfoRow("제한사항", it) }
-        InfoRow("실내 동반", if (place.petInfo.indoorAllowed) "가능" else "불가")
-        InfoRow("실외 동반", if (place.petInfo.outdoorAllowed) "가능" else "불가")
+            SectionTitle("반려동물 동반 정보")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                place.petInfo.allowedPetSize?.let { Pill("🐾 $it", highlight = true) }
+                Pill(if (place.petInfo.indoorAllowed) "실내 가능" else "실내 불가", highlight = place.petInfo.indoorAllowed)
+                Pill(if (place.petInfo.outdoorAllowed) "실외 가능" else "실외 불가", highlight = place.petInfo.outdoorAllowed)
+                place.petInfo.restriction?.let { Pill(it, highlight = false) }
+            }
+        }
     }
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
+private fun Header(place: Place) {
+    val open = OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    place.category.icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
+            Text(
+                place.category.label,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            if (open != null) {
+                Surface(
+                    color = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (open) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Text(
+                        if (open) "지금 영업중" else "영업종료",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun InfoRow(
+    icon: ImageVector,
+    value: String,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    underline: Boolean = false,
+    onClick: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = valueColor,
+            textDecoration = if (underline) TextDecoration.Underline else null,
+            modifier = Modifier.padding(start = 12.dp),
+        )
+    }
+}
+
+@Composable
+private fun Pill(text: String, highlight: Boolean) {
+    Surface(
+        color = if (highlight) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (highlight) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.padding(vertical = 4.dp),
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
     }
 }
