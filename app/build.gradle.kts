@@ -83,10 +83,11 @@ android {
     // 스토어 배포는 bundleRelease(.aab) 권장.
     splits {
         abi {
-            val isReleaseBuild = gradle.startParameter.taskNames.any {
-                it.contains("Release", ignoreCase = true)
+            // APK 빌드(assembleRelease)에서만 ABI 분리. bundleRelease(.aab)는 Play 가 분리하므로 끔.
+            val isApkRelease = gradle.startParameter.taskNames.any {
+                it.contains("assembleRelease", ignoreCase = true)
             }
-            isEnable = isReleaseBuild
+            isEnable = isApkRelease
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
             isUniversalApk = false
