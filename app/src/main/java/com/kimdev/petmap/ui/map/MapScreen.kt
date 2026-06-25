@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -20,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,10 +33,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.common.Constants
+import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.PlaceCard
@@ -88,6 +92,9 @@ fun MapScreen(
     val locationSource = rememberFusedLocationSource()
     var trackingMode by remember { mutableStateOf(LocationTrackingMode.NoFollow) }
     val granted = locationPermissions.allPermissionsGranted
+    var requestedLocationOnce by remember { mutableStateOf(false) }
+    var showLocationSettingsDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     LaunchedEffect(granted) {
         trackingMode = if (granted) LocationTrackingMode.Follow else LocationTrackingMode.NoFollow
@@ -163,8 +170,14 @@ fun MapScreen(
 
         FloatingActionButton(
             onClick = {
-                if (granted) trackingMode = LocationTrackingMode.Follow
-                else locationPermissions.launchMultiplePermissionRequest()
+                when {
+                    granted -> trackingMode = LocationTrackingMode.Follow
+                    locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
+                        requestedLocationOnce = true
+                        locationPermissions.launchMultiplePermissionRequest()
+                    }
+                    else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
+                }
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -232,6 +245,24 @@ fun MapScreen(
                 }
             }
         }
+    }
+
+    // 위치 권한 영구 거부 시 설정 안내
+    if (showLocationSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showLocationSettingsDialog = false },
+            title = { Text("위치 권한이 필요해요") },
+            text = { Text("내 위치를 지도에 표시하려면 위치 권한이 필요합니다. 설정에서 권한을 허용해 주세요.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLocationSettingsDialog = false
+                    context.openAppSettings()
+                }) { Text("설정 열기") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLocationSettingsDialog = false }) { Text("닫기") }
+            },
+        )
     }
 }
 

@@ -4,8 +4,16 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import com.kimdev.petmap.domain.model.Place
+
+/** 이 앱의 설정 화면 열기 (권한 영구 거부 시 안내용) */
+fun Context.openAppSettings() {
+    safeStart(
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+    )
+}
 
 /** 전화 앱 열기(다이얼러) */
 fun Context.dialPhone(phone: String) {

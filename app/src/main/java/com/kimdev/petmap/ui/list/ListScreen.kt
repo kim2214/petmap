@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.ui.components.CategoryFilterRow
+import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.PlaceCard
 
 @Composable
@@ -68,12 +71,26 @@ fun ListScreen(
             )
         }
 
-        if (state.places.isEmpty() && !state.isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(if (state.openNowOnly) "지금 영업중인 장소가 없습니다" else "결과가 없습니다")
+        when {
+            state.isLoading && state.places.isEmpty() ->
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+
+            state.places.isEmpty() -> {
+                val (title, desc) = when {
+                    state.openNowOnly -> "지금 영업중인 장소가 없어요" to "영업중 필터를 끄거나 다른 지역에서 찾아보세요."
+                    state.query.isNotBlank() -> "'${state.query}' 검색 결과가 없어요" to "다른 키워드로 찾아보세요."
+                    else -> "표시할 장소가 없어요" to null
+                }
+                EmptyState(
+                    icon = Icons.Filled.SearchOff,
+                    title = title,
+                    description = desc,
+                )
             }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+
+            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.places, key = { it.id }) { place ->
                     PlaceCard(
                         place = place,
