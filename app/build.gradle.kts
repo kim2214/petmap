@@ -16,6 +16,13 @@ val localProps = Properties().apply {
 }
 fun prop(key: String, default: String = "") = localProps.getProperty(key) ?: default
 
+// 릴리스 서명 설정(keystore.properties). 없으면 디버그 서명으로 폴백한다(로컬 검증용).
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = keystoreProps.getProperty("storeFile") != null
+
 android {
     namespace = "com.kimdev.petmap"
     compileSdk = 36
@@ -35,13 +42,42 @@ android {
         buildConfigField("String", "PUBLIC_DATA_SERVICE_KEY", "\"${prop("public.data.serviceKey")}\"")
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 실제 keystore 가 있으면 릴리스 서명, 없으면 로컬 검증용으로 디버그 서명
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+    }
+
+    // ABI 별 APK 분리(네이티브 라이브러리 4종 → 기기별 1종)로 APK 용량 대폭 축소.
+    // 스토어 배포는 bundleRelease(.aab) 권장.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = false
         }
     }
     compileOptions {

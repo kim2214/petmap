@@ -74,6 +74,28 @@ public.data.serviceKey=YOUR_PUBLIC_DATA_SERVICE_KEY
 # 또는 Android Studio에서 Sync 후 Run ▶
 ```
 
+### 4. 릴리스 빌드 (R8 + ABI 분리 + 서명)
+릴리스는 R8 minify·리소스 축소가 켜져 있고 ABI별로 APK가 분리된다(arm64-v8a ≈ 32MB).
+
+```bash
+./gradlew :app:assembleRelease    # ABI별 APK (app/build/outputs/apk/release/)
+./gradlew :app:bundleRelease      # 스토어용 App Bundle(.aab) — Play가 ABI 분리
+```
+
+서명은 `keystore.properties`(git 제외)에서 읽고, 없으면 디버그 서명으로 폴백한다(로컬 검증용).
+스토어 배포용 키를 만들려면:
+```bash
+keytool -genkeypair -v -keystore release.keystore -alias petmap \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+그리고 프로젝트 루트에 `keystore.properties` 작성(절대 커밋 금지, 키스토어 파일 백업 필수):
+```properties
+storeFile=release.keystore
+storePassword=...
+keyAlias=petmap
+keyPassword=...
+```
+
 ## 🗃️ 데이터 전략 (내장 CSV + 하이브리드 갱신)
 
 API 통신 부담을 최소화하기 위해 **내장 CSV를 단일 소스로** 사용한다.
