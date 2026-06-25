@@ -36,8 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.res.ResourcesCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kimdev.petmap.R
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.domain.model.Place
@@ -112,10 +114,11 @@ fun MapScreen(
             }
     }
 
-    // 클러스터 아이콘 캐시 (개수별)
+    // 클러스터 아이콘 캐시 (개수별). 숫자는 브랜드 폰트(나눔 ExtraBold)로 렌더링.
+    val clusterTypeface = remember { ResourcesCompat.getFont(context, R.font.nanum_square_round_extrabold) }
     val iconCache = remember { mutableMapOf<Int, OverlayImage>() }
     fun clusterIcon(count: Int): OverlayImage =
-        iconCache.getOrPut(count) { OverlayImage.fromBitmap(makeClusterBitmap(count)) }
+        iconCache.getOrPut(count) { OverlayImage.fromBitmap(makeClusterBitmap(count, clusterTypeface)) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         NaverMap(

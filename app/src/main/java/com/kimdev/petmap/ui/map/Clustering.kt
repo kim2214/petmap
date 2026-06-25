@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Typeface
 import com.kimdev.petmap.domain.model.Place
 import kotlin.math.cos
 import kotlin.math.floor
@@ -77,7 +78,7 @@ fun clusterPlaces(places: List<Place>, zoom: Double, cellPx: Double = 72.0): Lis
 }
 
 /** 개수가 그려진 원형 클러스터 마커 비트맵 생성 */
-fun makeClusterBitmap(count: Int): Bitmap {
+fun makeClusterBitmap(count: Int, typeface: Typeface? = null): Bitmap {
     val sizePx = when {
         count >= 100 -> 140
         count >= 10 -> 120
@@ -98,7 +99,8 @@ fun makeClusterBitmap(count: Int): Bitmap {
         color = Color.WHITE
         textAlign = Paint.Align.CENTER
         textSize = sizePx * 0.32f
-        isFakeBoldText = true
+        this.typeface = typeface ?: Typeface.DEFAULT_BOLD
+        isFakeBoldText = typeface == null
     }
     val label = if (count >= 1000) "999+" else count.toString()
     val ty = r - (tp.descent() + tp.ascent()) / 2f
