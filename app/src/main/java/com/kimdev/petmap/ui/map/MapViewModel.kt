@@ -3,6 +3,7 @@ package com.kimdev.petmap.ui.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.common.Constants
+import com.kimdev.petmap.core.common.MapFocusBus
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -26,12 +27,14 @@ data class MapUiState(
     val favoriteIds: Set<String> = emptySet(),
     val searchQuery: String = "",
     val searchResults: List<Place> = emptyList(),
+    val focusTarget: Place? = null,
 )
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class MapViewModel @Inject constructor(
     private val repository: PlaceRepository,
+    private val mapFocusBus: MapFocusBus,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MapUiState())
@@ -65,6 +68,22 @@ class MapViewModel @Inject constructor(
                     _uiState.update { it.copy(searchResults = results) }
                 }
         }
+        // "지도에서 보기" 요청 → 해당 장소를 포커스 대상으로
+        viewModelScope.launch {
+            mapFocusBus.targetPlaceId.collect { id ->
+                if (id == null) {
+                    _uiState.update { it.copy(focusTarget = null) }
+                } else {
+                    val place = repository.getPlace(id)
+                    _uiState.update { it.copy(focusTarget = place) }
+                }
+            }
+        }
+    }
+
+    /** 포커스 이동을 화면이 처리한 뒤 호출 (버스/상태 초기화) */
+    fun consumeFocus() {
+        mapFocusBus.consume()
     }
 
     fun toggleFavorite(place: Place) {

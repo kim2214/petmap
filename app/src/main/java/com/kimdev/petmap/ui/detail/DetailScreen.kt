@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
@@ -34,6 +35,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -64,6 +66,7 @@ import java.time.LocalDateTime
 @Composable
 fun DetailScreen(
     onBack: () -> Unit,
+    onShowOnMap: () -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -98,14 +101,25 @@ fun DetailScreen(
         when {
             state.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
             place == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("장소를 찾을 수 없습니다") }
-            else -> DetailContent(place, Modifier.padding(padding))
+            else -> DetailContent(
+                place = place,
+                onShowOnMap = {
+                    viewModel.showOnMap()
+                    onShowOnMap()
+                },
+                modifier = Modifier.padding(padding),
+            )
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DetailContent(place: Place, modifier: Modifier = Modifier) {
+private fun DetailContent(
+    place: Place,
+    onShowOnMap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     Column(
         modifier = modifier
@@ -139,6 +153,15 @@ private fun DetailContent(place: Place, modifier: Modifier = Modifier) {
                     Icon(Icons.Filled.Share, contentDescription = null)
                     Text("공유", modifier = Modifier.padding(start = 6.dp))
                 }
+            }
+            OutlinedButton(
+                onClick = onShowOnMap,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+            ) {
+                Icon(Icons.Filled.Map, contentDescription = null)
+                Text("지도에서 보기", modifier = Modifier.padding(start = 6.dp))
             }
 
             SectionTitle("정보")

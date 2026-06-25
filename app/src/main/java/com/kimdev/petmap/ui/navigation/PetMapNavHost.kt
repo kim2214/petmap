@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
@@ -37,7 +38,17 @@ fun PetMapNavHost(
             route = Routes.DETAIL_PATTERN,
             arguments = listOf(navArgument(Routes.DETAIL_ARG_ID) { type = NavType.StringType }),
         ) {
-            DetailScreen(onBack = { navController.popBackStack() })
+            DetailScreen(
+                onBack = { navController.popBackStack() },
+                onShowOnMap = {
+                    // 지도 탭으로 전환 (포커스는 MapFocusBus 가 전달)
+                    navController.navigate(Routes.MAP) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+            )
         }
     }
 }

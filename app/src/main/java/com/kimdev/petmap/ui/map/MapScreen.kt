@@ -129,6 +129,15 @@ fun MapScreen(
             }
     }
 
+    // "지도에서 보기"로 들어온 포커스 대상 → 카메라 이동 + 미리보기
+    LaunchedEffect(state.focusTarget) {
+        state.focusTarget?.let { target ->
+            cameraPositionState.position = CameraPosition(LatLng(target.lat, target.lng), 16.0)
+            previewPlace = target
+            viewModel.consumeFocus()
+        }
+    }
+
     // 클러스터 아이콘 캐시 (개수별). 숫자는 브랜드 폰트(나눔 ExtraBold)로 렌더링.
     val clusterTypeface = remember { ResourcesCompat.getFont(context, R.font.nanum_square_round_extrabold) }
     val iconCache = remember { mutableMapOf<Int, OverlayImage>() }
