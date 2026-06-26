@@ -23,10 +23,15 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.ads.AdsConsent
 import com.kimdev.petmap.core.review.InAppReview
+import com.kimdev.petmap.data.local.ThemeMode
+import com.kimdev.petmap.data.local.ThemeStore
 import com.kimdev.petmap.ui.onboarding.OnboardingPrefs
 import com.kimdev.petmap.ui.onboarding.OnboardingScreen
+import javax.inject.Inject
 import com.kimdev.petmap.ui.navigation.PetMapNavHost
 import com.kimdev.petmap.ui.navigation.TopLevelDestination
 import com.kimdev.petmap.ui.theme.PetMapTheme
@@ -34,6 +39,8 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var themeStore: ThemeStore
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -43,7 +50,13 @@ class MainActivity : ComponentActivity() {
         // 일정 실행 횟수 이상이면 인앱 리뷰 요청 (Play 설치 빌드에서만 실제 노출)
         InAppReview.maybeAsk(this)
         setContent {
-            PetMapTheme {
+            val themeMode by themeStore.mode.collectAsStateWithLifecycle()
+            val darkTheme = when (themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            PetMapTheme(darkTheme = darkTheme) {
                 var showOnboarding by rememberSaveable {
                     mutableStateOf(!OnboardingPrefs.isCompleted(this@MainActivity))
                 }

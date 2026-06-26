@@ -14,6 +14,7 @@ object Routes {
     const val FAVORITE = "favorite"
     const val SETTINGS = "settings"
     const val LICENSES = "licenses"
+    const val ONBOARDING = "onboarding"
     const val DETAIL = "detail"
     const val DETAIL_ARG_ID = "placeId"
     const val DETAIL_PATTERN = "$DETAIL/{$DETAIL_ARG_ID}"
