@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -136,9 +137,28 @@ fun ListScreen(
                     val (title, desc) = when {
                         state.openNowOnly -> "지금 영업중인 장소가 없어요" to "영업중 필터를 끄거나 다른 지역에서 찾아보세요."
                         state.query.isNotBlank() -> "'${state.query}' 검색 결과가 없어요" to "다른 키워드로 찾아보세요."
+                        state.selectedCategories.isNotEmpty() -> "조건에 맞는 장소가 없어요" to "필터를 줄이면 더 많은 장소가 보여요."
                         else -> "표시할 장소가 없어요" to null
                     }
-                    EmptyState(icon = Icons.Filled.SearchOff, title = title, description = desc)
+                    // 0건일 때 곧바로 빠져나갈 수 있는 복구 동선
+                    val recovery: (@Composable () -> Unit)? = when {
+                        state.openNowOnly -> {
+                            { Button(onClick = { viewModel.setOpenNowOnly(false) }) { Text("영업중 필터 끄기") } }
+                        }
+                        state.query.isNotBlank() -> {
+                            { Button(onClick = { viewModel.onQueryChange("") }) { Text("검색 지우기") } }
+                        }
+                        state.selectedCategories.isNotEmpty() -> {
+                            { Button(onClick = { viewModel.clearCategories() }) { Text("필터 초기화") } }
+                        }
+                        else -> null
+                    }
+                    EmptyState(
+                        icon = Icons.Filled.SearchOff,
+                        title = title,
+                        description = desc,
+                        action = recovery,
+                    )
                 }
 
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {

@@ -34,7 +34,16 @@ fun PetMapNavHost(
             ListScreen(onPlaceClick = openDetail)
         }
         composable(Routes.FAVORITE) {
-            FavoriteScreen(onPlaceClick = openDetail)
+            FavoriteScreen(
+                onPlaceClick = openDetail,
+                onExplore = {
+                    navController.navigate(Routes.MAP) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+            )
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onOpenLicenses = { navController.navigate(Routes.LICENSES) })

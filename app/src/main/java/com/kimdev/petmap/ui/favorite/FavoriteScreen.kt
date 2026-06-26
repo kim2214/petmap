@@ -8,9 +8,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.ui.components.BannerAd
@@ -20,6 +26,7 @@ import com.kimdev.petmap.ui.components.PlaceCard
 @Composable
 fun FavoriteScreen(
     onPlaceClick: (String) -> Unit,
+    onExplore: () -> Unit = {},
     viewModel: FavoriteViewModel = hiltViewModel(),
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -31,6 +38,12 @@ fun FavoriteScreen(
                     icon = Icons.Filled.FavoriteBorder,
                     title = "아직 즐겨찾기한 장소가 없어요",
                     description = "마음에 드는 곳의 ♡ 를 눌러 저장하면\n여기 모아서 볼 수 있어요.",
+                    action = {
+                        FilledTonalButton(onClick = onExplore) {
+                            Icon(Icons.Filled.Explore, contentDescription = null)
+                            Text("장소 둘러보기", modifier = Modifier.padding(start = 6.dp))
+                        }
+                    },
                 )
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
