@@ -12,6 +12,7 @@ import com.kimdev.petmap.data.remote.api.PublicDataApi
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
+import com.kimdev.petmap.domain.util.distanceMeters
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.math.cos
@@ -119,11 +120,3 @@ class PlaceRepositoryImpl @Inject constructor(
 /** 장소 목록에 즐겨찾기 상태를 결합 (ViewModel 에서 사용) */
 fun List<Place>.withFavorites(favoriteIds: Set<String>): List<Place> =
     map { it.copy(isFavorite = it.id in favoriteIds) }
-
-/** 두 좌표 간 근사 거리(m). 정렬/표시용 등거리 근사. */
-fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
-    val r = 6_371_000.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLng = Math.toRadians(lng2 - lng1) * cos(Math.toRadians((lat1 + lat2) / 2))
-    return r * kotlin.math.sqrt(dLat * dLat + dLng * dLng)
-}

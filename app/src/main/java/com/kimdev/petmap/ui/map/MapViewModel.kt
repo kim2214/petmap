@@ -19,11 +19,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 data class MapUiState(
     val isSeeding: Boolean = true,
@@ -134,10 +129,10 @@ class MapViewModel @Inject constructor(
         if (_uiState.value.isSeeding) return
 
         val clusters = clusterPlaces(places, zoom)
-        val movedMeters = distanceMeters(loadedCenterLat, loadedCenterLng, centerLat, centerLng)
-        val radiusChanged = radiusForZoom(zoom) != radiusForZoom(loadedZoom)
-        // 마지막 조회 반경의 45% 이상 벗어났거나, 줌 단계가 바뀌어 조회 범위가 달라지면 갱신 권장
-        val stale = movedMeters > radiusForZoom(loadedZoom) * 1000.0 * 0.45 || radiusChanged
+        val stale = isResearchNeeded(
+            loadedCenterLat, loadedCenterLng, loadedZoom,
+            centerLat, centerLng, zoom,
+        )
         _uiState.update { it.copy(clusters = clusters, canResearch = stale) }
     }
 
@@ -183,13 +178,4 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    /** 두 위경도 사이 대략 거리(m) — Haversine */
-    private fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
-        val r = 6_371_000.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLng = Math.toRadians(lng2 - lng1)
-        val a = sin(dLat / 2).pow(2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).pow(2)
-        return r * 2 * atan2(sqrt(a), sqrt(1 - a))
-    }
 }

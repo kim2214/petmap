@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.domain.util.distanceMeters
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.max
@@ -30,6 +31,26 @@ data class MapCluster(
             111_320.0 * max(0.01, cos(Math.toRadians(avgLat)))
         return max(dLat, dLng)
     }
+}
+
+/**
+ * 마지막으로 데이터를 불러온 지점/줌과 현재 카메라를 비교해
+ * "이 지역에서 다시 검색"이 필요한지 판단.
+ * - 조회 반경의 [movedFraction] 이상 이동했거나
+ * - 줌 단계가 바뀌어 조회 반경 자체가 달라지면 true.
+ */
+fun isResearchNeeded(
+    loadedLat: Double,
+    loadedLng: Double,
+    loadedZoom: Double,
+    currentLat: Double,
+    currentLng: Double,
+    currentZoom: Double,
+    movedFraction: Double = 0.45,
+): Boolean {
+    val moved = distanceMeters(loadedLat, loadedLng, currentLat, currentLng)
+    val radiusChanged = radiusForZoom(currentZoom) != radiusForZoom(loadedZoom)
+    return moved > radiusForZoom(loadedZoom) * 1000.0 * movedFraction || radiusChanged
 }
 
 /** 줌 레벨에 따른 장소 조회 반경(km) 근사 */

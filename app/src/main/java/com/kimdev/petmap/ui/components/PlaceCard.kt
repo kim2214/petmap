@@ -28,8 +28,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.OpeningHours
+import com.kimdev.petmap.domain.util.formatDistance
 import java.time.LocalDateTime
-import kotlin.math.roundToInt
 
 @Composable
 fun PlaceCard(
@@ -148,6 +148,3 @@ private fun OpenBadge(place: Place) {
         null -> Unit
     }
 }
-
-private fun formatDistance(m: Double): String =
-    if (m < 1000) "${m.roundToInt()}m" else "${(m / 100).roundToInt() / 10.0}km"
