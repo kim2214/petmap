@@ -85,7 +85,7 @@ fun PlacePreviewSheet(
             OutlinedButton(onClick = onToggleFavorite) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = "즐겨찾기",
+                    contentDescription = null,
                 )
                 Text("즐겨찾기", modifier = Modifier.padding(start = 6.dp))
             }

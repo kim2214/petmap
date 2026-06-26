@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -123,22 +124,23 @@ fun MapScreen(
         trackingMode = if (granted) LocationTrackingMode.Follow else LocationTrackingMode.NoFollow
     }
 
-    // 카메라 위치/줌이 바뀔 때마다(드래그·줌·프로그램적 이동 포함) 영역 재조회 + 클러스터링.
-    // isMoving 대신 position 을 직접 관찰해야 클러스터 탭으로 인한 프로그램적 줌도 반영된다.
+    // 카메라가 움직일 때마다 로컬 재클러스터링 + 데이터가 오래됐는지 판단("다시 검색" 노출).
+    // 데이터 재조회는 자동으로 하지 않고 사용자가 버튼을 눌렀을 때만 수행한다(통신·DB 부담 ↓).
     LaunchedEffect(state.isSeeding) {
         if (state.isSeeding) return@LaunchedEffect
         snapshotFlow { cameraPositionState.position }
             .debounce(180)
             .collect { pos ->
-                viewModel.onCameraIdle(pos.target.latitude, pos.target.longitude, pos.zoom)
+                viewModel.onCameraMove(pos.target.latitude, pos.target.longitude, pos.zoom)
             }
     }
 
-    // "지도에서 보기"로 들어온 포커스 대상 → 카메라 이동 + 미리보기
+    // "지도에서 보기"로 들어온 포커스 대상 → 카메라 이동 + 미리보기 + 주변 재조회
     LaunchedEffect(state.focusTarget) {
         state.focusTarget?.let { target ->
             cameraPositionState.position = CameraPosition(LatLng(target.lat, target.lng), 16.0)
             previewPlace = target
+            viewModel.researchHere(target.lat, target.lng, 16.0)
             viewModel.consumeFocus()
         }
     }
@@ -244,6 +246,7 @@ fun MapScreen(
                                 cameraPositionState.position =
                                     CameraPosition(LatLng(p.lat, p.lng), 16.0)
                                 previewPlace = p
+                                viewModel.researchHere(p.lat, p.lng, 16.0)
                                 if (q.isNotBlank()) viewModel.recordRecentSearch(q)
                                 viewModel.clearSearch()
                                 focusManager.clearFocus()
@@ -273,6 +276,42 @@ fun MapScreen(
                         onToggle = viewModel::toggleCategory,
                         onClearAll = viewModel::clearCategories,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
+            }
+        }
+
+        // "이 지역에서 다시 검색" — 지도를 옮겼을 때만 노출. 탭하면 현재 화면 기준 재조회.
+        val showResearch = state.canResearch &&
+            state.searchResults.isEmpty() &&
+            !(searchFocused && state.searchQuery.isBlank())
+        if (showResearch) {
+            Surface(
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(50),
+                shadowElevation = 4.dp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 132.dp)
+                    .clickable {
+                        val pos = cameraPositionState.position
+                        viewModel.researchHere(pos.target.latitude, pos.target.longitude, pos.zoom)
+                    },
+            ) {
+                androidx.compose.foundation.layout.Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        "이 지역에서 다시 검색",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(start = 6.dp),
                     )
                 }
             }

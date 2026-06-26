@@ -2,6 +2,7 @@ package com.kimdev.petmap.ui.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -49,8 +51,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.naver.maps.geometry.LatLng
+import com.naver.maps.map.CameraPosition
+import com.naver.maps.map.compose.ExperimentalNaverMapApi
+import com.naver.maps.map.compose.MapProperties
+import com.naver.maps.map.compose.MapUiSettings
+import com.naver.maps.map.compose.Marker
+import com.naver.maps.map.compose.MarkerState
+import com.naver.maps.map.compose.NaverMap
+import com.naver.maps.map.compose.rememberCameraPositionState
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.util.dialPhone
@@ -86,7 +100,7 @@ fun DetailScreen(
                         IconButton(onClick = viewModel::toggleFavorite) {
                             Icon(
                                 imageVector = if (place.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                                contentDescription = "즐겨찾기",
+                                contentDescription = if (place.isFavorite) "즐겨찾기 해제" else "즐겨찾기 추가",
                                 tint = if (place.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
                         }
@@ -164,6 +178,9 @@ private fun DetailContent(
                 Text("지도에서 보기", modifier = Modifier.padding(start = 6.dp))
             }
 
+            SectionTitle("위치")
+            LocationMiniMap(place)
+
             SectionTitle("정보")
             InfoRow(Icons.Filled.Place, place.roadAddress)
             place.operatingTime?.let { InfoRow(Icons.Filled.Schedule, it) }
@@ -214,7 +231,7 @@ private fun Header(place: Place) {
             ) {
                 Icon(
                     place.category.icon,
-                    contentDescription = null,
+                    contentDescription = place.category.label,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(40.dp),
                 )
@@ -242,12 +259,48 @@ private fun Header(place: Place) {
     }
 }
 
+@OptIn(ExperimentalNaverMapApi::class)
+@Composable
+private fun LocationMiniMap(place: Place) {
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition(LatLng(place.lat, place.lng), 15.0)
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .semantics { contentDescription = "${place.name} 위치 지도" },
+    ) {
+        NaverMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(isNightModeEnabled = isSystemInDarkTheme()),
+            // 미리보기용: 제스처/버튼 비활성 (네이버 로고는 약관상 노출 유지)
+            uiSettings = MapUiSettings(
+                isScrollGesturesEnabled = false,
+                isZoomGesturesEnabled = false,
+                isTiltGesturesEnabled = false,
+                isRotateGesturesEnabled = false,
+                isStopGesturesEnabled = false,
+                isZoomControlEnabled = false,
+                isScaleBarEnabled = false,
+                isLocationButtonEnabled = false,
+            ),
+        ) {
+            Marker(state = MarkerState(position = LatLng(place.lat, place.lng)))
+        }
+    }
+}
+
 @Composable
 private fun SectionTitle(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        modifier = Modifier
+            .padding(top = 24.dp, bottom = 8.dp)
+            .semantics { heading() },
     )
 }
 

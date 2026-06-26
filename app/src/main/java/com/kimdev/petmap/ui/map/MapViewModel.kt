@@ -19,6 +19,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 data class MapUiState(
     val isSeeding: Boolean = true,
@@ -30,6 +35,8 @@ data class MapUiState(
     val searchResults: List<Place> = emptyList(),
     val recentSearches: List<String> = emptyList(),
     val focusTarget: Place? = null,
+    /** 지도를 충분히 이동/축소해 현재 표시 데이터가 오래된 상태 → "이 지역에서 다시 검색" 노출 */
+    val canResearch: Boolean = false,
 )
 
 @OptIn(FlowPreview::class)
@@ -43,17 +50,22 @@ class MapViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
+    // 현재 카메라 위치
     private var lastCenterLat = Constants.DEFAULT_LAT
     private var lastCenterLng = Constants.DEFAULT_LNG
     private var lastZoom = Constants.DEFAULT_ZOOM
+    // 데이터를 마지막으로 조회한 위치
+    private var loadedCenterLat = Constants.DEFAULT_LAT
+    private var loadedCenterLng = Constants.DEFAULT_LNG
+    private var loadedZoom = Constants.DEFAULT_ZOOM
     private var places: List<Place> = emptyList()
 
     init {
         viewModelScope.launch {
             repository.ensureSeeded()
             _uiState.update { it.copy(isSeeding = false) }
-            reload()
-            if (repository.refreshFromRemoteIfStale(System.currentTimeMillis())) reload()
+            fetch()
+            if (repository.refreshFromRemoteIfStale(System.currentTimeMillis())) fetch()
         }
         viewModelScope.launch {
             repository.observeFavoriteIds().collect { ids ->
@@ -110,12 +122,31 @@ class MapViewModel @Inject constructor(
 
     fun clearRecentSearches() = recentSearchStore.clear()
 
-    /** 지도 카메라가 멈출 때마다 호출: 보이는 영역의 장소를 조회하고 클러스터링 */
-    fun onCameraIdle(centerLat: Double, centerLng: Double, zoom: Double) {
+    /**
+     * 카메라가 이동/줌될 때마다 호출.
+     * - 이미 불러온 장소들을 새 줌에 맞게 **로컬에서만** 재클러스터링(데이터 재조회 없음).
+     * - 마지막 조회 지점에서 충분히 멀어지거나 조회 반경이 달라지면 "다시 검색" 버튼을 노출.
+     */
+    fun onCameraMove(centerLat: Double, centerLng: Double, zoom: Double) {
         lastCenterLat = centerLat
         lastCenterLng = centerLng
         lastZoom = zoom
-        reload()
+        if (_uiState.value.isSeeding) return
+
+        val clusters = clusterPlaces(places, zoom)
+        val movedMeters = distanceMeters(loadedCenterLat, loadedCenterLng, centerLat, centerLng)
+        val radiusChanged = radiusForZoom(zoom) != radiusForZoom(loadedZoom)
+        // 마지막 조회 반경의 45% 이상 벗어났거나, 줌 단계가 바뀌어 조회 범위가 달라지면 갱신 권장
+        val stale = movedMeters > radiusForZoom(loadedZoom) * 1000.0 * 0.45 || radiusChanged
+        _uiState.update { it.copy(clusters = clusters, canResearch = stale) }
+    }
+
+    /** "이 지역에서 다시 검색" — 현재 카메라 위치 기준으로 데이터 재조회 */
+    fun researchHere(centerLat: Double, centerLng: Double, zoom: Double) {
+        lastCenterLat = centerLat
+        lastCenterLng = centerLng
+        lastZoom = zoom
+        fetch()
     }
 
     fun toggleCategory(category: PlaceCategory) {
@@ -124,27 +155,41 @@ class MapViewModel @Inject constructor(
             else it.selectedCategories + category
             it.copy(selectedCategories = next)
         }
-        reload()
+        fetch()
     }
 
     fun clearCategories() {
         _uiState.update { it.copy(selectedCategories = emptySet()) }
-        reload()
+        fetch()
     }
 
-    private fun reload() {
+    /** 현재 카메라 위치 기준으로 DB 조회 후 클러스터링. canResearch 해제. */
+    private fun fetch() {
         if (_uiState.value.isSeeding) return
+        loadedCenterLat = lastCenterLat
+        loadedCenterLng = lastCenterLng
+        loadedZoom = lastZoom
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             places = repository.getPlacesInBounds(
-                centerLat = lastCenterLat,
-                centerLng = lastCenterLng,
-                radiusKm = radiusForZoom(lastZoom),
+                centerLat = loadedCenterLat,
+                centerLng = loadedCenterLng,
+                radiusKm = radiusForZoom(loadedZoom),
                 categories = _uiState.value.selectedCategories,
                 limit = 500,
             )
             val clusters = clusterPlaces(places, lastZoom)
-            _uiState.update { it.copy(isLoading = false, clusters = clusters) }
+            _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
         }
+    }
+
+    /** 두 위경도 사이 대략 거리(m) — Haversine */
+    private fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val r = 6_371_000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLng = Math.toRadians(lng2 - lng1)
+        val a = sin(dLat / 2).pow(2) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).pow(2)
+        return r * 2 * atan2(sqrt(a), sqrt(1 - a))
     }
 }

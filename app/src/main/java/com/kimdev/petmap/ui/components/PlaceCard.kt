@@ -90,7 +90,7 @@ fun PlaceCard(
             IconButton(onClick = onToggleFavorite) {
                 Icon(
                     imageVector = if (place.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = "즐겨찾기",
+                    contentDescription = if (place.isFavorite) "즐겨찾기 해제" else "즐겨찾기 추가",
                     tint = if (place.isFavorite) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.outline,
                 )
