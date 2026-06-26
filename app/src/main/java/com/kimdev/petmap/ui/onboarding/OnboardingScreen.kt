@@ -1,0 +1,187 @@
+package com.kimdev.petmap.ui.onboarding
+
+import android.content.Context
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+
+/** 첫 실행 여부 플래그 (SharedPreferences) */
+object OnboardingPrefs {
+    private const val PREFS = "onboarding"
+    private const val KEY_DONE = "completed"
+
+    fun isCompleted(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_DONE, false)
+
+    fun setCompleted(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_DONE, true).apply()
+    }
+}
+
+private data class OnboardingPage(
+    val icon: ImageVector,
+    val title: String,
+    val description: String,
+    val accent: Color,
+)
+
+private val pages = listOf(
+    OnboardingPage(
+        icon = Icons.Filled.Map,
+        title = "지도로 한눈에",
+        description = "반려동물과 함께 갈 수 있는 카페·병원·숙박을\n지도 위에서 바로 찾아보세요.",
+        accent = Color(0xFF22A75A),
+    ),
+    OnboardingPage(
+        icon = Icons.Filled.FilterAlt,
+        title = "똑똑한 검색 & 필터",
+        description = "카테고리 다중 선택, 거리순·영업중 필터로\n원하는 곳을 빠르게 찾을 수 있어요.",
+        accent = Color(0xFF3D8BD4),
+    ),
+    OnboardingPage(
+        icon = Icons.Filled.Pets,
+        title = "동반 정보 & 즐겨찾기",
+        description = "장소별 반려동물 동반 가능 여부를 확인하고\n자주 가는 곳은 즐겨찾기로 모아보세요.",
+        accent = Color(0xFFF2913C),
+    ),
+)
+
+@Composable
+fun OnboardingScreen(onFinish: () -> Unit) {
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val scope = rememberCoroutineScope()
+    val isLast = pagerState.currentPage == pages.lastIndex
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp),
+    ) {
+        // 건너뛰기
+        Box(modifier = Modifier.fillMaxWidth()) {
+            TextButton(
+                onClick = onFinish,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) { Text("건너뛰기") }
+        }
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) { page ->
+            PageContent(pages[page])
+        }
+
+        // 페이지 인디케이터
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .padding(vertical = 24.dp)
+                .align(Alignment.CenterHorizontally),
+        ) {
+            repeat(pages.size) { i ->
+                val selected = pagerState.currentPage == i
+                val width by animateDpAsState(if (selected) 24.dp else 8.dp, label = "dot")
+                val color by animateColorAsState(
+                    if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outlineVariant,
+                    label = "dotColor",
+                )
+                Box(
+                    modifier = Modifier
+                        .height(8.dp)
+                        .size(width = width, height = 8.dp)
+                        .clip(CircleShape)
+                        .background(color),
+                )
+            }
+        }
+
+        Button(
+            onClick = {
+                if (isLast) onFinish()
+                else scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+        ) {
+            Text(if (isLast) "시작하기" else "다음")
+        }
+    }
+}
+
+@Composable
+private fun PageContent(page: OnboardingPage) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(160.dp)
+                .clip(CircleShape)
+                .background(page.accent.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                page.icon,
+                contentDescription = null,
+                tint = page.accent,
+                modifier = Modifier.size(80.dp),
+            )
+        }
+        Spacer(Modifier.height(40.dp))
+        Text(
+            page.title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            page.description,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}

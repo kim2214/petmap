@@ -15,6 +15,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -22,6 +25,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.kimdev.petmap.core.ads.AdsConsent
 import com.kimdev.petmap.core.review.InAppReview
+import com.kimdev.petmap.ui.onboarding.OnboardingPrefs
+import com.kimdev.petmap.ui.onboarding.OnboardingScreen
 import com.kimdev.petmap.ui.navigation.PetMapNavHost
 import com.kimdev.petmap.ui.navigation.TopLevelDestination
 import com.kimdev.petmap.ui.theme.PetMapTheme
@@ -39,7 +44,17 @@ class MainActivity : ComponentActivity() {
         InAppReview.maybeAsk(this)
         setContent {
             PetMapTheme {
-                PetMapApp()
+                var showOnboarding by rememberSaveable {
+                    mutableStateOf(!OnboardingPrefs.isCompleted(this@MainActivity))
+                }
+                if (showOnboarding) {
+                    OnboardingScreen(onFinish = {
+                        OnboardingPrefs.setCompleted(this@MainActivity)
+                        showOnboarding = false
+                    })
+                } else {
+                    PetMapApp()
+                }
             }
         }
     }
