@@ -96,6 +96,19 @@ keyAlias=petmap
 keyPassword=...
 ```
 
+### 5. 크래시 리포트 / 분석 (Firebase)
+Crashlytics·Analytics 가 연동돼 있으나, **본인 Firebase 프로젝트의 `google-services.json` 이 있어야 활성화**된다.
+파일이 없으면 빌드는 정상이고 Firebase 만 비활성(앱 시작 시 경고 로그만 출력)된다.
+
+활성화 방법:
+1. [Firebase 콘솔](https://console.firebase.google.com)에서 프로젝트 생성 → Android 앱 추가
+   (패키지 이름: `com.kimdev.petmap`)
+2. `google-services.json` 다운로드 → `app/google-services.json` 에 배치 (git 제외됨)
+3. 다시 빌드하면 자동으로 플러그인이 적용되고 크래시·기본 분석이 수집된다.
+
+> 크래시는 자동 수집(앱 코드에서 Firebase API 직접 호출 없음)이라, json 유무와 무관하게 앱은 안전하게 동작한다.
+> 비공개 테스트 중 크래시는 Firebase 콘솔 Crashlytics 에서 확인할 수 있다.
+
 ## 🗃️ 데이터 전략 (프리빌트 Room DB)
 
 API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 소스로** 사용한다.

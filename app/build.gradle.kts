@@ -111,6 +111,11 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.play.services.ads)
+
+    // Firebase (Crashlytics + Analytics). 실제 동작은 google-services.json 이 있어야 활성화됨.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -160,4 +165,13 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+// google-services.json 이 있을 때만 Firebase 플러그인 적용 (없으면 빌드는 정상, Firebase 비활성)
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+    println("Firebase: google-services.json 발견 → Crashlytics/Analytics 활성화")
+} else {
+    println("Firebase: google-services.json 없음 → Firebase 비활성(앱은 정상 빌드)")
 }
