@@ -1,14 +1,10 @@
 package com.kimdev.petmap
 
 import android.app.Application
-import com.google.android.gms.ads.MobileAds
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
 class PetMapApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        // 광고 SDK 초기화 (백그라운드 스레드에서 처리됨)
-        MobileAds.initialize(this) {}
-    }
+    // 광고 SDK 초기화는 사용자 동의(UMP) 확보 후 MainActivity 에서 수행한다.
+    // (AdsConsent.gather → canRequestAds 시 MobileAds.initialize)
 }

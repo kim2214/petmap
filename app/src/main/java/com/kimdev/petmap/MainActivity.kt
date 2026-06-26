@@ -19,6 +19,8 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.kimdev.petmap.core.ads.AdsConsent
+import com.kimdev.petmap.core.review.InAppReview
 import com.kimdev.petmap.ui.navigation.PetMapNavHost
 import com.kimdev.petmap.ui.navigation.TopLevelDestination
 import com.kimdev.petmap.ui.theme.PetMapTheme
@@ -30,6 +32,10 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // 광고 동의(UMP) 수집 → 동의되면 광고 SDK 초기화
+        AdsConsent.gather(this)
+        // 일정 실행 횟수 이상이면 인앱 리뷰 요청 (Play 설치 빌드에서만 실제 노출)
+        InAppReview.maybeAsk(this)
         setContent {
             PetMapTheme {
                 PetMapApp()
