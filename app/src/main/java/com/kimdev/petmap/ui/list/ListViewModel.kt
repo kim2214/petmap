@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.UserLocation
+import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.data.repository.withFavorites
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
@@ -26,15 +27,16 @@ data class ListUiState(
     val isLoading: Boolean = true,
     val places: List<Place> = emptyList(),
     val query: String = "",
-    val selectedCategory: PlaceCategory? = null,
+    val selectedCategories: Set<PlaceCategory> = emptySet(),
     val sortByDistance: Boolean = false,
     val openNowOnly: Boolean = false,
     val hasLocation: Boolean = false,
+    val recentSearches: List<String> = emptyList(),
 )
 
 private data class SearchKey(
     val query: String,
-    val category: PlaceCategory?,
+    val categories: Set<PlaceCategory>,
     val sortByDistance: Boolean,
     val openNowOnly: Boolean,
 )
@@ -44,6 +46,7 @@ private data class SearchKey(
 class ListViewModel @Inject constructor(
     private val repository: PlaceRepository,
     private val locationProvider: LocationProvider,
+    private val recentSearchStore: RecentSearchStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ListUiState())
@@ -59,7 +62,7 @@ class ListViewModel @Inject constructor(
             _uiState.update { it.copy(hasLocation = userLocation != null) }
             // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회
             _uiState
-                .map { SearchKey(it.query, it.selectedCategory, it.sortByDistance, it.openNowOnly) }
+                .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly) }
                 .distinctUntilChanged()
                 .debounce(250)
                 .collect { runSearch(it) }
@@ -68,6 +71,11 @@ class ListViewModel @Inject constructor(
             repository.observeFavoriteIds().collect { ids ->
                 favoriteIds = ids
                 _uiState.update { it.copy(places = it.places.withFavorites(ids)) }
+            }
+        }
+        viewModelScope.launch {
+            recentSearchStore.recent.collect { list ->
+                _uiState.update { it.copy(recentSearches = list) }
             }
         }
     }
@@ -79,9 +87,9 @@ class ListViewModel @Inject constructor(
         val fetchLimit = if (key.openNowOnly) 400 else 200
 
         var results = if (key.sortByDistance && loc != null) {
-            repository.searchNearby(key.query, key.category, loc.lat, loc.lng, fetchLimit)
+            repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, fetchLimit)
         } else {
-            repository.search(key.query, key.category, fetchLimit)
+            repository.search(key.query, key.categories, fetchLimit)
         }
 
         if (key.openNowOnly) {
@@ -98,8 +106,19 @@ class ListViewModel @Inject constructor(
 
     fun onQueryChange(q: String) = _uiState.update { it.copy(query = q) }
 
-    fun selectCategory(category: PlaceCategory?) =
-        _uiState.update { it.copy(selectedCategory = category) }
+    fun toggleCategory(category: PlaceCategory) = _uiState.update {
+        val next = if (category in it.selectedCategories) it.selectedCategories - category
+        else it.selectedCategories + category
+        it.copy(selectedCategories = next)
+    }
+
+    fun clearCategories() = _uiState.update { it.copy(selectedCategories = emptySet()) }
+
+    fun recordRecentSearch(query: String) = recentSearchStore.add(query)
+
+    fun removeRecentSearch(query: String) = recentSearchStore.remove(query)
+
+    fun clearRecentSearches() = recentSearchStore.clear()
 
     fun setSortByDistance(enabled: Boolean) =
         _uiState.update { it.copy(sortByDistance = enabled) }

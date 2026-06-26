@@ -35,15 +35,21 @@ class PlaceRepositoryImpl @Inject constructor(
         runCatching { placeDao.count() }
     }
 
+    // 빈 카테고리 셋이면 IN () 오류 방지를 위해 더미 1개 + catCount=0 으로 전달
+    private fun catsOf(categories: Set<PlaceCategory>): Pair<List<String>, Int> =
+        if (categories.isEmpty()) listOf("") to 0
+        else categories.map { it.name } to categories.size
+
     override suspend fun getPlacesInBounds(
         centerLat: Double,
         centerLng: Double,
         radiusKm: Double,
-        category: PlaceCategory?,
+        categories: Set<PlaceCategory>,
         limit: Int,
     ): List<Place> {
         val latDelta = radiusKm / 111.0
         val lngDelta = radiusKm / (111.0 * max(0.1, cos(Math.toRadians(centerLat))))
+        val (cats, catCount) = catsOf(categories)
         return placeDao.getInBounds(
             minLat = centerLat - latDelta,
             maxLat = centerLat + latDelta,
@@ -51,23 +57,28 @@ class PlaceRepositoryImpl @Inject constructor(
             maxLng = centerLng + lngDelta,
             centerLat = centerLat,
             centerLng = centerLng,
-            category = category?.name,
+            cats = cats,
+            catCount = catCount,
             limit = limit,
         ).map { it.toDomain() }
     }
 
-    override suspend fun search(query: String, category: PlaceCategory?, limit: Int): List<Place> =
-        placeDao.search(query.trim(), category?.name, limit).map { it.toDomain() }
+    override suspend fun search(query: String, categories: Set<PlaceCategory>, limit: Int): List<Place> {
+        val (cats, catCount) = catsOf(categories)
+        return placeDao.search(query.trim(), cats, catCount, limit).map { it.toDomain() }
+    }
 
     override suspend fun searchNearby(
         query: String,
-        category: PlaceCategory?,
+        categories: Set<PlaceCategory>,
         userLat: Double,
         userLng: Double,
         limit: Int,
-    ): List<Place> =
-        placeDao.searchByDistance(query.trim(), category?.name, userLat, userLng, limit)
+    ): List<Place> {
+        val (cats, catCount) = catsOf(categories)
+        return placeDao.searchByDistance(query.trim(), cats, catCount, userLat, userLng, limit)
             .map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
+    }
 
     override suspend fun getPlace(id: String): Place? = placeDao.getById(id)?.toDomain()
 

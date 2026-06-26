@@ -13,26 +13,26 @@ interface PlaceRepository {
     /** 내장 데이터가 비어 있으면 최초 1회 시딩 */
     suspend fun ensureSeeded()
 
-    /** 지도 뷰포트: 중심 좌표 기준 반경 박스 내 장소 (가까운 순, 개수 제한) */
+    /** 지도 뷰포트: 중심 좌표 기준 반경 박스 내 장소 (가까운 순, 개수 제한). categories 비면 전체 */
     suspend fun getPlacesInBounds(
         centerLat: Double,
         centerLng: Double,
         radiusKm: Double,
-        category: PlaceCategory? = null,
+        categories: Set<PlaceCategory> = emptySet(),
         limit: Int = 300,
     ): List<Place>
 
-    /** 목록: 이름/주소 검색 + 카테고리 필터 (이름순) */
+    /** 목록: 이름/주소 검색 + 카테고리 다중 필터 (이름순) */
     suspend fun search(
         query: String,
-        category: PlaceCategory? = null,
+        categories: Set<PlaceCategory> = emptySet(),
         limit: Int = 200,
     ): List<Place>
 
-    /** 목록: 이름/주소 검색 + 카테고리 필터, 사용자 위치에서 가까운 순 (각 항목에 거리 채움) */
+    /** 목록: 이름/주소 검색 + 카테고리 다중 필터, 사용자 위치에서 가까운 순 (각 항목에 거리 채움) */
     suspend fun searchNearby(
         query: String,
-        category: PlaceCategory?,
+        categories: Set<PlaceCategory>,
         userLat: Double,
         userLng: Double,
         limit: Int = 200,

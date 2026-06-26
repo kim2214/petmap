@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -44,6 +45,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -95,6 +97,8 @@ fun MapScreen(
     var previewPlace by remember { mutableStateOf<Place?>(null) }
     // 더 못 쪼개는 클러스터를 탭했을 때 펼쳐 보여줄 장소 목록
     var clusterList by remember { mutableStateOf<List<Place>?>(null) }
+    // 검색창 포커스 여부 (최근 검색어 표시용)
+    var searchFocused by remember { mutableStateOf(false) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition(
@@ -218,11 +222,14 @@ fun MapScreen(
                     unfocusedBorderColor = Color.Transparent,
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                 ),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { searchFocused = it.isFocused },
             )
 
-            if (state.searchResults.isNotEmpty()) {
-                Surface(
+            when {
+                // 자동완성 결과
+                state.searchResults.isNotEmpty() -> Surface(
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(16.dp),
                     shadowElevation = 4.dp,
@@ -233,25 +240,38 @@ fun MapScreen(
                     Column(modifier = Modifier.heightIn(max = 320.dp)) {
                         state.searchResults.forEach { p ->
                             SearchResultRow(p) {
+                                val q = state.searchQuery
                                 cameraPositionState.position =
                                     CameraPosition(LatLng(p.lat, p.lng), 16.0)
                                 previewPlace = p
+                                if (q.isNotBlank()) viewModel.recordRecentSearch(q)
                                 viewModel.clearSearch()
                                 focusManager.clearFocus()
                             }
                         }
                     }
                 }
-            } else {
-                Surface(
+
+                // 최근 검색어 (검색창 포커스 + 입력 비어있음)
+                searchFocused && state.searchQuery.isBlank() && state.recentSearches.isNotEmpty() ->
+                    RecentSearchPanel(
+                        recents = state.recentSearches,
+                        onPick = { viewModel.onSearchQueryChange(it) },
+                        onRemove = { viewModel.removeRecentSearch(it) },
+                        onClearAll = { viewModel.clearRecentSearches() },
+                    )
+
+                // 카테고리 다중 선택 칩
+                else -> Surface(
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                     shape = RoundedCornerShape(24.dp),
                     shadowElevation = 2.dp,
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
                     CategoryFilterRow(
-                        selected = state.selectedCategory,
-                        onSelect = viewModel::selectCategory,
+                        selected = state.selectedCategories,
+                        onToggle = viewModel::toggleCategory,
+                        onClearAll = viewModel::clearCategories,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
@@ -360,6 +380,73 @@ fun MapScreen(
 private const val MAX_CLUSTER_ZOOM = 19.0
 // 멤버들이 이 거리(m) 이내면 사실상 같은 좌표로 보고 목록으로 펼친다.
 private const val CO_LOCATED_M = 25.0
+
+@Composable
+private fun RecentSearchPanel(
+    recents: List<String>,
+    onPick: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onClearAll: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(16.dp),
+        shadowElevation = 4.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+    ) {
+        Column(modifier = Modifier.heightIn(max = 360.dp)) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp, top = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "최근 검색",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onClearAll) { Text("전체 삭제") }
+            }
+            recents.forEach { term ->
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPick(term) }
+                        .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        term,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    IconButton(onClick = { onRemove(term) }) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "삭제",
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun SearchResultRow(place: Place, onClick: () -> Unit) {

@@ -18,14 +18,15 @@ interface PlaceDao {
 
     /**
      * 지도 뷰포트(위/경도 박스) 안의 장소. 중심에서 가까운 순으로 제한.
-     * category 가 null 이면 전체 카테고리.
+     * 카테고리 다중 필터: catCount 가 0 이면 전체, 아니면 category IN (cats).
+     * (cats 는 빈 리스트일 때 SQL 오류가 나므로 항상 1개 이상 전달)
      */
     @Query(
         """
         SELECT * FROM places
         WHERE lat BETWEEN :minLat AND :maxLat
           AND lng BETWEEN :minLng AND :maxLng
-          AND (:category IS NULL OR category = :category)
+          AND (:catCount = 0 OR category IN (:cats))
         ORDER BY ((lat - :centerLat) * (lat - :centerLat) + (lng - :centerLng) * (lng - :centerLng)) ASC
         LIMIT :limit
         """
@@ -37,35 +38,37 @@ interface PlaceDao {
         maxLng: Double,
         centerLat: Double,
         centerLng: Double,
-        category: String?,
+        cats: List<String>,
+        catCount: Int,
         limit: Int,
     ): List<PlaceEntity>
 
-    /** 이름/주소 검색 + 카테고리 필터 */
+    /** 이름/주소 검색 + 카테고리 다중 필터 */
     @Query(
         """
         SELECT * FROM places
         WHERE (:query = '' OR name LIKE '%' || :query || '%' OR roadAddress LIKE '%' || :query || '%')
-          AND (:category IS NULL OR category = :category)
+          AND (:catCount = 0 OR category IN (:cats))
         ORDER BY name ASC
         LIMIT :limit
         """
     )
-    suspend fun search(query: String, category: String?, limit: Int): List<PlaceEntity>
+    suspend fun search(query: String, cats: List<String>, catCount: Int, limit: Int): List<PlaceEntity>
 
-    /** 이름/주소 검색 + 카테고리 필터, 지정 좌표에서 가까운 순 */
+    /** 이름/주소 검색 + 카테고리 다중 필터, 지정 좌표에서 가까운 순 */
     @Query(
         """
         SELECT * FROM places
         WHERE (:query = '' OR name LIKE '%' || :query || '%' OR roadAddress LIKE '%' || :query || '%')
-          AND (:category IS NULL OR category = :category)
+          AND (:catCount = 0 OR category IN (:cats))
         ORDER BY ((lat - :lat) * (lat - :lat) + (lng - :lng) * (lng - :lng)) ASC
         LIMIT :limit
         """
     )
     suspend fun searchByDistance(
         query: String,
-        category: String?,
+        cats: List<String>,
+        catCount: Int,
         lat: Double,
         lng: Double,
         limit: Int,
