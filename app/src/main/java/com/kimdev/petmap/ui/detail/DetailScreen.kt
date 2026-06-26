@@ -227,7 +227,7 @@ private fun Header(place: Place) {
             if (open != null) {
                 Surface(
                     color = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = if (open) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    contentColor = if (open) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
