@@ -63,7 +63,9 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlacePreviewSheet
+import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
+import com.kimdev.petmap.ui.components.softColor
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.naver.maps.geometry.LatLng
@@ -168,6 +170,7 @@ fun MapScreen(
                     Marker(
                         state = MarkerState(position = LatLng(single.lat, single.lng)),
                         captionText = single.name,
+                        iconTintColor = single.category.color,
                         onClick = {
                             previewPlace = single
                             true
@@ -499,14 +502,14 @@ private fun SearchResultRow(place: Place, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
+                .clip(RoundedCornerShape(11.dp))
+                .background(place.category.softColor),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 place.category.icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                tint = place.category.color,
                 modifier = Modifier.size(20.dp),
             )
         }

@@ -73,7 +73,9 @@ import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sharePlace
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.OpeningHours
+import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
+import com.kimdev.petmap.ui.components.softColor
 import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -182,16 +184,18 @@ private fun DetailContent(
             LocationMiniMap(place)
 
             SectionTitle("정보")
-            InfoRow(Icons.Filled.Place, place.roadAddress)
-            place.operatingTime?.let { InfoRow(Icons.Filled.Schedule, it) }
-            place.closedDays?.let { InfoRow(Icons.Filled.CalendarMonth, "휴무 $it") }
-            place.phone?.let { InfoRow(Icons.Filled.Phone, it) }
+            val accent = place.category.color
+            InfoRow(Icons.Filled.Place, place.roadAddress, tint = accent)
+            place.operatingTime?.let { InfoRow(Icons.Filled.Schedule, it, tint = accent) }
+            place.closedDays?.let { InfoRow(Icons.Filled.CalendarMonth, "휴무 $it", tint = accent) }
+            place.phone?.let { InfoRow(Icons.Filled.Phone, it, tint = accent) }
             place.homepage?.let { hp ->
                 InfoRow(
                     Icons.Filled.Language,
                     hp,
                     valueColor = MaterialTheme.colorScheme.primary,
                     underline = true,
+                    tint = accent,
                     onClick = { context.openUrl(hp) },
                 )
             }
@@ -211,8 +215,8 @@ private fun DetailContent(
 private fun Header(place: Place) {
     val open = OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())
     Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = place.category.softColor,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -232,7 +236,7 @@ private fun Header(place: Place) {
                 Icon(
                     place.category.icon,
                     contentDescription = place.category.label,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = place.category.color,
                     modifier = Modifier.size(40.dp),
                 )
             }
@@ -288,7 +292,10 @@ private fun LocationMiniMap(place: Place) {
                 isLocationButtonEnabled = false,
             ),
         ) {
-            Marker(state = MarkerState(position = LatLng(place.lat, place.lng)))
+            Marker(
+                state = MarkerState(position = LatLng(place.lat, place.lng)),
+                iconTintColor = place.category.color,
+            )
         }
     }
 }
@@ -310,6 +317,7 @@ private fun InfoRow(
     value: String,
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
     underline: Boolean = false,
+    tint: Color = MaterialTheme.colorScheme.primary,
     onClick: (() -> Unit)? = null,
 ) {
     Row(
@@ -322,7 +330,7 @@ private fun InfoRow(
         Icon(
             icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = tint,
             modifier = Modifier.size(20.dp),
         )
         Text(

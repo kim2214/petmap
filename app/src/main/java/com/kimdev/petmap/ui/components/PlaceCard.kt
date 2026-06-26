@@ -76,7 +76,7 @@ fun PlaceCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
-                    CategoryTag(place.category.label)
+                    CategoryTag(place)
                     place.distanceMeters?.let {
                         Text(
                             formatDistance(it),
@@ -86,6 +86,7 @@ fun PlaceCard(
                     }
                     OpenBadge(place)
                 }
+                PetBadges(place)
             }
             IconButton(onClick = onToggleFavorite) {
                 Icon(
@@ -104,31 +105,61 @@ private fun CategoryAvatar(place: Place) {
     Box(
         modifier = Modifier
             .size(48.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
+            .clip(RoundedCornerShape(14.dp))
+            .background(place.category.softColor),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = place.category.icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            tint = place.category.color,
             modifier = Modifier.size(24.dp),
         )
     }
 }
 
 @Composable
-private fun CategoryTag(label: String) {
+private fun CategoryTag(place: Place) {
     Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        color = place.category.softColor,
+        contentColor = place.category.color,
         shape = RoundedCornerShape(8.dp),
     ) {
         Text(
-            label,
+            place.category.label,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
+    }
+}
+
+/** 반려동물 동반 정보 뱃지 (소형견 가능 / 실내·실외 가능 등) */
+@Composable
+private fun PetBadges(place: Place) {
+    val badges = buildList {
+        place.petInfo.allowedPetSize?.let { add("🐾 $it") }
+        if (place.petInfo.indoorAllowed) add("실내 가능")
+        if (place.petInfo.outdoorAllowed) add("실외 가능")
+    }.take(3)
+    if (badges.isEmpty()) return
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(top = 6.dp),
+    ) {
+        badges.forEach { text ->
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                )
+            }
+        }
     }
 }
 

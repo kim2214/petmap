@@ -110,10 +110,10 @@ fun makeClusterBitmap(count: Int, typeface: Typeface? = null): Bitmap {
     val r = sizePx / 2f
 
     // 반투명 외곽 링 (브랜드 그린)
-    val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x553E7D44.toInt() }
+    val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x5522A75A.toInt() }
     canvas.drawCircle(r, r, r, ring)
     // 채워진 원
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF3E7D44.toInt() }
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF22A75A.toInt() }
     canvas.drawCircle(r, r, r * 0.74f, fill)
     // 개수 텍스트
     val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
