@@ -37,6 +37,14 @@ fun Context.sharePlace(place: Place) {
     safeStart(Intent.createChooser(send, "공유"))
 }
 
+/** 메일 앱으로 문의 보내기 */
+fun Context.sendEmail(address: String, subject: String = "") {
+    val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$address")).apply {
+        if (subject.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, subject)
+    }
+    safeStart(intent)
+}
+
 /** 외부 브라우저로 URL 열기 */
 fun Context.openUrl(url: String) {
     val normalized = if (url.startsWith("http", ignoreCase = true)) url else "http://$url"

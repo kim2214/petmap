@@ -12,6 +12,8 @@ import com.kimdev.petmap.ui.detail.DetailScreen
 import com.kimdev.petmap.ui.favorite.FavoriteScreen
 import com.kimdev.petmap.ui.list.ListScreen
 import com.kimdev.petmap.ui.map.MapScreen
+import com.kimdev.petmap.ui.settings.LicensesScreen
+import com.kimdev.petmap.ui.settings.SettingsScreen
 
 @Composable
 fun PetMapNavHost(
@@ -33,6 +35,12 @@ fun PetMapNavHost(
         }
         composable(Routes.FAVORITE) {
             FavoriteScreen(onPlaceClick = openDetail)
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(onOpenLicenses = { navController.navigate(Routes.LICENSES) })
+        }
+        composable(Routes.LICENSES) {
+            LicensesScreen(onBack = { navController.popBackStack() })
         }
         composable(
             route = Routes.DETAIL_PATTERN,
