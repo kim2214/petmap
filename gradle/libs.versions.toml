@@ -27,7 +27,6 @@ okhttp = "4.12.0"
 kotlinxSerialization = "1.7.3"
 
 room = "2.6.1"
-coil = "2.7.0"
 
 naverMapCompose = "1.9.0"
 playServicesLocation = "21.3.0"
@@ -75,9 +74,6 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
-
-# Image loading
-coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
 # Map + Location
 naver-map-compose = { group = "io.github.fornewid", name = "naver-map-compose", version.ref = "naverMapCompose" }

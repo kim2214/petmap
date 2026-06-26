@@ -26,11 +26,11 @@ private val LICENSES = listOf(
     "Retrofit · OkHttp" to "Apache License 2.0",
     "kotlinx.serialization" to "Apache License 2.0",
     "Room" to "Apache License 2.0",
-    "Coil" to "Apache License 2.0",
     "Accompanist" to "Apache License 2.0",
     "naver-map-compose (fornewid)" to "Apache License 2.0",
     "NAVER Maps SDK" to "NAVER Cloud Platform 이용약관",
     "Google Mobile Ads (AdMob)" to "Android Software Development Kit License",
+    "Google UMP · Play In-App Review" to "Android Software Development Kit License",
     "Firebase (Crashlytics · Analytics)" to "Apache License 2.0",
     "나눔스퀘어라운드 글꼴" to "네이버 나눔글꼴 라이선스 (무료 사용)",
 )

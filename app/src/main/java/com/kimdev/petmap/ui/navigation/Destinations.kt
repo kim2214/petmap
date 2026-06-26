@@ -1,9 +1,9 @@
 package com.kimdev.petmap.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -29,7 +29,7 @@ enum class TopLevelDestination(
     val icon: ImageVector,
 ) {
     MAP(Routes.MAP, "지도", Icons.Filled.Map),
-    LIST(Routes.LIST, "목록", Icons.Filled.List),
+    LIST(Routes.LIST, "목록", Icons.AutoMirrored.Filled.List),
     FAVORITE(Routes.FAVORITE, "즐겨찾기", Icons.Filled.FavoriteBorder),
     SETTINGS(Routes.SETTINGS, "설정", Icons.Filled.Settings),
 }

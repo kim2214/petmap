@@ -155,9 +155,6 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // Image
-    implementation(libs.coil.compose)
-
     // Map + Location
     implementation(libs.naver.map.compose)
     implementation(libs.naver.map.location)
