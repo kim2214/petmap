@@ -22,4 +22,4 @@ keystore.properties
 
 # Firebase 설정 (각 환경에서 본인 프로젝트 파일 배치)
 google-services.json
-app/google-services.json
+app/google-services*.json
