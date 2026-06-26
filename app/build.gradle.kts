@@ -41,12 +41,12 @@ android {
         // 공공데이터포털 서비스 키
         buildConfigField("String", "PUBLIC_DATA_SERVICE_KEY", "\"${prop("public.data.serviceKey")}\"")
 
-        // AdMob (기본값은 Google 공식 테스트 ID — 출시 시 local.properties 에서 실제 ID 로 교체)
-        manifestPlaceholders["admobAppId"] =
-            prop("admob.appId", "ca-app-pub-3940256099942544~3347511713")
+        // AdMob: 디버그 빌드는 Google 공식 테스트 ID 사용(아래 release 에서 실제 ID 로 덮어씀).
+        // ID 는 APK 에 포함되어 비밀이 아니므로 하드코딩한다.
+        manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
         buildConfigField(
             "String", "ADMOB_BANNER_UNIT_ID",
-            "\"${prop("admob.bannerUnitId", "ca-app-pub-3940256099942544/6300978111")}\"",
+            "\"ca-app-pub-3940256099942544/6300978111\"",
         )
     }
 
@@ -68,6 +68,12 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
+            )
+            // 릴리스 빌드만 실제 AdMob ID 사용
+            manifestPlaceholders["admobAppId"] = "ca-app-pub-1641853512361199~7767904833"
+            buildConfigField(
+                "String", "ADMOB_BANNER_UNIT_ID",
+                "\"ca-app-pub-1641853512361199/6256079867\"",
             )
             // 실제 keystore 가 있으면 릴리스 서명, 없으면 로컬 검증용으로 디버그 서명
             signingConfig = if (hasReleaseKeystore) {
