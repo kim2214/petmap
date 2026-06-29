@@ -7,8 +7,12 @@ import com.kimdev.petmap.domain.model.PetInfo
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 
+/** 공공데이터의 "가능 여부" 문자열을 Boolean 으로 변환 (도메인/엔티티 경로 공통) */
 private fun String?.toBool(): Boolean =
     this?.let { it == "Y" || it == "가능" || it.equals("true", true) } ?: false
+
+/** 좌표 + 이름으로 안정적인 id 생성 (데이터셋에 고유 id 가 없을 때) */
+private fun stableId(name: String, lat: Double, lng: Double) = "${name}_${lat}_${lng}"
 
 /** 원격 DTO → 도메인 모델 */
 fun PlaceDto.toDomain(): Place? {
@@ -17,8 +21,7 @@ fun PlaceDto.toDomain(): Place? {
     val placeName = name ?: return null
     val road = roadAddress ?: lotAddress.orEmpty()
     return Place(
-        // 좌표 + 이름으로 안정적인 id 생성 (데이터셋에 고유 id 가 없을 때)
-        id = "${placeName}_${lat}_${lng}",
+        id = stableId(placeName, lat, lng),
         name = placeName,
         category = PlaceCategory.fromRaw(category),
         roadAddress = road,
@@ -59,9 +62,8 @@ fun PlaceDto.toEntity(): PlaceEntity? {
     val lat = latitude ?: return null
     val lng = longitude ?: return null
     val placeName = name ?: return null
-    fun String?.bool() = this?.let { it == "Y" || it == "가능" } ?: false
     return PlaceEntity(
-        id = "${placeName}_${lat}_${lng}",
+        id = stableId(placeName, lat, lng),
         name = placeName,
         category = PlaceCategory.fromRaw(category).name,
         roadAddress = roadAddress ?: lotAddress.orEmpty(),
@@ -74,8 +76,8 @@ fun PlaceDto.toEntity(): PlaceEntity? {
         homepage = homepage?.takeIf { it.isNotBlank() },
         allowedPetSize = allowedPetSize?.takeIf { it.isNotBlank() },
         restriction = restriction?.takeIf { it.isNotBlank() },
-        indoorAllowed = indoorAllowed.bool(),
-        outdoorAllowed = outdoorAllowed.bool(),
+        indoorAllowed = indoorAllowed.toBool(),
+        outdoorAllowed = outdoorAllowed.toBool(),
     )
 }
 

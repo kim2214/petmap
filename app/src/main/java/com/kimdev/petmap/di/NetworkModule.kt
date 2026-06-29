@@ -1,5 +1,6 @@
 package com.kimdev.petmap.di
 
+import com.kimdev.petmap.BuildConfig
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.data.remote.api.PublicDataApi
 import dagger.Module
@@ -30,7 +31,14 @@ object NetworkModule {
     @Singleton
     fun provideOkHttp(): OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(
-            HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
+            // 디버그 빌드에서만 네트워크 로깅. 릴리스는 오버헤드/정보노출 방지로 끔.
+            HttpLoggingInterceptor().apply {
+                level = if (BuildConfig.DEBUG) {
+                    HttpLoggingInterceptor.Level.BASIC
+                } else {
+                    HttpLoggingInterceptor.Level.NONE
+                }
+            }
         )
         .build()
 
