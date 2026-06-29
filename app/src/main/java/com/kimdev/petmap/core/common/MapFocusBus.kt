@@ -1,6 +1,8 @@
 package com.kimdev.petmap.core.common
 
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -10,13 +12,16 @@ import javax.inject.Singleton
  */
 @Singleton
 class MapFocusBus @Inject constructor() {
-    val targetPlaceId = MutableStateFlow<String?>(null)
+    private val _targetPlaceId = MutableStateFlow<String?>(null)
+
+    /** 지도 화면이 관찰할 포커스 대상 placeId. 변경은 request()/consume() 으로만. */
+    val targetPlaceId: StateFlow<String?> = _targetPlaceId.asStateFlow()
 
     fun request(placeId: String) {
-        targetPlaceId.value = placeId
+        _targetPlaceId.value = placeId
     }
 
     fun consume() {
-        targetPlaceId.value = null
+        _targetPlaceId.value = null
     }
 }
