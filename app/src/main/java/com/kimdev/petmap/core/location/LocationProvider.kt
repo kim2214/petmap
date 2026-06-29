@@ -2,6 +2,7 @@ package com.kimdev.petmap.core.location
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import com.google.android.gms.location.LocationServices
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.tasks.await
@@ -10,17 +11,29 @@ import javax.inject.Singleton
 
 data class UserLocation(val lat: Double, val lng: Double)
 
-/** FusedLocationProvider 래퍼. 권한 확인은 호출 측(UI)에서 처리한다. */
+/** 마지막 위치 조회 추상화. 권한 확인은 호출 측(UI)에서 처리한다. */
+interface LocationProvider {
+    /** 마지막으로 알려진 위치. 권한 미허용·위치 없음·실패 시 null. */
+    suspend fun lastLocation(): UserLocation?
+}
+
+/** FusedLocationProvider 래퍼. */
 @Singleton
-class LocationProvider @Inject constructor(
+class LocationProviderImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : LocationProvider {
     private val client = LocationServices.getFusedLocationProviderClient(context)
 
     @SuppressLint("MissingPermission")
-    suspend fun lastLocation(): UserLocation? {
-        return runCatching {
+    override suspend fun lastLocation(): UserLocation? =
+        runCatching {
             client.lastLocation.await()?.let { UserLocation(it.latitude, it.longitude) }
-        }.getOrNull()
+        }.getOrElse {
+            Log.w(TAG, "lastLocation failed: ${it.message}")
+            null
+        }
+
+    companion object {
+        private const val TAG = "LocationProvider"
     }
 }
