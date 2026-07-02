@@ -1,5 +1,6 @@
 package com.kimdev.petmap.ui.list
 
+import androidx.lifecycle.SavedStateHandle
 import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.fake.FakeLocationProvider
@@ -24,12 +25,16 @@ class ListViewModelTest {
 
     private val repo = FakePlaceRepository()
 
-    private fun viewModel(location: UserLocation? = null): ListViewModel =
+    private fun viewModel(
+        location: UserLocation? = null,
+        savedState: SavedStateHandle = SavedStateHandle(),
+    ): ListViewModel =
         ListViewModel(
             repo,
             FakeLocationProvider(location),
             FakeRecentSearchStore(),
             mainDispatcherRule.testDispatcher,
+            savedState,
         )
 
     @Test
@@ -40,6 +45,29 @@ class ListViewModelTest {
         assertEquals(1, repo.ensureSeededCount)
         assertFalse(vm.uiState.value.hasLocation)
         assertFalse(vm.uiState.value.isLoading)
+    }
+
+    @Test
+    fun `검색어와 필터가 저장되어 새 인스턴스에서 복원된다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("cafe", name = "행복카페", category = PlaceCategory.CAFE))
+        val saved = SavedStateHandle()
+        val vm = viewModel(savedState = saved)
+        advanceUntilIdle()
+
+        vm.onQueryChange("카페")
+        vm.toggleCategory(PlaceCategory.CAFE)
+        vm.setSortByDistance(true)
+        vm.setOpenNowOnly(true)
+        advanceUntilIdle()
+
+        // 같은 SavedStateHandle 로 재생성(프로세스 사망 후 복원 시나리오)
+        val restored = viewModel(savedState = saved)
+        advanceUntilIdle()
+        val s = restored.uiState.value
+        assertEquals("카페", s.query)
+        assertEquals(setOf(PlaceCategory.CAFE), s.selectedCategories)
+        assertTrue(s.sortByDistance)
+        assertTrue(s.openNowOnly)
     }
 
     @Test

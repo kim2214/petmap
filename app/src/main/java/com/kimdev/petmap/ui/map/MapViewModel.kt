@@ -1,6 +1,7 @@
 package com.kimdev.petmap.ui.map
 
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.common.Constants
@@ -10,6 +11,7 @@ import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
+import com.kimdev.petmap.ui.common.SavedFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,9 +49,13 @@ class MapViewModel @Inject constructor(
     private val mapFocusBus: MapFocusBus,
     private val recentSearchStore: RecentSearchStore,
     @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(MapUiState())
+    // 프로세스 사망 후에도 카테고리 필터를 복원한다.
+    private val _uiState = MutableStateFlow(
+        MapUiState(selectedCategories = SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]))
+    )
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
     // 현재 카메라 위치
@@ -91,6 +98,13 @@ class MapViewModel @Inject constructor(
             recentSearchStore.recent.collect { list ->
                 _uiState.update { it.copy(recentSearches = list) }
             }
+        }
+        // 카테고리 필터 변경 시 저장(프로세스 사망 대비)
+        viewModelScope.launch {
+            _uiState.map { it.selectedCategories }
+                .distinctUntilChanged()
+                .onEach { savedStateHandle[KEY_CATEGORIES] = SavedFilters.categoriesToNames(it) }
+                .collect {}
         }
         // "지도에서 보기" 요청 → 해당 장소를 포커스 대상으로
         viewModelScope.launch {
@@ -202,5 +216,6 @@ class MapViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "MapViewModel"
+        private const val KEY_CATEGORIES = "map_categories"
     }
 }

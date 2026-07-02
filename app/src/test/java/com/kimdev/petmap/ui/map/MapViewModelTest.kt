@@ -2,6 +2,7 @@ package com.kimdev.petmap.ui.map
 
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.common.MapFocusBus
+import androidx.lifecycle.SavedStateHandle
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.fake.FakePlaceRepository
 import com.kimdev.petmap.fake.FakeRecentSearchStore
@@ -26,8 +27,8 @@ class MapViewModelTest {
     private val repo = FakePlaceRepository()
     private val focusBus = MapFocusBus()
 
-    private fun viewModel(): MapViewModel =
-        MapViewModel(repo, focusBus, FakeRecentSearchStore(), mainDispatcherRule.testDispatcher)
+    private fun viewModel(savedState: SavedStateHandle = SavedStateHandle()): MapViewModel =
+        MapViewModel(repo, focusBus, FakeRecentSearchStore(), mainDispatcherRule.testDispatcher, savedState)
 
     @Test
     fun `초기화 후 시딩 완료되고 클러스터가 채워진다`() = runTest(mainDispatcherRule.testDispatcher) {
@@ -90,6 +91,22 @@ class MapViewModelTest {
         assertEquals(setOf(PlaceCategory.CAFE), vm.uiState.value.selectedCategories)
         assertEquals(setOf(PlaceCategory.CAFE), repo.lastCategories)
         assertEquals(1, vm.uiState.value.clusters.sumOf { it.count })
+    }
+
+    @Test
+    fun `카테고리 필터가 저장되어 새 인스턴스에서 복원된다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("cafe", category = PlaceCategory.CAFE))
+        val saved = SavedStateHandle()
+        val vm = viewModel(saved)
+        advanceUntilIdle()
+        vm.toggleCategory(PlaceCategory.CAFE)
+        advanceUntilIdle()
+
+        // 같은 SavedStateHandle 로 재생성(프로세스 사망 후 복원 시나리오)
+        val restored = viewModel(saved)
+        advanceUntilIdle()
+        assertEquals(setOf(PlaceCategory.CAFE), restored.uiState.value.selectedCategories)
+        assertEquals(setOf(PlaceCategory.CAFE), repo.lastCategories) // 복원된 필터로 조회
     }
 
     @Test

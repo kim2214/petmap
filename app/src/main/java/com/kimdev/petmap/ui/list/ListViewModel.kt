@@ -1,6 +1,7 @@
 package com.kimdev.petmap.ui.list
 
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.common.DefaultDispatcher
@@ -12,6 +13,7 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.OpeningHours
+import com.kimdev.petmap.ui.common.SavedFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,9 +55,18 @@ class ListViewModel @Inject constructor(
     private val locationProvider: LocationProvider,
     private val recentSearchStore: RecentSearchStore,
     @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ListUiState())
+    // 프로세스 사망 후에도 검색어·필터·정렬을 복원한다.
+    private val _uiState = MutableStateFlow(
+        ListUiState(
+            query = savedStateHandle[KEY_QUERY] ?: "",
+            selectedCategories = SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]),
+            sortByDistance = savedStateHandle[KEY_SORT_BY_DISTANCE] ?: false,
+            openNowOnly = savedStateHandle[KEY_OPEN_NOW_ONLY] ?: false,
+        )
+    )
     val uiState: StateFlow<ListUiState> = _uiState.asStateFlow()
 
     private var favoriteIds: Set<String> = emptySet()
@@ -65,10 +77,11 @@ class ListViewModel @Inject constructor(
             repository.ensureSeeded()
             userLocation = locationProvider.lastLocation()
             _uiState.update { it.copy(hasLocation = userLocation != null) }
-            // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회
+            // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
             _uiState
                 .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly) }
                 .distinctUntilChanged()
+                .onEach { persist(it) }
                 .debounce(250)
                 .collect { runSearch(it) }
         }
@@ -142,7 +155,19 @@ class ListViewModel @Inject constructor(
         viewModelScope.launch { repository.toggleFavorite(place) }
     }
 
+    /** 검색어·필터·정렬을 SavedStateHandle 에 저장(프로세스 사망 대비). */
+    private fun persist(key: SearchKey) {
+        savedStateHandle[KEY_QUERY] = key.query
+        savedStateHandle[KEY_CATEGORIES] = SavedFilters.categoriesToNames(key.categories)
+        savedStateHandle[KEY_SORT_BY_DISTANCE] = key.sortByDistance
+        savedStateHandle[KEY_OPEN_NOW_ONLY] = key.openNowOnly
+    }
+
     companion object {
         private const val TAG = "ListViewModel"
+        private const val KEY_QUERY = "list_query"
+        private const val KEY_CATEGORIES = "list_categories"
+        private const val KEY_SORT_BY_DISTANCE = "list_sort_by_distance"
+        private const val KEY_OPEN_NOW_ONLY = "list_open_now_only"
     }
 }
