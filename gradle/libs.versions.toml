@@ -2,6 +2,7 @@
 agp = "8.12.3"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
+desugarJdkLibs = "2.1.2"
 
 coreKtx = "1.13.1"
 coreSplashscreen = "1.0.1"
@@ -35,6 +36,8 @@ coroutinesTest = "1.8.1"
 accompanistPermissions = "0.36.0"
 
 [libraries]
+# Java 8+ API desugaring (minSdk 24 에서 java.time 등 사용)
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 # AndroidX / Compose
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }

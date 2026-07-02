@@ -29,7 +29,7 @@ android {
 
     defaultConfig {
         applicationId = "com.kimdev.petmap"
-        minSdk = 30
+        minSdk = 24
         targetSdk = 36
         versionCode = 2
         versionName = "1.1"
@@ -102,6 +102,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        // minSdk 24 에서 java.time 등 Java 8+ API 사용을 위한 디슈가링
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "11"
@@ -113,6 +115,9 @@ android {
 }
 
 dependencies {
+    // Java 8+ API 디슈가링(java.time 등) — minSdk 24 지원
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // AndroidX core / lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
