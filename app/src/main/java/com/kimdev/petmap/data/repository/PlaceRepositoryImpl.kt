@@ -1,7 +1,11 @@
 package com.kimdev.petmap.data.repository
 
 import android.util.Log
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.kimdev.petmap.BuildConfig
+import com.kimdev.petmap.data.local.PetMapDatabase
+import com.kimdev.petmap.data.local.PlaceFts
 import com.kimdev.petmap.data.local.SyncPreferences
 import com.kimdev.petmap.data.local.dao.FavoriteDao
 import com.kimdev.petmap.data.local.dao.PlaceDao
@@ -26,6 +30,7 @@ class PlaceRepositoryImpl @Inject constructor(
     private val placeDao: PlaceDao,
     private val favoriteDao: FavoriteDao,
     private val syncPrefs: SyncPreferences,
+    private val database: PetMapDatabase,
 ) : PlaceRepository {
 
     /**
@@ -66,7 +71,10 @@ class PlaceRepositoryImpl @Inject constructor(
 
     override suspend fun search(query: String, categories: Set<PlaceCategory>, limit: Int): List<Place> {
         val (cats, catCount) = catsOf(categories)
-        return placeDao.search(query.trim(), cats, catCount, limit).map { it.toDomain() }
+        val match = PlaceFts.match(query)
+        val rows = if (match == null) placeDao.browse(cats, catCount, limit)
+        else placeDao.searchByFts(ftsQuery(match, cats, catCount, userLat = null, userLng = null, limit = limit))
+        return rows.map { it.toDomain() }
     }
 
     override suspend fun searchNearby(
@@ -77,8 +85,49 @@ class PlaceRepositoryImpl @Inject constructor(
         limit: Int,
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
-        return placeDao.searchByDistance(query.trim(), cats, catCount, userLat, userLng, limit)
-            .map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
+        val match = PlaceFts.match(query)
+        val rows = if (match == null) placeDao.browseByDistance(cats, catCount, userLat, userLng, limit)
+        else placeDao.searchByFts(ftsQuery(match, cats, catCount, userLat, userLng, limit))
+        return rows.map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
+    }
+
+    /**
+     * FTS 검색 SQL 을 구성한다(카테고리 IN 절은 개수만큼 `?` 를 동적으로 만든다).
+     * places_fts 는 외부-콘텐츠 FTS4 테이블로 places 의 rowid(docid) 를 참조한다.
+     * userLat/userLng 가 주어지면 해당 좌표에서 가까운 순, 아니면 이름순.
+     */
+    private fun ftsQuery(
+        match: String,
+        cats: List<String>,
+        catCount: Int,
+        userLat: Double?,
+        userLng: Double?,
+        limit: Int,
+    ): SupportSQLiteQuery {
+        val args = mutableListOf<Any>(match)
+        val sql = StringBuilder(
+            "SELECT places.* FROM places " +
+                "JOIN places_fts ON places.rowid = places_fts.docid " +
+                "WHERE places_fts MATCH ?"
+        )
+        if (catCount != 0) {
+            sql.append(" AND places.category IN (")
+            sql.append(cats.joinToString(",") { "?" })
+            sql.append(")")
+            args.addAll(cats)
+        }
+        if (userLat != null && userLng != null) {
+            sql.append(
+                " ORDER BY ((places.lat - ?) * (places.lat - ?) + " +
+                    "(places.lng - ?) * (places.lng - ?)) ASC"
+            )
+            args.add(userLat); args.add(userLat); args.add(userLng); args.add(userLng)
+        } else {
+            sql.append(" ORDER BY places.name ASC")
+        }
+        sql.append(" LIMIT ?")
+        args.add(limit)
+        return SimpleSQLiteQuery(sql.toString(), args.toTypedArray())
     }
 
     override suspend fun getPlace(id: String): Place? = placeDao.getById(id)?.toDomain()
@@ -102,6 +151,8 @@ class PlaceRepositoryImpl @Inject constructor(
             val entities = api.getPetFriendlyPlaces(serviceKey = key).data.mapNotNull { it.toEntity() }
             if (entities.isNotEmpty()) {
                 entities.chunked(1000).forEach { placeDao.upsertAll(it) }
+                // upsert(REPLACE)로 rowid 가 바뀔 수 있으므로 FTS 색인을 다시 만든다.
+                PlaceFts.rebuild(database.openHelper.writableDatabase)
                 syncPrefs.lastSyncAt = now
                 Log.i(TAG, "Remote refresh upserted ${entities.size} places")
             }

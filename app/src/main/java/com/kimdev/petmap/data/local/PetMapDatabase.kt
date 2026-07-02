@@ -9,7 +9,7 @@ import com.kimdev.petmap.data.local.entity.PlaceEntity
 
 @Database(
     entities = [FavoriteEntity::class, PlaceEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class PetMapDatabase : RoomDatabase() {
