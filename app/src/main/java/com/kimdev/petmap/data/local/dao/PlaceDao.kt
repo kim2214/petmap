@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.kimdev.petmap.data.local.entity.PlaceEntity
 
 @Dao
@@ -43,36 +45,41 @@ interface PlaceDao {
         limit: Int,
     ): List<PlaceEntity>
 
-    /** 이름/주소 검색 + 카테고리 다중 필터 */
+    /** 검색어 없이 카테고리 필터만 (이름순) */
     @Query(
         """
         SELECT * FROM places
-        WHERE (:query = '' OR name LIKE '%' || :query || '%' OR roadAddress LIKE '%' || :query || '%')
-          AND (:catCount = 0 OR category IN (:cats))
+        WHERE (:catCount = 0 OR category IN (:cats))
         ORDER BY name ASC
         LIMIT :limit
         """
     )
-    suspend fun search(query: String, cats: List<String>, catCount: Int, limit: Int): List<PlaceEntity>
+    suspend fun browse(cats: List<String>, catCount: Int, limit: Int): List<PlaceEntity>
 
-    /** 이름/주소 검색 + 카테고리 다중 필터, 지정 좌표에서 가까운 순 */
+    /** 검색어 없이 카테고리 필터만, 지정 좌표에서 가까운 순 */
     @Query(
         """
         SELECT * FROM places
-        WHERE (:query = '' OR name LIKE '%' || :query || '%' OR roadAddress LIKE '%' || :query || '%')
-          AND (:catCount = 0 OR category IN (:cats))
+        WHERE (:catCount = 0 OR category IN (:cats))
         ORDER BY ((lat - :lat) * (lat - :lat) + (lng - :lng) * (lng - :lng)) ASC
         LIMIT :limit
         """
     )
-    suspend fun searchByDistance(
-        query: String,
+    suspend fun browseByDistance(
         cats: List<String>,
         catCount: Int,
         lat: Double,
         lng: Double,
         limit: Int,
     ): List<PlaceEntity>
+
+    /**
+     * FTS 검색. places_fts 는 Migration(2,3) 이 만든 비-엔티티 FTS4 테이블이라
+     * Room 이 컴파일타임에 스키마를 알 수 없으므로 RawQuery 로 실행한다.
+     * SQL/바인딩은 [com.kimdev.petmap.data.repository.PlaceRepositoryImpl] 에서 구성한다.
+     */
+    @RawQuery
+    suspend fun searchByFts(query: SupportSQLiteQuery): List<PlaceEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(places: List<PlaceEntity>)
