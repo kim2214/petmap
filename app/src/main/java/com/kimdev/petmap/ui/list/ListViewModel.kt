@@ -1,7 +1,9 @@
 package com.kimdev.petmap.ui.list
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kimdev.petmap.core.common.DefaultDispatcher
 import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.data.local.RecentSearchStore
@@ -11,6 +13,7 @@ import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.OpeningHours
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
 import javax.inject.Inject
 
@@ -47,6 +51,7 @@ class ListViewModel @Inject constructor(
     private val repository: PlaceRepository,
     private val locationProvider: LocationProvider,
     private val recentSearchStore: RecentSearchStore,
+    @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ListUiState())
@@ -86,21 +91,28 @@ class ListViewModel @Inject constructor(
         // 영업중 필터가 켜지면 걸러진 뒤에도 충분히 남도록 더 넉넉히 가져온다
         val fetchLimit = if (key.openNowOnly) 400 else 200
 
-        var results = if (key.sortByDistance && loc != null) {
-            repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, fetchLimit)
-        } else {
-            repository.search(key.query, key.categories, fetchLimit)
-        }
-
-        if (key.openNowOnly) {
-            val now = LocalDateTime.now()
-            results = results.filter {
-                OpeningHours.isOpenNow(it.operatingTime, it.closedDays, now) == true
+        runCatching {
+            val fetched = if (key.sortByDistance && loc != null) {
+                repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, fetchLimit)
+            } else {
+                repository.search(key.query, key.categories, fetchLimit)
             }
-        }
-
-        _uiState.update {
-            it.copy(isLoading = false, places = results.take(200).withFavorites(favoriteIds))
+            if (key.openNowOnly) {
+                val now = LocalDateTime.now()
+                // 운영시간 파싱(정규식) × 최대 400건은 CPU 작업이라 백그라운드에서 처리
+                withContext(defaultDispatcher) {
+                    fetched.filter { OpeningHours.isOpenNow(it.operatingTime, it.closedDays, now) == true }
+                }
+            } else {
+                fetched
+            }
+        }.onSuccess { results ->
+            _uiState.update {
+                it.copy(isLoading = false, places = results.take(200).withFavorites(favoriteIds))
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "search failed: ${e.message}")
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
@@ -128,5 +140,9 @@ class ListViewModel @Inject constructor(
 
     fun toggleFavorite(place: Place) {
         viewModelScope.launch { repository.toggleFavorite(place) }
+    }
+
+    companion object {
+        private const val TAG = "ListViewModel"
     }
 }

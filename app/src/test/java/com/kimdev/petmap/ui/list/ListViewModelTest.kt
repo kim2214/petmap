@@ -25,7 +25,12 @@ class ListViewModelTest {
     private val repo = FakePlaceRepository()
 
     private fun viewModel(location: UserLocation? = null): ListViewModel =
-        ListViewModel(repo, FakeLocationProvider(location), FakeRecentSearchStore())
+        ListViewModel(
+            repo,
+            FakeLocationProvider(location),
+            FakeRecentSearchStore(),
+            mainDispatcherRule.testDispatcher,
+        )
 
     @Test
     fun `초기화 시 시딩하고 위치 없으면 hasLocation false`() = runTest(mainDispatcherRule.testDispatcher) {
