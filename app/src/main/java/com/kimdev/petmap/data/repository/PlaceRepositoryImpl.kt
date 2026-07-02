@@ -46,6 +46,12 @@ class PlaceRepositoryImpl @Inject constructor(
         if (categories.isEmpty()) listOf("") to 0
         else categories.map { it.name } to categories.size
 
+    /** 경도 항 가중치 cos²(lat). 거리 정렬에서 경도 1도가 위도 1도보다 짧은 것을 보정한다. */
+    private fun lngScaleSq(lat: Double): Double {
+        val c = cos(Math.toRadians(lat))
+        return c * c
+    }
+
     override suspend fun getPlacesInBounds(
         centerLat: Double,
         centerLng: Double,
@@ -63,6 +69,7 @@ class PlaceRepositoryImpl @Inject constructor(
             maxLng = centerLng + lngDelta,
             centerLat = centerLat,
             centerLng = centerLng,
+            lngScaleSq = lngScaleSq(centerLat),
             cats = cats,
             catCount = catCount,
             limit = limit,
@@ -86,9 +93,14 @@ class PlaceRepositoryImpl @Inject constructor(
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
         val match = PlaceFts.match(query)
-        val rows = if (match == null) placeDao.browseByDistance(cats, catCount, userLat, userLng, limit)
-        else placeDao.searchByFts(ftsQuery(match, cats, catCount, userLat, userLng, limit))
+        val rows = if (match == null) {
+            placeDao.browseByDistance(cats, catCount, userLat, userLng, lngScaleSq(userLat), limit)
+        } else {
+            placeDao.searchByFts(ftsQuery(match, cats, catCount, userLat, userLng, limit))
+        }
+        // SQL 정렬은 근사(cos 보정)로 top-N 을 뽑고, 표시 순서는 정확한 거리로 다시 정렬한다.
         return rows.map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
+            .sortedBy { it.distanceMeters ?: Double.MAX_VALUE }
     }
 
     /**
@@ -119,9 +131,10 @@ class PlaceRepositoryImpl @Inject constructor(
         if (userLat != null && userLng != null) {
             sql.append(
                 " ORDER BY ((places.lat - ?) * (places.lat - ?) + " +
-                    "(places.lng - ?) * (places.lng - ?)) ASC"
+                    "(places.lng - ?) * (places.lng - ?) * ?) ASC"
             )
             args.add(userLat); args.add(userLat); args.add(userLng); args.add(userLng)
+            args.add(lngScaleSq(userLat))
         } else {
             sql.append(" ORDER BY places.name ASC")
         }

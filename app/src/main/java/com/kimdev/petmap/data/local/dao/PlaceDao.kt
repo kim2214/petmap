@@ -22,6 +22,7 @@ interface PlaceDao {
      * 지도 뷰포트(위/경도 박스) 안의 장소. 중심에서 가까운 순으로 제한.
      * 카테고리 다중 필터: catCount 가 0 이면 전체, 아니면 category IN (cats).
      * (cats 는 빈 리스트일 때 SQL 오류가 나므로 항상 1개 이상 전달)
+     * 정렬: 경도 1도는 위도 1도보다 실제 거리가 짧으므로 lng 항에 cos²(lat)(=lngScaleSq)를 곱해 보정.
      */
     @Query(
         """
@@ -29,7 +30,8 @@ interface PlaceDao {
         WHERE lat BETWEEN :minLat AND :maxLat
           AND lng BETWEEN :minLng AND :maxLng
           AND (:catCount = 0 OR category IN (:cats))
-        ORDER BY ((lat - :centerLat) * (lat - :centerLat) + (lng - :centerLng) * (lng - :centerLng)) ASC
+        ORDER BY ((lat - :centerLat) * (lat - :centerLat)
+                  + (lng - :centerLng) * (lng - :centerLng) * :lngScaleSq) ASC
         LIMIT :limit
         """
     )
@@ -40,6 +42,7 @@ interface PlaceDao {
         maxLng: Double,
         centerLat: Double,
         centerLng: Double,
+        lngScaleSq: Double,
         cats: List<String>,
         catCount: Int,
         limit: Int,
@@ -56,12 +59,13 @@ interface PlaceDao {
     )
     suspend fun browse(cats: List<String>, catCount: Int, limit: Int): List<PlaceEntity>
 
-    /** 검색어 없이 카테고리 필터만, 지정 좌표에서 가까운 순 */
+    /** 검색어 없이 카테고리 필터만, 지정 좌표에서 가까운 순 (lng 항에 cos²(lat) 보정) */
     @Query(
         """
         SELECT * FROM places
         WHERE (:catCount = 0 OR category IN (:cats))
-        ORDER BY ((lat - :lat) * (lat - :lat) + (lng - :lng) * (lng - :lng)) ASC
+        ORDER BY ((lat - :lat) * (lat - :lat)
+                  + (lng - :lng) * (lng - :lng) * :lngScaleSq) ASC
         LIMIT :limit
         """
     )
@@ -70,6 +74,7 @@ interface PlaceDao {
         catCount: Int,
         lat: Double,
         lng: Double,
+        lngScaleSq: Double,
         limit: Int,
     ): List<PlaceEntity>
 
