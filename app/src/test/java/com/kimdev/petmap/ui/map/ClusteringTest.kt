@@ -57,6 +57,13 @@ class ClusteringTest {
         assertTrue(result.all { it.single != null })
     }
 
+    @Test fun `줌 아웃하면 묶이고 줌 인하면 분리된다`() {
+        // 약 1.1km 떨어진 두 곳: 셀 크기가 줌에 따라 달라져 결과가 갈린다
+        val places = listOf(place("a", 37.500, 127.0), place("b", 37.510, 127.0))
+        assertEquals(1, clusterPlaces(places, 8.0).size)  // 줌 아웃: 한 셀
+        assertEquals(2, clusterPlaces(places, 17.0).size) // 줌 인: 분리
+    }
+
     @Test fun `spanMeters - 단일은 0`() {
         val c = MapCluster("a", 37.5, 127.0, listOf(place("a", 37.5, 127.0)))
         assertEquals(0.0, c.spanMeters(), 0.0001)
