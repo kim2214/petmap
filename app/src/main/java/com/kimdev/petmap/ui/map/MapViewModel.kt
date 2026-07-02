@@ -1,15 +1,19 @@
 package com.kimdev.petmap.ui.map
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.common.Constants
+import com.kimdev.petmap.core.common.DefaultDispatcher
 import com.kimdev.petmap.core.common.MapFocusBus
 import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +22,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class MapUiState(
@@ -40,6 +45,7 @@ class MapViewModel @Inject constructor(
     private val repository: PlaceRepository,
     private val mapFocusBus: MapFocusBus,
     private val recentSearchStore: RecentSearchStore,
+    @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MapUiState())
@@ -54,6 +60,8 @@ class MapViewModel @Inject constructor(
     private var loadedCenterLng = Constants.DEFAULT_LNG
     private var loadedZoom = Constants.DEFAULT_ZOOM
     private var places: List<Place> = emptyList()
+    // 카메라 이동 시 재클러스터링 잡. 연속 이동하면 이전 계산을 취소하고 최신 것만 반영.
+    private var clusterJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -128,12 +136,17 @@ class MapViewModel @Inject constructor(
         lastZoom = zoom
         if (_uiState.value.isSeeding) return
 
-        val clusters = clusterPlaces(places, zoom)
         val stale = isResearchNeeded(
             loadedCenterLat, loadedCenterLng, loadedZoom,
             centerLat, centerLng, zoom,
         )
-        _uiState.update { it.copy(clusters = clusters, canResearch = stale) }
+        // 클러스터링(최대 수백 개 좌표 연산)은 백그라운드에서 수행해 지도 제스처 중 메인 스레드 부담을 줄인다.
+        val snapshot = places
+        clusterJob?.cancel()
+        clusterJob = viewModelScope.launch {
+            val clusters = withContext(defaultDispatcher) { clusterPlaces(snapshot, zoom) }
+            _uiState.update { it.copy(clusters = clusters, canResearch = stale) }
+        }
     }
 
     /** "이 지역에서 다시 검색" — 현재 카메라 위치 기준으로 데이터 재조회 */
@@ -161,21 +174,33 @@ class MapViewModel @Inject constructor(
     /** 현재 카메라 위치 기준으로 DB 조회 후 클러스터링. canResearch 해제. */
     private fun fetch() {
         if (_uiState.value.isSeeding) return
+        // 재조회가 클러스터 결과를 확정하므로 진행 중인 카메라-이동 클러스터링은 취소.
+        clusterJob?.cancel()
         loadedCenterLat = lastCenterLat
         loadedCenterLng = lastCenterLng
         loadedZoom = lastZoom
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            places = repository.getPlacesInBounds(
-                centerLat = loadedCenterLat,
-                centerLng = loadedCenterLng,
-                radiusKm = radiusForZoom(loadedZoom),
-                categories = _uiState.value.selectedCategories,
-                limit = 500,
-            )
-            val clusters = clusterPlaces(places, lastZoom)
-            _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
+            runCatching {
+                repository.getPlacesInBounds(
+                    centerLat = loadedCenterLat,
+                    centerLng = loadedCenterLng,
+                    radiusKm = radiusForZoom(loadedZoom),
+                    categories = _uiState.value.selectedCategories,
+                    limit = 500,
+                )
+            }.onSuccess { loaded ->
+                places = loaded
+                val clusters = withContext(defaultDispatcher) { clusterPlaces(loaded, lastZoom) }
+                _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
+            }.onFailure { e ->
+                Log.w(TAG, "getPlacesInBounds failed: ${e.message}")
+                _uiState.update { it.copy(isLoading = false) }
+            }
         }
     }
 
+    companion object {
+        private const val TAG = "MapViewModel"
+    }
 }

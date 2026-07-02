@@ -27,7 +27,7 @@ class MapViewModelTest {
     private val focusBus = MapFocusBus()
 
     private fun viewModel(): MapViewModel =
-        MapViewModel(repo, focusBus, FakeRecentSearchStore())
+        MapViewModel(repo, focusBus, FakeRecentSearchStore(), mainDispatcherRule.testDispatcher)
 
     @Test
     fun `초기화 후 시딩 완료되고 클러스터가 채워진다`() = runTest(mainDispatcherRule.testDispatcher) {
