@@ -1,11 +1,15 @@
 package com.kimdev.petmap
 
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.DisposableEffect
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,7 +57,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         // 광고 동의(UMP) 수집 → 동의되면 광고 SDK 초기화
         AdsConsent.gather(this)
         // 일정 실행 횟수 이상이면 인앱 리뷰 요청 (Play 설치 빌드에서만 실제 노출)
@@ -64,6 +67,21 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
+            }
+            // 시스템바를 투명하게 두되, 아이콘 명암은 시스템이 아닌 "앱 테마"를 따르게 한다.
+            // (인앱에서 라이트/다크를 강제해도 상태바 아이콘이 배경과 항상 대비됨)
+            DisposableEffect(darkTheme) {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(
+                        AndroidColor.TRANSPARENT,
+                        AndroidColor.TRANSPARENT,
+                    ) { darkTheme },
+                    navigationBarStyle = SystemBarStyle.auto(
+                        AndroidColor.TRANSPARENT,
+                        AndroidColor.TRANSPARENT,
+                    ) { darkTheme },
+                )
+                onDispose {}
             }
             PetMapTheme(darkTheme = darkTheme) {
                 var showOnboarding by rememberSaveable {
@@ -95,6 +113,9 @@ private fun PetMapApp() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        // 상단 시스템바 인셋을 콘텐츠에 적용하지 않음 → 지도가 상태바 밑까지 풀블리드.
+        // 각 화면이 필요 시 statusBarsPadding 으로 직접 처리한다.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottomBar) {
                 Column {
