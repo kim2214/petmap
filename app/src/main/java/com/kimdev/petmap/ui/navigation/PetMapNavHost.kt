@@ -1,5 +1,10 @@
 package com.kimdev.petmap.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -25,6 +30,9 @@ fun PetMapNavHost(
         navController = navController,
         startDestination = Routes.MAP,
         modifier = modifier,
+        // 탭/일반 화면 기본 전환: 부드러운 페이드
+        enterTransition = { fadeIn(tween(220)) },
+        exitTransition = { fadeOut(tween(180)) },
     ) {
         val openDetail: (String) -> Unit = { id -> navController.navigate(Routes.detail(id)) }
 
@@ -61,6 +69,11 @@ fun PetMapNavHost(
         composable(
             route = Routes.DETAIL_PATTERN,
             arguments = listOf(navArgument(Routes.DETAIL_ARG_ID) { type = NavType.StringType }),
+            // 상세는 오른쪽에서 밀려 들어오는 push 전환
+            enterTransition = { slideInHorizontally(tween(300)) { it } + fadeIn(tween(300)) },
+            exitTransition = { fadeOut(tween(200)) },
+            popEnterTransition = { fadeIn(tween(200)) },
+            popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(200)) },
         ) {
             DetailScreen(
                 onBack = { navController.popBackStack() },

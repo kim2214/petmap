@@ -423,6 +423,7 @@ fun MapScreen(
                             onPlaceClick(p.id)
                         },
                         onToggleFavorite = { viewModel.toggleFavorite(p) },
+                        modifier = Modifier.animateItem(),
                     )
                 }
             }

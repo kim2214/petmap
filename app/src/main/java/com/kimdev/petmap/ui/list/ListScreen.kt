@@ -60,6 +60,11 @@ fun ListScreen(
     var searchFocused by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        Text(
+            "목록",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 4.dp),
+        )
         OutlinedTextField(
             value = state.query,
             onValueChange = viewModel::onQueryChange,
@@ -167,6 +172,7 @@ fun ListScreen(
                             place = place,
                             onClick = { onPlaceClick(place.id) },
                             onToggleFavorite = { viewModel.toggleFavorite(place) },
+                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
