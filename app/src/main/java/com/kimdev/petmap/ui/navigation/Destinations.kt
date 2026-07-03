@@ -1,11 +1,7 @@
 package com.kimdev.petmap.ui.navigation
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.annotation.DrawableRes
+import com.kimdev.petmap.R
 
 /** 앱 라우트 정의 */
 object Routes {
@@ -22,14 +18,14 @@ object Routes {
     fun detail(placeId: String) = "$DETAIL/$placeId"
 }
 
-/** 하단 탭 항목 */
+/** 하단 탭 항목. 컬러 일러스트 아이콘(브랜드 커스텀)을 사용. */
 enum class TopLevelDestination(
     val route: String,
     val label: String,
-    val icon: ImageVector,
+    @DrawableRes val iconRes: Int,
 ) {
-    MAP(Routes.MAP, "지도", Icons.Filled.Map),
-    LIST(Routes.LIST, "목록", Icons.AutoMirrored.Filled.List),
-    FAVORITE(Routes.FAVORITE, "즐겨찾기", Icons.Filled.FavoriteBorder),
-    SETTINGS(Routes.SETTINGS, "설정", Icons.Filled.Settings),
+    MAP(Routes.MAP, "지도", R.drawable.ic_nav_map),
+    LIST(Routes.LIST, "목록", R.drawable.ic_nav_list),
+    FAVORITE(Routes.FAVORITE, "즐겨찾기", R.drawable.ic_nav_favorite),
+    SETTINGS(Routes.SETTINGS, "설정", R.drawable.ic_nav_settings),
 }
