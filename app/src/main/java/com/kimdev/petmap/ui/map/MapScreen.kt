@@ -147,6 +147,8 @@ fun MapScreen(
         }
     }
 
+    // 카테고리별 단일 장소 마커 (컬러 핀 + 흰 아이콘). 최초 1회만 생성.
+    val categoryMarkers = rememberCategoryMarkers()
     // 클러스터 아이콘 캐시 (개수별). 숫자는 브랜드 폰트(나눔 ExtraBold)로 렌더링.
     val clusterTypeface = remember { ResourcesCompat.getFont(context, R.font.nanum_square_round_extrabold) }
     val iconCache = remember { mutableMapOf<Int, OverlayImage>() }
@@ -170,7 +172,8 @@ fun MapScreen(
                     Marker(
                         state = MarkerState(position = LatLng(single.lat, single.lng)),
                         captionText = single.name,
-                        iconTintColor = single.category.color,
+                        icon = categoryMarkers.getValue(single.category),
+                        anchor = MarkerAnchor,
                         onClick = {
                             previewPlace = single
                             true
