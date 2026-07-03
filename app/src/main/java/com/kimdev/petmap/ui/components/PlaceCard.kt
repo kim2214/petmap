@@ -101,7 +101,7 @@ fun PlaceCard(
 }
 
 @Composable
-private fun CategoryAvatar(place: Place) {
+fun CategoryAvatar(place: Place) {
     Box(
         modifier = Modifier
             .size(48.dp)
@@ -119,7 +119,7 @@ private fun CategoryAvatar(place: Place) {
 }
 
 @Composable
-private fun CategoryTag(place: Place) {
+fun CategoryTag(place: Place) {
     Surface(
         color = place.category.softColor,
         contentColor = place.category.color,
@@ -164,7 +164,7 @@ private fun PetBadges(place: Place) {
 }
 
 @Composable
-private fun OpenBadge(place: Place) {
+fun OpenBadge(place: Place) {
     when (OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())) {
         true -> Text(
             "영업중",

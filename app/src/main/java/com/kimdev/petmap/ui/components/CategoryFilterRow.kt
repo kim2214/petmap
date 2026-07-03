@@ -3,14 +3,15 @@ package com.kimdev.petmap.ui.components
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.domain.model.PlaceCategory
 
@@ -41,11 +42,25 @@ fun CategoryFilterRow(
                 selected = isOn,
                 onClick = { onToggle(category) },
                 label = { Text(category.label) },
-                leadingIcon = if (isOn) {
-                    { Icon(Icons.Filled.Check, contentDescription = null) }
-                } else {
-                    null
+                leadingIcon = {
+                    Icon(
+                        imageVector = category.icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
                 },
+                colors = FilterChipDefaults.filterChipColors(
+                    iconColor = category.color,
+                    selectedContainerColor = category.color,
+                    selectedLabelColor = Color.White,
+                    selectedLeadingIconColor = Color.White,
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = isOn,
+                    borderColor = category.color.copy(alpha = 0.35f),
+                    selectedBorderColor = Color.Transparent,
+                ),
                 modifier = Modifier.padding(end = 8.dp),
             )
         }

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
@@ -17,12 +16,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.domain.util.formatDistance
 
 /**
  * 지도 마커 탭 시 뜨는 미리보기 바텀시트 내용.
- * 핵심 정보만 보여주고 상세 화면으로 진입하거나 즐겨찾기 토글.
+ * 목록 카드와 같은 시각 언어(컬러 아바타·카테고리 태그·거리·영업중)로 통일.
  */
 @Composable
 fun PlacePreviewSheet(
@@ -38,19 +39,41 @@ fun PlacePreviewSheet(
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = place.name,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f),
-            )
-            AssistChip(onClick = {}, label = { Text(place.category.label) })
+            CategoryAvatar(place)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 14.dp),
+            ) {
+                Text(
+                    text = place.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 6.dp),
+                ) {
+                    CategoryTag(place)
+                    place.distanceMeters?.let {
+                        Text(
+                            formatDistance(it),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    OpenBadge(place)
+                }
+            }
         }
 
         Text(
             text = place.roadAddress,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 6.dp),
+            modifier = Modifier.padding(top = 14.dp),
         )
 
         place.operatingTime?.let {
