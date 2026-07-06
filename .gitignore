@@ -8,6 +8,12 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 /.idea/inspectionProfiles
+# IDE 개인/기기별 설정 (실행할 때마다 바뀜)
+/.idea/deploymentTargetSelector.xml
+/.idea/deploymentTargetDropDown.xml
+/.idea/usage.statistics.xml
+/.idea/shelf
+/.idea/.name
 .DS_Store
 /build
 /captures
