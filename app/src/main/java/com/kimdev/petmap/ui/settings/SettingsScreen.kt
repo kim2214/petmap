@@ -46,7 +46,7 @@ import com.kimdev.petmap.core.util.sendEmail
 import com.kimdev.petmap.data.local.ThemeMode
 
 private const val PRIVACY_POLICY_URL =
-    "https://doc-hosting.flycricket.io/pesmaeb-petmap-privacy-policy/f61c0ebd-d3ba-4c86-946b-42ea4157ec86/privacy"
+    "https://kim2214.github.io/privacy-policy.html"
 private const val CONTACT_EMAIL = "kimdev0821@gmail.com"
 
 @Composable
