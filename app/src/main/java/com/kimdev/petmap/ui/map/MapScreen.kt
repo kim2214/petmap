@@ -61,6 +61,7 @@ import com.kimdev.petmap.R
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlacePreviewSheet
@@ -156,7 +157,8 @@ fun MapScreen(
     fun clusterIcon(count: Int): OverlayImage =
         iconCache.getOrPut(count) { OverlayImage.fromBitmap(makeClusterBitmap(count, clusterTypeface)) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
+      Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         NaverMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
@@ -382,6 +384,10 @@ fun MapScreen(
                     .padding(16.dp)
             )
         }
+      }
+
+      // 지도 아래 별도 영역에 배너(지도를 덮지 않음)
+      BannerAd()
     }
 
     // 마커 미리보기 바텀시트
