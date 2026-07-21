@@ -39,6 +39,8 @@ data class ListUiState(
     val openNowOnly: Boolean = false,
     val hasLocation: Boolean = false,
     val recentSearches: List<String> = emptyList(),
+    /** 조회 실패 여부. true 면 "결과 없음"이 아니라 에러 상태로 표시한다. */
+    val isError: Boolean = false,
 )
 
 private data class SearchKey(
@@ -76,8 +78,15 @@ class ListViewModel @Inject constructor(
         viewModelScope.launch {
             repository.ensureSeeded()
             userLocation = locationProvider.lastLocation()
+            // 콜드스타트 직후 lastLocation 은 흔히 null → 단발성 현재 위치로 보완한다.
+            // (검색 플로우는 아래 별도 launch 에서 돌아가므로 이 지연이 목록 로딩을 막지 않는다)
+            if (userLocation == null) userLocation = locationProvider.currentLocation()
             _uiState.update { it.copy(hasLocation = userLocation != null) }
-            // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
+            // 위치를 뒤늦게 확보했고 거리순 정렬이 켜져 있으면 거리 반영을 위해 재조회
+            if (userLocation != null && _uiState.value.sortByDistance) refreshSearch()
+        }
+        // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
+        viewModelScope.launch {
             _uiState
                 .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly) }
                 .distinctUntilChanged()
@@ -99,7 +108,7 @@ class ListViewModel @Inject constructor(
     }
 
     private suspend fun runSearch(key: SearchKey) {
-        _uiState.update { it.copy(isLoading = true) }
+        _uiState.update { it.copy(isLoading = true, isError = false) }
         val loc = userLocation
         // 영업중 필터가 켜지면 걸러진 뒤에도 충분히 남도록 더 넉넉히 가져온다
         val fetchLimit = if (key.openNowOnly) 400 else 200
@@ -125,9 +134,20 @@ class ListViewModel @Inject constructor(
             }
         }.onFailure { e ->
             Log.w(TAG, "search failed: ${e.message}")
-            _uiState.update { it.copy(isLoading = false) }
+            _uiState.update { it.copy(isLoading = false, isError = true) }
         }
     }
+
+    /** 현재 검색 조건으로 즉시 재조회(위치 뒤늦은 확보·에러 후 재시도). */
+    private fun refreshSearch() {
+        val s = _uiState.value
+        viewModelScope.launch {
+            runSearch(SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly))
+        }
+    }
+
+    /** 에러 상태에서 사용자가 "다시 시도" 를 눌렀을 때. */
+    fun retry() = refreshSearch()
 
     fun onQueryChange(q: String) = _uiState.update { it.copy(query = q) }
 

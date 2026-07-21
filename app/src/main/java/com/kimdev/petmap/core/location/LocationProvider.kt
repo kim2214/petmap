@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -15,6 +17,12 @@ data class UserLocation(val lat: Double, val lng: Double)
 interface LocationProvider {
     /** 마지막으로 알려진 위치. 권한 미허용·위치 없음·실패 시 null. */
     suspend fun lastLocation(): UserLocation?
+
+    /**
+     * 단발성 현재 위치 요청. 콜드스타트 직후처럼 [lastLocation] 이 null 일 때 보완용.
+     * 권한 미허용·위치 없음·실패 시 null.
+     */
+    suspend fun currentLocation(): UserLocation?
 }
 
 /** FusedLocationProvider 래퍼. */
@@ -30,6 +38,18 @@ class LocationProviderImpl @Inject constructor(
             client.lastLocation.await()?.let { UserLocation(it.latitude, it.longitude) }
         }.getOrElse {
             Log.w(TAG, "lastLocation failed: ${it.message}")
+            null
+        }
+
+    @SuppressLint("MissingPermission")
+    override suspend fun currentLocation(): UserLocation? =
+        runCatching {
+            client.getCurrentLocation(
+                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                CancellationTokenSource().token,
+            ).await()?.let { UserLocation(it.latitude, it.longitude) }
+        }.getOrElse {
+            Log.w(TAG, "currentLocation failed: ${it.message}")
             null
         }
 

@@ -212,7 +212,8 @@ class MapViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
             }.onFailure { e ->
                 Log.w(TAG, "getPlacesInBounds failed: ${e.message}")
-                _uiState.update { it.copy(isLoading = false) }
+                // 실패 시 "이 지역에서 다시 검색" 버튼을 다시 노출해 재시도 동선을 준다.
+                _uiState.update { it.copy(isLoading = false, canResearch = true) }
             }
         }
     }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
@@ -138,6 +139,14 @@ fun ListScreen(
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
+
+                // 조회 실패 → "결과 없음"과 구분해 에러 상태 + 재시도 동선 제공
+                state.isError && state.places.isEmpty() -> EmptyState(
+                    icon = Icons.Filled.CloudOff,
+                    title = "장소를 불러오지 못했어요",
+                    description = "네트워크 상태를 확인하고 다시 시도해 주세요.",
+                    action = { Button(onClick = { viewModel.retry() }) { Text("다시 시도") } },
+                )
 
                 state.places.isEmpty() -> {
                     val (title, desc) = when {
