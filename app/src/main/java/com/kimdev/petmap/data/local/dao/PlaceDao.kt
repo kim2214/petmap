@@ -8,6 +8,9 @@ import androidx.room.RawQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.kimdev.petmap.data.local.entity.PlaceEntity
 
+/** [PlaceDao.getClusterCells] 결과: 그리드 셀의 대표 좌표(평균)와 장소 개수. */
+data class ClusterCell(val lat: Double, val lng: Double, val cnt: Int)
+
 @Dao
 interface PlaceDao {
 
@@ -47,6 +50,35 @@ interface PlaceDao {
         catCount: Int,
         limit: Int,
     ): List<PlaceEntity>
+
+    /**
+     * 저줌(광역) 개요용 그리드 집계. 뷰포트 박스를 latStep×lngStep 격자로 나눠
+     * 셀별 대표 좌표(평균)와 개수만 반환한다.
+     * 개별 로우/거리 정렬 없이 화면 전역을 커버하며, 반환 로우 수가 격자 수로 제한된다.
+     */
+    @Query(
+        """
+        SELECT AVG(lat) AS lat, AVG(lng) AS lng, COUNT(*) AS cnt
+        FROM places
+        WHERE lat BETWEEN :minLat AND :maxLat
+          AND lng BETWEEN :minLng AND :maxLng
+          AND (:catCount = 0 OR category IN (:cats))
+        GROUP BY CAST((lat - :minLat) / :latStep AS INTEGER),
+                 CAST((lng - :minLng) / :lngStep AS INTEGER)
+        LIMIT :limit
+        """
+    )
+    suspend fun getClusterCells(
+        minLat: Double,
+        maxLat: Double,
+        minLng: Double,
+        maxLng: Double,
+        latStep: Double,
+        lngStep: Double,
+        cats: List<String>,
+        catCount: Int,
+        limit: Int,
+    ): List<ClusterCell>
 
     /** 검색어 없이 카테고리 필터만 (이름순) */
     @Query(

@@ -126,6 +126,25 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `저줌에서는 그리드 집계 경로로 클러스터를 채운다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(
+            testPlace("a", lat = 37.50, lng = 127.00),
+            testPlace("b", lat = 37.90, lng = 127.40),
+        )
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        // 광역(줌 8)으로 재검색 → 개별 조회가 아니라 getClusterCells 사용
+        vm.researchHere(37.5, 127.0, 8.0)
+        advanceUntilIdle()
+
+        assertEquals(500, repo.lastClusterCellsLimit)
+        assertEquals(2, vm.uiState.value.clusters.sumOf { it.count })
+        // 집계 클러스터는 개별 좌표를 갖지 않으므로 members 는 비어 있다
+        assertTrue(vm.uiState.value.clusters.all { it.members.isEmpty() })
+    }
+
+    @Test
     fun `멀리 이동하면 canResearch true, 다시 검색하면 false`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = listOf(testPlace("a"))
         val vm = viewModel()

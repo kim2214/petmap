@@ -14,6 +14,7 @@ import com.kimdev.petmap.data.mapper.toDomain
 import com.kimdev.petmap.data.mapper.toEntity
 import com.kimdev.petmap.data.mapper.toFavoriteEntity
 import com.kimdev.petmap.data.remote.api.PublicDataApi
+import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -78,6 +79,37 @@ class PlaceRepositoryImpl @Inject constructor(
             catCount = catCount,
             limit = limit,
         ).map { it.toDomain() }
+    }
+
+    override suspend fun getClusterCells(
+        centerLat: Double,
+        centerLng: Double,
+        radiusKm: Double,
+        categories: Set<PlaceCategory>,
+        gridDivisions: Int,
+        limit: Int,
+    ): List<GeoClusterCell> {
+        val latDelta = radiusKm / 111.0
+        val lngDelta = radiusKm / (111.0 * max(0.1, cos(Math.toRadians(centerLat))))
+        val minLat = centerLat - latDelta
+        val maxLat = centerLat + latDelta
+        val minLng = centerLng - lngDelta
+        val maxLng = centerLng + lngDelta
+        val divisions = max(1, gridDivisions)
+        val latStep = (maxLat - minLat) / divisions
+        val lngStep = (maxLng - minLng) / divisions
+        val (cats, catCount) = catsOf(categories)
+        return placeDao.getClusterCells(
+            minLat = minLat,
+            maxLat = maxLat,
+            minLng = minLng,
+            maxLng = maxLng,
+            latStep = latStep,
+            lngStep = lngStep,
+            cats = cats,
+            catCount = catCount,
+            limit = limit,
+        ).map { GeoClusterCell(it.lat, it.lng, it.cnt) }
     }
 
     override suspend fun search(query: String, categories: Set<PlaceCategory>, limit: Int): List<Place> {

@@ -157,6 +157,12 @@ class MapViewModel @Inject constructor(
             loadedCenterLat, loadedCenterLng, loadedZoom,
             centerLat, centerLng, zoom,
         )
+        // 저줌 집계 모드에선 개별 좌표를 갖고 있지 않아(places 비어 있음) 로컬 재클러스터링이 불가하다.
+        // 이 경우(또는 결과 없음) 기존 클러스터를 유지하고 "다시 검색" 노출 여부만 갱신한다.
+        if (places.isEmpty()) {
+            _uiState.update { it.copy(canResearch = stale) }
+            return
+        }
         // 클러스터링(최대 수백 개 좌표 연산)은 백그라운드에서 수행해 지도 제스처 중 메인 스레드 부담을 줄인다.
         val snapshot = places
         clusterJob?.cancel()
@@ -198,28 +204,76 @@ class MapViewModel @Inject constructor(
         loadedZoom = lastZoom
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            runCatching {
-                repository.getPlacesInBounds(
-                    centerLat = loadedCenterLat,
-                    centerLng = loadedCenterLng,
-                    radiusKm = radiusForZoom(loadedZoom),
-                    categories = _uiState.value.selectedCategories,
-                    limit = 500,
-                )
-            }.onSuccess { loaded ->
-                places = loaded
-                val clusters = withContext(defaultDispatcher) { clusterPlaces(loaded, lastZoom) }
-                _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
-            }.onFailure { e ->
-                Log.w(TAG, "getPlacesInBounds failed: ${e.message}")
-                // 실패 시 "이 지역에서 다시 검색" 버튼을 다시 노출해 재시도 동선을 준다.
-                _uiState.update { it.copy(isLoading = false, canResearch = true) }
+            if (loadedZoom < AGGREGATE_ZOOM_BELOW) {
+                fetchAggregated()
+            } else {
+                fetchExact()
             }
+        }
+    }
+
+    /** 고줌(도시/거리) 경로: 뷰포트 내 개별 장소를 가져와 클라이언트에서 클러스터링. */
+    private suspend fun fetchExact() {
+        runCatching {
+            repository.getPlacesInBounds(
+                centerLat = loadedCenterLat,
+                centerLng = loadedCenterLng,
+                radiusKm = radiusForZoom(loadedZoom),
+                categories = _uiState.value.selectedCategories,
+                limit = 500,
+            )
+        }.onSuccess { loaded ->
+            places = loaded
+            val clusters = withContext(defaultDispatcher) { clusterPlaces(loaded, lastZoom) }
+            _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
+        }.onFailure { e ->
+            Log.w(TAG, "getPlacesInBounds failed: ${e.message}")
+            // 실패 시 "이 지역에서 다시 검색" 버튼을 다시 노출해 재시도 동선을 준다.
+            _uiState.update { it.copy(isLoading = false, canResearch = true) }
+        }
+    }
+
+    /**
+     * 저줌(광역) 경로: SQL 그리드 집계로 셀별 개수만 가져온다.
+     * 개별 로우 마샬링·클라이언트 클러스터링을 생략하고, 중심 근처 500개가 아니라
+     * 화면 전역을 실제 개수 기반 클러스터로 고르게 덮는다.
+     */
+    private suspend fun fetchAggregated() {
+        runCatching {
+            repository.getClusterCells(
+                centerLat = loadedCenterLat,
+                centerLng = loadedCenterLng,
+                radiusKm = radiusForZoom(loadedZoom),
+                categories = _uiState.value.selectedCategories,
+                gridDivisions = GRID_DIVISIONS,
+                limit = 500,
+            )
+        }.onSuccess { cells ->
+            // 개별 좌표를 보유하지 않으므로 로컬 재클러스터링 대상(places)은 비운다.
+            places = emptyList()
+            val clusters = cells.map { cell ->
+                MapCluster(
+                    id = "cell_${cell.lat}_${cell.lng}",
+                    lat = cell.lat,
+                    lng = cell.lng,
+                    members = emptyList(),
+                    aggregatedCount = cell.count,
+                )
+            }
+            _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
+        }.onFailure { e ->
+            Log.w(TAG, "getClusterCells failed: ${e.message}")
+            _uiState.update { it.copy(isLoading = false, canResearch = true) }
         }
     }
 
     companion object {
         private const val TAG = "MapViewModel"
         private const val KEY_CATEGORIES = "map_categories"
+
+        // 이 줌 미만(광역, 반경 40·120km)에선 개별 로우 대신 SQL 그리드 집계로 개요를 그린다.
+        private const val AGGREGATE_ZOOM_BELOW = 11.0
+        // 뷰포트를 나눌 격자 분할 수(가로/세로). 집계 셀(=클러스터 점) 최대 개수 ≈ 분할²을 제한.
+        private const val GRID_DIVISIONS = 24
     }
 }

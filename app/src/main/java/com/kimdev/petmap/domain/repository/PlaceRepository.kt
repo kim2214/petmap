@@ -1,5 +1,6 @@
 package com.kimdev.petmap.domain.repository
 
+import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +22,19 @@ interface PlaceRepository {
         categories: Set<PlaceCategory> = emptySet(),
         limit: Int = 300,
     ): List<Place>
+
+    /**
+     * 저줌 지도 개요: 뷰포트를 [gridDivisions]×[gridDivisions] 격자로 나눠 셀별 개수만 집계.
+     * 개별 로우/거리 정렬 없이 화면 전역을 저비용으로 커버한다.
+     */
+    suspend fun getClusterCells(
+        centerLat: Double,
+        centerLng: Double,
+        radiusKm: Double,
+        categories: Set<PlaceCategory> = emptySet(),
+        gridDivisions: Int,
+        limit: Int,
+    ): List<GeoClusterCell>
 
     /** 목록: 이름/주소 검색 + 카테고리 다중 필터 (이름순) */
     suspend fun search(

@@ -18,8 +18,13 @@ data class MapCluster(
     val lat: Double,
     val lng: Double,
     val members: List<Place>,
+    /**
+     * 저줌 SQL 그리드 집계 클러스터의 실제 개수. 이 경우 개별 좌표를 모르므로 [members] 는 비어 있다.
+     * null 이면 [members] 크기를 개수로 사용한다.
+     */
+    val aggregatedCount: Int? = null,
 ) {
-    val count: Int get() = members.size
+    val count: Int get() = aggregatedCount ?: members.size
     val single: Place? get() = if (members.size == 1) members[0] else null
 
     /** 멤버들이 차지하는 대략적 범위(m). 0에 가까우면 사실상 같은 좌표 → 줌해도 안 쪼개짐 */

@@ -194,8 +194,11 @@ fun MapScreen(
                         anchor = Offset(0.5f, 0.5f),
                         onClick = {
                             val z = cameraPositionState.position.zoom
-                            // 더 줌인해도 안 쪼개지면(같은 좌표/최대 줌) 목록으로 펼친다
-                            if (z >= MAX_CLUSTER_ZOOM || cluster.spanMeters() < CO_LOCATED_M) {
+                            // 더 줌인해도 안 쪼개지면(같은 좌표/최대 줌) 목록으로 펼친다.
+                            // 저줌 집계 클러스터(members 비어 있음)는 펼칠 수 없으므로 항상 줌인한다.
+                            val canExpand = cluster.members.size >= 2 &&
+                                (z >= MAX_CLUSTER_ZOOM || cluster.spanMeters() < CO_LOCATED_M)
+                            if (canExpand) {
                                 clusterList = cluster.members
                             } else {
                                 cameraPositionState.position = CameraPosition(

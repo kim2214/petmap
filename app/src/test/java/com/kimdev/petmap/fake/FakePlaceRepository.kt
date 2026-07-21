@@ -1,5 +1,6 @@
 package com.kimdev.petmap.fake
 
+import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -27,6 +28,7 @@ class FakePlaceRepository : PlaceRepository {
     var lastSearchNearbyLimit: Int? = null
     var lastCategories: Set<PlaceCategory>? = null
     var lastBoundsLimit: Int? = null
+    var lastClusterCellsLimit: Int? = null
 
     fun setFavorites(ids: Set<String>) { favorites.value = ids }
 
@@ -48,6 +50,23 @@ class FakePlaceRepository : PlaceRepository {
         lastCategories = categories
         lastBoundsLimit = limit
         return dataset.filterBy("", categories).take(limit)
+    }
+
+    override suspend fun getClusterCells(
+        centerLat: Double,
+        centerLng: Double,
+        radiusKm: Double,
+        categories: Set<PlaceCategory>,
+        gridDivisions: Int,
+        limit: Int,
+    ): List<GeoClusterCell> {
+        lastCategories = categories
+        lastClusterCellsLimit = limit
+        // 소수 1자리 그리드로 묶어 셀별 개수 집계(테스트용 근사)
+        return dataset.filterBy("", categories)
+            .groupBy { Math.round(it.lat * 10) / 10.0 to Math.round(it.lng * 10) / 10.0 }
+            .map { (key, members) -> GeoClusterCell(key.first, key.second, members.size) }
+            .take(limit)
     }
 
     override suspend fun search(query: String, categories: Set<PlaceCategory>, limit: Int): List<Place> {
