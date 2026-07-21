@@ -108,7 +108,8 @@ fun PlacePreviewSheet(
             OutlinedButton(onClick = onToggleFavorite) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = null,
+                    // 스크린리더에 담김/해제 상태 전달
+                    contentDescription = if (isFavorite) "즐겨찾기 됨" else "즐겨찾기 안 됨",
                 )
                 Text("즐겨찾기", modifier = Modifier.padding(start = 6.dp))
             }

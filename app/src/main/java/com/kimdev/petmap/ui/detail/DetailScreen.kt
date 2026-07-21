@@ -45,6 +45,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -213,7 +214,10 @@ private fun DetailContent(
 
 @Composable
 private fun Header(place: Place) {
-    val open = OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())
+    // 재구성마다 정규식 파싱을 반복하지 않도록 영업 여부를 캐시(초 단위 정확도는 불필요).
+    val open = remember(place.operatingTime, place.closedDays) {
+        OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())
+    }
     Surface(
         color = place.category.softColor,
         contentColor = MaterialTheme.colorScheme.onSurface,

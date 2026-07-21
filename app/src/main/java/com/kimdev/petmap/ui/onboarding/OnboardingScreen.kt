@@ -28,7 +28,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,7 +87,8 @@ private val pages = listOf(
 fun OnboardingScreen(onFinish: () -> Unit) {
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
-    val isLast = pagerState.currentPage == pages.lastIndex
+    // currentPage 를 직접 읽으면 스와이프 매 프레임 재구성 → 마지막 페이지 진입 시에만 갱신.
+    val isLast by remember { derivedStateOf { pagerState.currentPage == pages.lastIndex } }
 
     Column(
         modifier = Modifier

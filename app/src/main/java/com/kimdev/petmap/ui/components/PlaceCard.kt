@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -165,7 +166,11 @@ private fun PetBadges(place: Place) {
 
 @Composable
 fun OpenBadge(place: Place) {
-    when (OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())) {
+    // 리스트의 각 카드가 재구성마다 정규식 파싱을 반복하지 않도록 캐시(초 단위 정확도는 불필요).
+    val isOpen = remember(place.operatingTime, place.closedDays) {
+        OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())
+    }
+    when (isOpen) {
         true -> Text(
             "영업중",
             style = MaterialTheme.typography.labelMedium,

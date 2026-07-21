@@ -152,8 +152,14 @@ fun MapScreen(
     // 카테고리별 단일 장소 마커 (컬러 핀 + 흰 아이콘). 최초 1회만 생성.
     val categoryMarkers = rememberCategoryMarkers()
     // 클러스터 아이콘 캐시 (개수별). 숫자는 브랜드 폰트(나눔 ExtraBold)로 렌더링.
+    // 개수 값이 최대 500까지 제각각이라 무제한 증가를 막기 위해 LRU(접근순)로 상한을 둔다.
     val clusterTypeface = remember { ResourcesCompat.getFont(context, R.font.nanum_square_round_extrabold) }
-    val iconCache = remember { mutableMapOf<Int, OverlayImage>() }
+    val iconCache = remember {
+        object : LinkedHashMap<Int, OverlayImage>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<Int, OverlayImage>): Boolean =
+                size > CLUSTER_ICON_CACHE_MAX
+        }
+    }
     fun clusterIcon(count: Int): OverlayImage =
         iconCache.getOrPut(count) { OverlayImage.fromBitmap(makeClusterBitmap(count, clusterTypeface)) }
 
@@ -461,6 +467,8 @@ fun MapScreen(
     }
 }
 
+// 클러스터 아이콘 비트맵 캐시 상한(개수 값별). 화면에 동시에 보이는 클러스터 수를 크게 상회한다.
+private const val CLUSTER_ICON_CACHE_MAX = 64
 // 네이버 지도 최대 줌(21) 직전. 이 이상에선 줌인 대신 목록으로 펼친다.
 private const val MAX_CLUSTER_ZOOM = 19.0
 // 멤버들이 이 거리(m) 이내면 사실상 같은 좌표로 보고 목록으로 펼친다.
