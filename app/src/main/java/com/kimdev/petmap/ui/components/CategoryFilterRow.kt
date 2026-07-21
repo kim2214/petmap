@@ -2,6 +2,7 @@ package com.kimdev.petmap.ui.components
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -34,7 +35,9 @@ fun CategoryFilterRow(
             selected = selected.isEmpty(),
             onClick = onClearAll,
             label = { Text("전체") },
-            modifier = Modifier.padding(end = 8.dp),
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .padding(end = 8.dp),
         )
         PlaceCategory.entries.forEach { category ->
             val isOn = category in selected
@@ -61,7 +64,9 @@ fun CategoryFilterRow(
                     borderColor = category.color.copy(alpha = 0.35f),
                     selectedBorderColor = Color.Transparent,
                 ),
-                modifier = Modifier.padding(end = 8.dp),
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .padding(end = 8.dp),
             )
         }
     }

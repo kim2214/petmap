@@ -4,6 +4,8 @@ import android.Manifest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +23,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,8 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,7 +46,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +63,7 @@ import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlacePreviewSheet
+import com.kimdev.petmap.ui.components.SearchTextField
 import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
 import com.kimdev.petmap.ui.components.softColor
@@ -219,30 +218,14 @@ fun MapScreen(
                 .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            OutlinedTextField(
+            SearchTextField(
                 value = state.searchQuery,
                 onValueChange = viewModel::onSearchQueryChange,
-                placeholder = { Text("장소·주소 검색") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (state.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = {
-                            viewModel.clearSearch()
-                            focusManager.clearFocus()
-                        }) { Icon(Icons.Filled.Close, contentDescription = "지우기") }
-                    }
+                onClear = {
+                    viewModel.clearSearch()
+                    focusManager.clearFocus()
                 },
-                singleLine = true,
-                shape = RoundedCornerShape(28.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { searchFocused = it.isFocused },
+                onFocusChanged = { searchFocused = it },
             )
 
             when {
@@ -255,7 +238,11 @@ fun MapScreen(
                         .fillMaxWidth()
                         .padding(top = 6.dp),
                 ) {
-                    Column(modifier = Modifier.heightIn(max = 320.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
                         state.searchResults.forEach { p ->
                             SearchResultRow(p) {
                                 val q = state.searchQuery
@@ -489,7 +476,11 @@ private fun RecentSearchPanel(
             .fillMaxWidth()
             .padding(top = 6.dp),
     ) {
-        Column(modifier = Modifier.heightIn(max = 360.dp)) {
+        Column(
+            modifier = Modifier
+                .heightIn(max = 360.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier
                     .fillMaxWidth()
