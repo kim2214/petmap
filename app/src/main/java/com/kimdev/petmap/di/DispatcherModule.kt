@@ -1,6 +1,7 @@
 package com.kimdev.petmap.di
 
 import com.kimdev.petmap.core.common.DefaultDispatcher
+import com.kimdev.petmap.core.common.IoDispatcher
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,4 +16,8 @@ object DispatcherModule {
     @Provides
     @DefaultDispatcher
     fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
+    @Provides
+    @IoDispatcher
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 }

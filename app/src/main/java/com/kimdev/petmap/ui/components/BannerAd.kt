@@ -25,6 +25,8 @@ fun BannerAd(modifier: Modifier = Modifier) {
                 loadAd(AdRequest.Builder().build())
             }
         },
+        // 화면(탭)을 벗어날 때 AdView 를 해제해 누수를 막는다.
+        onRelease = { it.destroy() },
     )
 }
 

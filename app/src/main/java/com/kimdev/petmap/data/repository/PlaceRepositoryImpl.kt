@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.kimdev.petmap.BuildConfig
+import com.kimdev.petmap.core.common.IoDispatcher
 import com.kimdev.petmap.data.local.PetMapDatabase
 import com.kimdev.petmap.data.local.PlaceFts
 import com.kimdev.petmap.data.local.SyncPreferences
@@ -17,8 +18,10 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.distanceMeters
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlin.math.cos
 import kotlin.math.max
 import javax.inject.Inject
@@ -31,6 +34,7 @@ class PlaceRepositoryImpl @Inject constructor(
     private val favoriteDao: FavoriteDao,
     private val syncPrefs: SyncPreferences,
     private val database: PetMapDatabase,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : PlaceRepository {
 
     /**
@@ -160,14 +164,18 @@ class PlaceRepositoryImpl @Inject constructor(
         val key = BuildConfig.PUBLIC_DATA_SERVICE_KEY
         if (key.isBlank() || key == "YOUR_PUBLIC_DATA_SERVICE_KEY") return false
         if (!syncPrefs.isStale(now)) return false
+        // 네트워크 조회 + 약 2만 행 FTS 재색인(PlaceFts.rebuild)은 블로킹 작업이므로 IO 로 오프로딩한다.
+        // (호출부가 viewModelScope=Main 이라 메인 스레드에서 실행되면 ANR 위험)
         return runCatching {
-            val entities = api.getPetFriendlyPlaces(serviceKey = key).data.mapNotNull { it.toEntity() }
-            if (entities.isNotEmpty()) {
-                entities.chunked(1000).forEach { placeDao.upsertAll(it) }
-                // upsert(REPLACE)로 rowid 가 바뀔 수 있으므로 FTS 색인을 다시 만든다.
-                PlaceFts.rebuild(database.openHelper.writableDatabase)
-                syncPrefs.lastSyncAt = now
-                Log.i(TAG, "Remote refresh upserted ${entities.size} places")
+            withContext(ioDispatcher) {
+                val entities = api.getPetFriendlyPlaces(serviceKey = key).data.mapNotNull { it.toEntity() }
+                if (entities.isNotEmpty()) {
+                    entities.chunked(1000).forEach { placeDao.upsertAll(it) }
+                    // upsert(REPLACE)로 rowid 가 바뀔 수 있으므로 FTS 색인을 다시 만든다.
+                    PlaceFts.rebuild(database.openHelper.writableDatabase)
+                    syncPrefs.lastSyncAt = now
+                    Log.i(TAG, "Remote refresh upserted ${entities.size} places")
+                }
             }
             true
         }.getOrElse {

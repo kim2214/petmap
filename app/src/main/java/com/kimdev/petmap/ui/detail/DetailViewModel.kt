@@ -34,7 +34,8 @@ class DetailViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val place = repository.getPlace(placeId)
+            // 로드 실패 시에도 스피너가 멈추도록 예외를 흡수한다(화면은 place==null 을 "찾을 수 없음"으로 표시).
+            val place = runCatching { repository.getPlace(placeId) }.getOrNull()
             _uiState.update { it.copy(isLoading = false, place = place) }
         }
         viewModelScope.launch {

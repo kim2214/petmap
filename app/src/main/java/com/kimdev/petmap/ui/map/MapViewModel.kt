@@ -88,8 +88,11 @@ class MapViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .debounce(250)
                 .collect { q ->
+                    // 검색 실패로 collector 가 취소되면 자동완성이 영구 중단되므로 예외를 흡수한다.
                     val results = if (q.isBlank()) emptyList()
-                    else repository.search(q.trim(), limit = 8)
+                    else runCatching { repository.search(q.trim(), limit = 8) }
+                        .onFailure { Log.w(TAG, "search failed: ${it.message}") }
+                        .getOrDefault(emptyList())
                     _uiState.update { it.copy(searchResults = results) }
                 }
         }
