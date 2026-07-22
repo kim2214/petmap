@@ -25,7 +25,7 @@ object DatabaseModule {
             .createFromAsset("petmap.db")
             // v2 에셋을 로드한 뒤 FTS 색인/트리거를 구축(첫 실행 1회)
             .addMigrations(MIGRATION_2_3)
-            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
     @Provides
