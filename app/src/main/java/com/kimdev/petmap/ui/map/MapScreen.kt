@@ -1,6 +1,7 @@
 package com.kimdev.petmap.ui.map
 
 import android.Manifest
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -62,8 +62,10 @@ import com.kimdev.petmap.R
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.CategoryFilterRow
+import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlacePreviewSheet
 import com.kimdev.petmap.ui.components.SearchTextField
@@ -140,6 +142,12 @@ fun MapScreen(
 
     LaunchedEffect(granted) {
         trackingMode = if (granted) LocationTrackingMode.Follow else LocationTrackingMode.NoFollow
+    }
+
+    // 검색 오버레이(자동완성·최근 검색)가 열려 있으면 뒤로가기로 앱 종료 대신 오버레이를 닫는다
+    BackHandler(enabled = searchFocused || state.searchQuery.isNotBlank()) {
+        viewModel.clearSearch()
+        focusManager.clearFocus()
     }
 
     // 카메라가 움직일 때마다 로컬 재클러스터링 + 데이터가 오래됐는지 판단("다시 검색" 노출).
@@ -336,41 +344,41 @@ fun MapScreen(
                     )
                 }
             }
-        }
 
-        // "이 지역에서 다시 검색" — 지도를 옮겼을 때만 노출. 탭하면 현재 화면 기준 재조회.
-        val showResearch = state.canResearch &&
-            state.searchResults.isEmpty() &&
-            !(searchFocused && state.searchQuery.isBlank())
-        if (showResearch) {
-            Surface(
-                color = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(50),
-                shadowElevation = 4.dp,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 132.dp)
-                    .clickable {
-                        val pos = cameraPositionState.position
-                        viewModel.researchHere(pos.target.latitude, pos.target.longitude, pos.zoom)
-                    },
-            ) {
-                androidx.compose.foundation.layout.Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            // "이 지역에서 다시 검색" — 지도를 옮겼을 때만 노출. 탭하면 현재 화면 기준 재조회.
+            // 검색바/칩과 같은 Column 에 두어 글꼴 크기가 커져도 겹치지 않는다.
+            val showResearch = state.canResearch &&
+                state.searchResults.isEmpty() &&
+                !(searchFocused && state.searchQuery.isBlank())
+            if (showResearch) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(50),
+                    shadowElevation = 4.dp,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 10.dp)
+                        .clickable {
+                            val pos = cameraPositionState.position
+                            viewModel.researchHere(pos.target.latitude, pos.target.longitude, pos.zoom)
+                        },
                 ) {
-                    Icon(
-                        Icons.Filled.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        "이 지역에서 다시 검색",
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
+                    androidx.compose.foundation.layout.Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            "이 지역에서 다시 검색",
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(start = 6.dp),
+                        )
+                    }
                 }
             }
         }
@@ -429,6 +437,7 @@ fun MapScreen(
                 place = place,
                 isFavorite = place.id in state.favoriteIds,
                 onToggleFavorite = { viewModel.toggleFavorite(place) },
+                onDirections = { context.openNaverDirections(place) },
                 onDetail = {
                     val id = place.id
                     previewPlace = null
@@ -472,19 +481,10 @@ fun MapScreen(
 
     // 위치 권한 영구 거부 시 설정 안내
     if (showLocationSettingsDialog) {
-        AlertDialog(
-            onDismissRequest = { showLocationSettingsDialog = false },
-            title = { Text("위치 권한이 필요해요") },
-            text = { Text("내 위치를 지도에 표시하려면 위치 권한이 필요합니다. 설정에서 권한을 허용해 주세요.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLocationSettingsDialog = false
-                    context.openAppSettings()
-                }) { Text("설정 열기") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLocationSettingsDialog = false }) { Text("닫기") }
-            },
+        LocationSettingsDialog(
+            message = "내 위치를 지도에 표시하려면 위치 권한이 필요합니다. 설정에서 권한을 허용해 주세요.",
+            onOpenSettings = { context.openAppSettings() },
+            onDismiss = { showLocationSettingsDialog = false },
         )
     }
 }

@@ -68,6 +68,7 @@ import com.naver.maps.map.compose.NaverMap
 import com.naver.maps.map.compose.rememberCameraPositionState
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kimdev.petmap.core.util.copyToClipboard
 import com.kimdev.petmap.core.util.dialPhone
 import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.core.util.openUrl
@@ -182,14 +183,23 @@ private fun DetailContent(
             }
 
             SectionTitle("위치")
-            LocationMiniMap(place)
+            LocationMiniMap(place, onClick = onShowOnMap)
 
             SectionTitle("정보")
             val accent = place.category.color
-            InfoRow(Icons.Filled.Place, place.roadAddress, tint = accent)
+            // 주소는 탭으로 복사 (숙소 예약·메시지 공유 등에 붙여넣기)
+            InfoRow(
+                Icons.Filled.Place,
+                place.roadAddress,
+                tint = accent,
+                onClick = { context.copyToClipboard("주소", place.roadAddress) },
+            )
             place.operatingTime?.let { InfoRow(Icons.Filled.Schedule, it, tint = accent) }
             place.closedDays?.let { InfoRow(Icons.Filled.CalendarMonth, "휴무 $it", tint = accent) }
-            place.phone?.let { InfoRow(Icons.Filled.Phone, it, tint = accent) }
+            // 상단 전화 버튼과 별개로, 번호 행 자체도 탭하면 다이얼로 연결 (홈페이지 행과 동작 일관)
+            place.phone?.let { phone ->
+                InfoRow(Icons.Filled.Phone, phone, tint = accent, onClick = { context.dialPhone(phone) })
+            }
             place.homepage?.let { hp ->
                 InfoRow(
                     Icons.Filled.Language,
@@ -269,7 +279,7 @@ private fun Header(place: Place) {
 
 @OptIn(ExperimentalNaverMapApi::class)
 @Composable
-private fun LocationMiniMap(place: Place) {
+private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition(LatLng(place.lat, place.lng), 15.0)
     }
@@ -301,6 +311,12 @@ private fun LocationMiniMap(place: Place) {
                 iconTintColor = place.category.color,
             )
         }
+        // 제스처가 모두 꺼진 미리보기 지도 → 탭하면 본 지도에서 열리게 전체를 클릭 영역으로 덮는다
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable(onClickLabel = "지도에서 보기") { onClick() },
+        )
     }
 }
 

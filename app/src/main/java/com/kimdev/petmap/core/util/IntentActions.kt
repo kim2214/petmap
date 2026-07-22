@@ -1,9 +1,12 @@
 package com.kimdev.petmap.core.util
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import com.kimdev.petmap.domain.model.Place
@@ -66,6 +69,15 @@ fun Context.openNaverDirections(place: Place) {
     } catch (e: ActivityNotFoundException) {
         // 네이버 지도 미설치 → 웹 지도 검색으로 대체
         openUrl("https://map.naver.com/p/search/$name")
+    }
+}
+
+/** 텍스트를 클립보드에 복사. Android 13+ 는 시스템이 복사 UI 를 띄우므로 토스트를 생략한다. */
+fun Context.copyToClipboard(label: String, text: String) {
+    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        Toast.makeText(this, "복사했어요", Toast.LENGTH_SHORT).show()
     }
 }
 

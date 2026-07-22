@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.domain.model.Place
 import kotlinx.coroutines.launch
 import com.kimdev.petmap.ui.components.BannerAd
+import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.PlaceCard
 
@@ -41,7 +44,7 @@ fun FavoriteScreen(
     onExplore: () -> Unit = {},
     viewModel: FavoriteViewModel = hiltViewModel(),
 ) {
-    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -70,17 +73,26 @@ fun FavoriteScreen(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
-            if (favorites.isNotEmpty()) {
+            if (state.favorites.isNotEmpty()) {
                 Text(
-                    "${favorites.size}곳",
+                    "${state.favorites.size}곳",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
+        // 즐겨찾기가 쌓이면 카테고리로 좁혀 볼 수 있게 한다 (하나도 없을 땐 숨김)
+        if (state.totalCount > 0) {
+            CategoryFilterRow(
+                selected = state.selectedCategories,
+                onToggle = viewModel::toggleCategory,
+                onClearAll = viewModel::clearCategories,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (favorites.isEmpty()) {
-                EmptyState(
+            when {
+                state.totalCount == 0 -> EmptyState(
                     icon = Icons.Filled.FavoriteBorder,
                     title = "아직 즐겨찾기한 장소가 없어요",
                     description = "마음에 드는 곳의 ♡ 를 눌러 저장하면\n여기 모아서 볼 수 있어요.",
@@ -91,9 +103,18 @@ fun FavoriteScreen(
                         }
                     },
                 )
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(favorites, key = { it.id }) { place ->
+
+                state.favorites.isEmpty() -> EmptyState(
+                    icon = Icons.Filled.SearchOff,
+                    title = "조건에 맞는 즐겨찾기가 없어요",
+                    description = "다른 카테고리를 선택하거나 필터를 초기화해 보세요.",
+                    action = {
+                        Button(onClick = viewModel::clearCategories) { Text("필터 초기화") }
+                    },
+                )
+
+                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(state.favorites, key = { it.id }) { place ->
                         PlaceCard(
                             place = place,
                             onClick = { onPlaceClick(place.id) },

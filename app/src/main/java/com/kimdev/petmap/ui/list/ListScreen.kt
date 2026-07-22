@@ -1,5 +1,6 @@
 package com.kimdev.petmap.ui.list
 
+import android.Manifest
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,9 +27,12 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,18 +40,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
+import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.SearchTextField
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ListScreen(
     onPlaceClick: (String) -> Unit,
@@ -55,7 +65,34 @@ fun ListScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
     var searchFocused by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // "거리순" 칩에서 위치 권한을 바로 요청할 수 있게 한다 (지도 탭을 안 거쳐도 됨)
+    val locationPermissions = rememberMultiplePermissionsState(
+        listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+    )
+    var requestedLocationOnce by remember { mutableStateOf(false) }
+    var pendingDistanceSort by remember { mutableStateOf(false) }
+    var showLocationSettingsDialog by remember { mutableStateOf(false) }
+    val granted = locationPermissions.allPermissionsGranted
+
+    // 칩 탭으로 권한을 요청했고 사용자가 허용함 → 위치 확보 후 거리순 켜기
+    LaunchedEffect(granted) {
+        if (granted && pendingDistanceSort) {
+            pendingDistanceSort = false
+            viewModel.enableDistanceSortWithLocation()
+        }
+    }
+
+    // 권한은 있는데 위치 확보 실패(위치 서비스 꺼짐 등) 안내
+    LaunchedEffect(state.locationUnavailable) {
+        if (state.locationUnavailable) {
+            viewModel.consumeLocationUnavailable()
+            snackbarHostState.showSnackbar("현재 위치를 확인할 수 없어요")
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         Text(
@@ -89,9 +126,20 @@ fun ListScreen(
         ) {
             FilterChip(
                 selected = state.sortByDistance,
-                onClick = { viewModel.setSortByDistance(!state.sortByDistance) },
-                enabled = state.hasLocation,
-                label = { Text(if (state.hasLocation) "거리순" else "거리순(위치 필요)") },
+                onClick = {
+                    when {
+                        state.hasLocation -> viewModel.setSortByDistance(!state.sortByDistance)
+                        // 권한은 있는데 위치만 없음 → 위치 재확보 시도
+                        granted -> viewModel.enableDistanceSortWithLocation()
+                        locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
+                            requestedLocationOnce = true
+                            pendingDistanceSort = true
+                            locationPermissions.launchMultiplePermissionRequest()
+                        }
+                        else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
+                    }
+                },
+                label = { Text("거리순") },
                 leadingIcon = leadingCheck(state.sortByDistance),
             )
             FilterChip(
@@ -165,9 +213,21 @@ fun ListScreen(
                     }
                 }
             }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
 
         BannerAd()
+    }
+
+    if (showLocationSettingsDialog) {
+        LocationSettingsDialog(
+            message = "거리순 정렬에는 위치 권한이 필요합니다. 설정에서 권한을 허용해 주세요.",
+            onOpenSettings = { context.openAppSettings() },
+            onDismiss = { showLocationSettingsDialog = false },
+        )
     }
 }
 

@@ -6,12 +6,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,6 +32,7 @@ fun PlacePreviewSheet(
     place: Place,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
+    onDirections: () -> Unit,
     onDetail: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -104,14 +107,18 @@ fun PlacePreviewSheet(
                 .fillMaxWidth()
                 .padding(top = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedButton(onClick = onToggleFavorite) {
+            OutlinedIconButton(onClick = onToggleFavorite) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                     // 스크린리더에 담김/해제 상태 전달
                     contentDescription = if (isFavorite) "즐겨찾기 됨" else "즐겨찾기 안 됨",
                 )
-                Text("즐겨찾기", modifier = Modifier.padding(start = 6.dp))
+            }
+            FilledTonalButton(onClick = onDirections, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Filled.Directions, contentDescription = null)
+                Text("길찾기", modifier = Modifier.padding(start = 6.dp))
             }
             Button(onClick = onDetail, modifier = Modifier.weight(1f)) {
                 Text("상세 보기")

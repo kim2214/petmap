@@ -41,6 +41,8 @@ data class ListUiState(
     val recentSearches: List<String> = emptyList(),
     /** 조회 실패 여부. true 면 "결과 없음"이 아니라 에러 상태로 표시한다. */
     val isError: Boolean = false,
+    /** 권한은 있지만 위치를 얻지 못함(위치 꺼짐 등) → 스낵바 안내 (화면이 소비) */
+    val locationUnavailable: Boolean = false,
 )
 
 private data class SearchKey(
@@ -167,6 +169,31 @@ class ListViewModel @Inject constructor(
 
     fun setSortByDistance(enabled: Boolean) =
         _uiState.update { it.copy(sortByDistance = enabled) }
+
+    /**
+     * "거리순" 칩을 눌렀는데 위치가 아직 없을 때(권한 방금 허용·위치 미확보) 호출.
+     * 위치를 확보하면 거리순 정렬을 켜고, 실패하면 스낵바 안내 플래그를 올린다.
+     */
+    fun enableDistanceSortWithLocation() {
+        viewModelScope.launch {
+            if (userLocation == null) {
+                userLocation = locationProvider.lastLocation() ?: locationProvider.currentLocation()
+            }
+            val has = userLocation != null
+            _uiState.update { it.copy(hasLocation = has, locationUnavailable = !has) }
+            when {
+                !has -> Unit
+                // SearchKey 변경으로 자동 재조회된다
+                !_uiState.value.sortByDistance -> setSortByDistance(true)
+                // 정렬은 이미 켜져 있었지만 위치가 이제 생김 → 거리 반영 재조회
+                else -> refreshSearch()
+            }
+        }
+    }
+
+    /** 위치 확보 실패 안내를 화면이 표시한 뒤 호출 */
+    fun consumeLocationUnavailable() =
+        _uiState.update { it.copy(locationUnavailable = false) }
 
     fun setOpenNowOnly(enabled: Boolean) =
         _uiState.update { it.copy(openNowOnly = enabled) }
