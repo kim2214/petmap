@@ -14,15 +14,23 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kimdev.petmap.domain.model.Place
+import kotlinx.coroutines.launch
 import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.PlaceCard
@@ -34,6 +42,21 @@ fun FavoriteScreen(
     viewModel: FavoriteViewModel = hiltViewModel(),
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 하트 탭으로 목록에서 즉시 사라지므로, 실수 방지용 실행취소 동선을 준다.
+    fun removeWithUndo(place: Place) {
+        viewModel.toggleFavorite(place)
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = "'${place.name}' 즐겨찾기에서 제거했어요",
+                actionLabel = "실행취소",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.toggleFavorite(place)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         Row(
@@ -74,12 +97,16 @@ fun FavoriteScreen(
                         PlaceCard(
                             place = place,
                             onClick = { onPlaceClick(place.id) },
-                            onToggleFavorite = { viewModel.toggleFavorite(place) },
+                            onToggleFavorite = { removeWithUndo(place) },
                             modifier = Modifier.animateItem(),
                         )
                     }
                 }
             }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
 
         BannerAd()

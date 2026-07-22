@@ -32,6 +32,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -70,7 +73,9 @@ import com.kimdev.petmap.ui.components.softColor
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.naver.maps.geometry.LatLng
+import com.naver.maps.map.CameraAnimation
 import com.naver.maps.map.CameraPosition
+import com.naver.maps.map.CameraUpdate
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
 import com.naver.maps.map.compose.LocationTrackingMode
 import com.naver.maps.map.compose.MapProperties
@@ -83,6 +88,7 @@ import com.naver.maps.map.compose.rememberFusedLocationSource
 import com.naver.maps.map.overlay.OverlayImage
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.launch
 
 @OptIn(
     ExperimentalNaverMapApi::class,
@@ -122,6 +128,15 @@ fun MapScreen(
     var showLocationSettingsDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 카메라를 부드럽게 이동. 화면 스코프에서 실행해 호출부(효과/콜백)가 끝나도 애니메이션이 끊기지 않는다.
+    fun moveCameraTo(lat: Double, lng: Double, zoom: Double, animation: CameraAnimation = CameraAnimation.Fly) {
+        scope.launch {
+            cameraPositionState.animate(CameraUpdate.scrollAndZoomTo(LatLng(lat, lng), zoom), animation)
+        }
+    }
 
     LaunchedEffect(granted) {
         trackingMode = if (granted) LocationTrackingMode.Follow else LocationTrackingMode.NoFollow
@@ -141,10 +156,18 @@ fun MapScreen(
     // "지도에서 보기"로 들어온 포커스 대상 → 카메라 이동 + 미리보기 + 주변 재조회
     LaunchedEffect(state.focusTarget) {
         state.focusTarget?.let { target ->
-            cameraPositionState.position = CameraPosition(LatLng(target.lat, target.lng), 16.0)
+            moveCameraTo(target.lat, target.lng, 16.0)
             previewPlace = target
             viewModel.researchHere(target.lat, target.lng, 16.0)
             viewModel.consumeFocus()
+        }
+    }
+
+    // 조회 결과 0건 안내 (다시 검색 후 마커만 사라지면 무반응으로 보이므로)
+    LaunchedEffect(state.showNoResults) {
+        if (state.showNoResults) {
+            viewModel.consumeNoResults()
+            snackbarHostState.showSnackbar("이 지역엔 표시할 장소가 없어요")
         }
     }
 
@@ -201,9 +224,11 @@ fun MapScreen(
                             if (canExpand) {
                                 clusterList = cluster.members
                             } else {
-                                cameraPositionState.position = CameraPosition(
-                                    LatLng(cluster.lat, cluster.lng),
+                                moveCameraTo(
+                                    cluster.lat,
+                                    cluster.lng,
                                     (z + 2.0).coerceAtMost(MAX_CLUSTER_ZOOM),
+                                    CameraAnimation.Easing,
                                 )
                             }
                             true
@@ -249,8 +274,7 @@ fun MapScreen(
                         state.searchResults.forEach { p ->
                             SearchResultRow(p) {
                                 val q = state.searchQuery
-                                cameraPositionState.position =
-                                    CameraPosition(LatLng(p.lat, p.lng), 16.0)
+                                moveCameraTo(p.lat, p.lng, 16.0)
                                 previewPlace = p
                                 viewModel.researchHere(p.lat, p.lng, 16.0)
                                 if (q.isNotBlank()) viewModel.recordRecentSearch(q)
@@ -380,6 +404,14 @@ fun MapScreen(
                     .padding(16.dp)
             )
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                // 내 위치 FAB(BottomEnd, 56dp + 16dp 여백)을 가리지 않도록 그 위에 띄운다
+                .padding(bottom = 88.dp),
+        )
       }
 
       // 지도 아래 별도 영역에 배너(지도를 덮지 않음)

@@ -40,6 +40,8 @@ data class MapUiState(
     val focusTarget: Place? = null,
     /** 지도를 충분히 이동/축소해 현재 표시 데이터가 오래된 상태 → "이 지역에서 다시 검색" 노출 */
     val canResearch: Boolean = false,
+    /** 조회 결과가 0건 → 스낵바로 안내 (화면이 소비 후 consumeNoResults 호출) */
+    val showNoResults: Boolean = false,
 )
 
 @OptIn(FlowPreview::class)
@@ -126,6 +128,9 @@ class MapViewModel @Inject constructor(
     fun consumeFocus() {
         mapFocusBus.consume()
     }
+
+    /** 0건 안내를 화면이 표시한 뒤 호출 */
+    fun consumeNoResults() = _uiState.update { it.copy(showNoResults = false) }
 
     fun toggleFavorite(place: Place) {
         viewModelScope.launch { repository.toggleFavorite(place) }
@@ -225,7 +230,14 @@ class MapViewModel @Inject constructor(
         }.onSuccess { loaded ->
             places = loaded
             val clusters = withContext(defaultDispatcher) { clusterPlaces(loaded, lastZoom) }
-            _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    clusters = clusters,
+                    canResearch = false,
+                    showNoResults = loaded.isEmpty(),
+                )
+            }
         }.onFailure { e ->
             Log.w(TAG, "getPlacesInBounds failed: ${e.message}")
             // 실패 시 "이 지역에서 다시 검색" 버튼을 다시 노출해 재시도 동선을 준다.
@@ -260,7 +272,14 @@ class MapViewModel @Inject constructor(
                     aggregatedCount = cell.count,
                 )
             }
-            _uiState.update { it.copy(isLoading = false, clusters = clusters, canResearch = false) }
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    clusters = clusters,
+                    canResearch = false,
+                    showNoResults = cells.isEmpty(),
+                )
+            }
         }.onFailure { e ->
             Log.w(TAG, "getClusterCells failed: ${e.message}")
             _uiState.update { it.copy(isLoading = false, canResearch = true) }
