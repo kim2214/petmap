@@ -6,7 +6,7 @@
 ## 계층 구조
 
 ```
-com.example.petmap
+com.kimdev.petmap
 ├── PetMapApplication.kt          # @HiltAndroidApp 진입점
 ├── MainActivity.kt               # 단일 Activity. 하단탭 Scaffold + NavHost
 │
