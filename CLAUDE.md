@@ -15,8 +15,9 @@
 
 - 오래 걸리는 Gradle 작업은 `timeout 580 ./gradlew ...` 로 감싼다.
 - 실기기/에뮬레이터 실행: `adb install -r <apk>` → `adb shell am start -n com.kimdev.petmap/.MainActivity` → `adb logcat` 로 크래시 확인.
-- Gradle 실행에는 JDK 17+ 필요하나 바이트코드는 Java 11 타깃(`sourceCompatibility=11`).
-- SDK: minSdk 24 / targetSdk 36 / compileSdk 36. 버전: versionCode 4, versionName 1.3.
+- 빌드 툴체인: **AGP 9.x / Gradle 9.3.1 / Kotlin 2.3 / KSP 2.3 / Hilt 2.57 / Room 2.8**. 정확한 버전은 `gradle/libs.versions.toml`·`gradle/wrapper/gradle-wrapper.properties`가 단일 소스.
+- Gradle 실행에는 JDK 17+ 필요하나 바이트코드는 Java 11 타깃(`compilerOptions.jvmTarget=JVM_11`, `sourceCompatibility=11`).
+- SDK: minSdk 24 / targetSdk 36 / compileSdk 36. 버전: versionCode 5, versionName 1.4.
 
 ## 릴리스
 
