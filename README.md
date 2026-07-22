@@ -16,6 +16,7 @@
 
 ## 🛠️ 기술 스택
 
+- **빌드 툴체인**: AGP 9.x · Gradle 9.3.1 · Kotlin 2.3 · KSP 2.3 · Hilt 2.57 · Room 2.8 (정확한 버전은 `gradle/libs.versions.toml`)
 - **언어/UI**: Kotlin, Jetpack Compose, Material3
 - **아키텍처**: 단일 Activity + Compose Navigation, MVVM + Repository, 계층 분리(`data` / `domain` / `ui`)
 - **DI**: Hilt
@@ -44,9 +45,9 @@ com.example.petmap
 ## 🚀 시작하기
 
 ### 요구 사항
-- Android Studio (최신 버전 권장)
-- JDK 17+
-- minSdk 30 / targetSdk 36
+- Android Studio (최신 버전 권장) — 빌드 툴체인 **AGP 9.x / Gradle 9.3.1**
+- JDK 17+ (Gradle 실행용, 바이트코드는 Java 11 타깃)
+- minSdk 24 / targetSdk 36 / compileSdk 36
 
 ### 1. 클론
 ```bash
