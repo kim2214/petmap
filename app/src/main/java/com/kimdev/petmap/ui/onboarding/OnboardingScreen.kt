@@ -34,11 +34,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.annotation.StringRes
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.kimdev.petmap.R
 import kotlinx.coroutines.launch
 
 /** 첫 실행 여부 플래그 (SharedPreferences) */
@@ -57,28 +60,28 @@ object OnboardingPrefs {
 
 private data class OnboardingPage(
     val icon: ImageVector,
-    val title: String,
-    val description: String,
+    @StringRes val titleRes: Int,
+    @StringRes val descRes: Int,
     val accent: Color,
 )
 
 private val pages = listOf(
     OnboardingPage(
         icon = Icons.Filled.Map,
-        title = "지도로 한눈에",
-        description = "반려동물과 함께 갈 수 있는 카페·병원·숙박을\n지도 위에서 바로 찾아보세요.",
+        titleRes = R.string.onboarding_page1_title,
+        descRes = R.string.onboarding_page1_desc,
         accent = Color(0xFF22A75A),
     ),
     OnboardingPage(
         icon = Icons.Filled.FilterAlt,
-        title = "똑똑한 검색 & 필터",
-        description = "카테고리 다중 선택, 거리순·영업중 필터로\n원하는 곳을 빠르게 찾을 수 있어요.",
+        titleRes = R.string.onboarding_page2_title,
+        descRes = R.string.onboarding_page2_desc,
         accent = Color(0xFF3D8BD4),
     ),
     OnboardingPage(
         icon = Icons.Filled.Pets,
-        title = "동반 정보 & 즐겨찾기",
-        description = "장소별 반려동물 동반 가능 여부를 확인하고\n자주 가는 곳은 즐겨찾기로 모아보세요.",
+        titleRes = R.string.onboarding_page3_title,
+        descRes = R.string.onboarding_page3_desc,
         accent = Color(0xFFF2913C),
     ),
 )
@@ -102,7 +105,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             TextButton(
                 onClick = onFinish,
                 modifier = Modifier.align(Alignment.CenterEnd),
-            ) { Text("건너뛰기") }
+            ) { Text(stringResource(R.string.onboarding_skip)) }
         }
 
         HorizontalPager(
@@ -148,7 +151,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 .fillMaxWidth()
                 .height(52.dp),
         ) {
-            Text(if (isLast) "시작하기" else "다음")
+            Text(stringResource(if (isLast) R.string.onboarding_start else R.string.onboarding_next))
         }
     }
 }
@@ -176,14 +179,14 @@ private fun PageContent(page: OnboardingPage) {
         }
         Spacer(Modifier.height(40.dp))
         Text(
-            page.title,
+            stringResource(page.titleRes),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            page.description,
+            stringResource(page.descRes),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

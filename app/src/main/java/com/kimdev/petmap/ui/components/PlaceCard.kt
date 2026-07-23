@@ -25,8 +25,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.OpeningHours
 import com.kimdev.petmap.domain.util.formatDistance
@@ -92,7 +94,7 @@ fun PlaceCard(
             IconButton(onClick = onToggleFavorite) {
                 Icon(
                     imageVector = if (place.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = if (place.isFavorite) "즐겨찾기 해제" else "즐겨찾기 추가",
+                    contentDescription = stringResource(if (place.isFavorite) R.string.favorite_remove else R.string.favorite_add),
                     tint = if (place.isFavorite) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.outline,
                 )
@@ -127,7 +129,7 @@ fun CategoryTag(place: Place) {
         shape = RoundedCornerShape(8.dp),
     ) {
         Text(
-            place.category.label,
+            stringResource(place.category.labelRes),
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
@@ -137,10 +139,13 @@ fun CategoryTag(place: Place) {
 /** 반려동물 동반 정보 뱃지 (소형견 가능 / 실내·실외 가능 등) */
 @Composable
 private fun PetBadges(place: Place) {
+    val paw = place.petInfo.allowedPetSize?.let { stringResource(R.string.pet_size_format, it) }
+    val indoorLabel = stringResource(R.string.pet_indoor_allowed)
+    val outdoorLabel = stringResource(R.string.pet_outdoor_allowed)
     val badges = buildList {
-        place.petInfo.allowedPetSize?.let { add("🐾 $it") }
-        if (place.petInfo.indoorAllowed) add("실내 가능")
-        if (place.petInfo.outdoorAllowed) add("실외 가능")
+        paw?.let { add(it) }
+        if (place.petInfo.indoorAllowed) add(indoorLabel)
+        if (place.petInfo.outdoorAllowed) add(outdoorLabel)
     }.take(3)
     if (badges.isEmpty()) return
     Row(
@@ -172,12 +177,12 @@ fun OpenBadge(place: Place) {
     }
     when (isOpen) {
         true -> Text(
-            "영업중",
+            stringResource(R.string.label_open_now),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
         )
         false -> Text(
-            "영업종료",
+            stringResource(R.string.label_closed),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -16,8 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import com.kimdev.petmap.R
 
 /**
  * 지도/목록 화면 공용 검색 입력창.
@@ -30,7 +32,7 @@ fun SearchTextField(
     onValueChange: (String) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "장소·주소 검색",
+    placeholder: String = stringResource(R.string.search_placeholder),
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     onFocusChanged: (Boolean) -> Unit = {},
@@ -42,7 +44,7 @@ fun SearchTextField(
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (value.isNotEmpty()) {
-                IconButton(onClick = onClear) { Icon(Icons.Filled.Close, contentDescription = "지우기") }
+                IconButton(onClick = onClear) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear)) }
             }
         },
         singleLine = true,

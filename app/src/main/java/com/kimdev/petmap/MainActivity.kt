@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
@@ -144,14 +145,14 @@ private fun PetMapApp() {
                                 icon = {
                                     Icon(
                                         painter = painterResource(dest.iconRes),
-                                        contentDescription = dest.label,
+                                        contentDescription = stringResource(dest.labelRes),
                                         tint = Color.Unspecified, // 컬러 일러스트 원본 색 유지
                                         modifier = Modifier
                                             .size(26.dp)
                                             .alpha(if (selected) 1f else 0.5f), // 비선택은 흐리게 de-emphasis
                                     )
                                 },
-                                label = { Text(dest.label) },
+                                label = { Text(stringResource(dest.labelRes)) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedTextColor = MaterialTheme.colorScheme.primary,
                                     indicatorColor = MaterialTheme.colorScheme.primaryContainer,

@@ -8,11 +8,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** 화면 테마 모드 */
-enum class ThemeMode(val label: String) {
-    SYSTEM("시스템 설정"),
-    LIGHT("라이트"),
-    DARK("다크"),
+/** 화면 테마 모드 (표시 라벨은 UI 계층에서 문자열 리소스로 해석) */
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK,
 }
 
 /** 사용자가 선택한 화면 테마(기기 로컬). 기본값은 시스템 설정 따름. */

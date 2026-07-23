@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -75,9 +76,11 @@ import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sharePlace
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.util.OpeningHours
 import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
+import com.kimdev.petmap.ui.components.labelRes
 import com.kimdev.petmap.ui.components.softColor
 import java.time.LocalDateTime
 
@@ -94,10 +97,10 @@ fun DetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(place?.name ?: "상세", maxLines = 1) },
+                title = { Text(place?.name ?: stringResource(R.string.detail_title_fallback), maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
@@ -105,7 +108,7 @@ fun DetailScreen(
                         IconButton(onClick = viewModel::toggleFavorite) {
                             Icon(
                                 imageVector = if (place.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                                contentDescription = if (place.isFavorite) "즐겨찾기 해제" else "즐겨찾기 추가",
+                                contentDescription = stringResource(if (place.isFavorite) R.string.favorite_remove else R.string.favorite_add),
                                 tint = if (place.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
                         }
@@ -119,7 +122,7 @@ fun DetailScreen(
     ) { padding ->
         when {
             state.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-            place == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("장소를 찾을 수 없습니다") }
+            place == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text(stringResource(R.string.detail_not_found)) }
             else -> DetailContent(
                 place = place,
                 onShowOnMap = {
@@ -154,7 +157,7 @@ private fun DetailContent(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Directions, contentDescription = null)
-                Text("길찾기", modifier = Modifier.padding(start = 6.dp))
+                Text(stringResource(R.string.action_directions), modifier = Modifier.padding(start = 6.dp))
             }
             Row(
                 modifier = Modifier
@@ -165,12 +168,12 @@ private fun DetailContent(
                 place.phone?.let { phone ->
                     FilledTonalButton(onClick = { context.dialPhone(phone) }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Filled.Phone, contentDescription = null)
-                        Text("전화", modifier = Modifier.padding(start = 6.dp))
+                        Text(stringResource(R.string.action_phone), modifier = Modifier.padding(start = 6.dp))
                     }
                 }
                 FilledTonalButton(onClick = { context.sharePlace(place) }, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.Share, contentDescription = null)
-                    Text("공유", modifier = Modifier.padding(start = 6.dp))
+                    Text(stringResource(R.string.action_share), modifier = Modifier.padding(start = 6.dp))
                 }
             }
             OutlinedButton(
@@ -180,23 +183,24 @@ private fun DetailContent(
                     .padding(top = 10.dp),
             ) {
                 Icon(Icons.Filled.Map, contentDescription = null)
-                Text("지도에서 보기", modifier = Modifier.padding(start = 6.dp))
+                Text(stringResource(R.string.detail_show_on_map), modifier = Modifier.padding(start = 6.dp))
             }
 
-            SectionTitle("위치")
+            SectionTitle(stringResource(R.string.section_location))
             LocationMiniMap(place, onClick = onShowOnMap)
 
-            SectionTitle("정보")
+            SectionTitle(stringResource(R.string.section_info))
             val accent = place.category.color
+            val addressLabel = stringResource(R.string.clipboard_label_address)
             // 주소는 탭으로 복사 (숙소 예약·메시지 공유 등에 붙여넣기)
             InfoRow(
                 Icons.Filled.Place,
                 place.roadAddress,
                 tint = accent,
-                onClick = { context.copyToClipboard("주소", place.roadAddress) },
+                onClick = { context.copyToClipboard(addressLabel, place.roadAddress) },
             )
             place.operatingTime?.let { InfoRow(Icons.Filled.Schedule, it, tint = accent) }
-            place.closedDays?.let { InfoRow(Icons.Filled.CalendarMonth, "휴무 $it", tint = accent) }
+            place.closedDays?.let { InfoRow(Icons.Filled.CalendarMonth, stringResource(R.string.closed_days_format, it), tint = accent) }
             // 상단 전화 버튼과 별개로, 번호 행 자체도 탭하면 다이얼로 연결 (홈페이지 행과 동작 일관)
             place.phone?.let { phone ->
                 InfoRow(Icons.Filled.Phone, phone, tint = accent, onClick = { context.dialPhone(phone) })
@@ -212,11 +216,17 @@ private fun DetailContent(
                 )
             }
 
-            SectionTitle("반려동물 동반 정보")
+            SectionTitle(stringResource(R.string.section_pet_info))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                place.petInfo.allowedPetSize?.let { Pill("🐾 $it", highlight = true) }
-                Pill(if (place.petInfo.indoorAllowed) "실내 가능" else "실내 불가", highlight = place.petInfo.indoorAllowed)
-                Pill(if (place.petInfo.outdoorAllowed) "실외 가능" else "실외 불가", highlight = place.petInfo.outdoorAllowed)
+                place.petInfo.allowedPetSize?.let { Pill(stringResource(R.string.pet_size_format, it), highlight = true) }
+                Pill(
+                    stringResource(if (place.petInfo.indoorAllowed) R.string.pet_indoor_allowed else R.string.pet_indoor_not_allowed),
+                    highlight = place.petInfo.indoorAllowed,
+                )
+                Pill(
+                    stringResource(if (place.petInfo.outdoorAllowed) R.string.pet_outdoor_allowed else R.string.pet_outdoor_not_allowed),
+                    highlight = place.petInfo.outdoorAllowed,
+                )
                 place.petInfo.restriction?.let { Pill(it, highlight = false) }
             }
         }
@@ -250,13 +260,13 @@ private fun Header(place: Place) {
             ) {
                 Icon(
                     place.category.icon,
-                    contentDescription = place.category.label,
+                    contentDescription = stringResource(place.category.labelRes),
                     tint = place.category.color,
                     modifier = Modifier.size(40.dp),
                 )
             }
             Text(
-                place.category.label,
+                stringResource(place.category.labelRes),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 12.dp),
             )
@@ -268,7 +278,7 @@ private fun Header(place: Place) {
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
                     Text(
-                        if (open) "영업중" else "영업종료",
+                        stringResource(if (open) R.string.label_open_now else R.string.label_closed),
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
@@ -286,12 +296,13 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
     }
     // 시스템 설정이 아니라 앱에 적용된 테마(설정에서 강제 가능)에 맞춰 야간 모드를 켠다.
     val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val mapContentDesc = stringResource(R.string.detail_map_content_desc_format, place.name)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(180.dp)
             .clip(RoundedCornerShape(16.dp))
-            .semantics { contentDescription = "${place.name} 위치 지도" },
+            .semantics { contentDescription = mapContentDesc },
     ) {
         NaverMap(
             modifier = Modifier.fillMaxSize(),
@@ -318,7 +329,7 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .clickable(onClickLabel = "지도에서 보기") { onClick() },
+                .clickable(onClickLabel = stringResource(R.string.detail_show_on_map)) { onClick() },
         )
     }
 }

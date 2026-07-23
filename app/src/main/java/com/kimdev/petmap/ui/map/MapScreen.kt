@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
@@ -196,7 +197,7 @@ fun MapScreen(
     LaunchedEffect(state.showNoResults) {
         if (state.showNoResults) {
             viewModel.consumeNoResults()
-            snackbarHostState.showSnackbar("이 지역엔 표시할 장소가 없어요")
+            snackbarHostState.showSnackbar(context.getString(R.string.map_no_results))
         }
     }
 
@@ -333,7 +334,7 @@ fun MapScreen(
                             tint = MaterialTheme.colorScheme.outline,
                         )
                         Text(
-                            "'${state.searchQuery}' 검색 결과가 없어요",
+                            stringResource(R.string.map_search_no_result_format, state.searchQuery),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = 10.dp),
@@ -395,7 +396,7 @@ fun MapScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Text(
-                            "이 지역에서 다시 검색",
+                            stringResource(R.string.map_research_here),
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.padding(start = 6.dp),
                         )
@@ -421,7 +422,7 @@ fun MapScreen(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         ) {
-            Icon(Icons.Filled.MyLocation, contentDescription = "내 위치")
+            Icon(Icons.Filled.MyLocation, contentDescription = stringResource(R.string.map_my_location))
         }
 
         when {
@@ -476,7 +477,7 @@ fun MapScreen(
             sheetState = sheetState,
         ) {
             Text(
-                text = "이 위치의 장소 ${places.size}곳",
+                text = stringResource(R.string.map_cluster_places_format, places.size),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
             )
@@ -503,7 +504,7 @@ fun MapScreen(
     // 위치 권한 영구 거부 시 설정 안내
     if (showLocationSettingsDialog) {
         LocationSettingsDialog(
-            message = "내 위치를 지도에 표시하려면 위치 권한이 필요합니다. 설정에서 권한을 허용해 주세요.",
+            message = stringResource(R.string.location_message_map),
             onOpenSettings = { context.openAppSettings() },
             onDismiss = { showLocationSettingsDialog = false },
         )
@@ -546,12 +547,12 @@ private fun RecentSearchPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "최근 검색",
+                    stringResource(R.string.recent_search),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = onClearAll) { Text("전체 삭제") }
+                TextButton(onClick = onClearAll) { Text(stringResource(R.string.clear_all)) }
             }
             recents.forEach { term ->
                 androidx.compose.foundation.layout.Row(
@@ -579,7 +580,7 @@ private fun RecentSearchPanel(
                     IconButton(onClick = { onRemove(term) }) {
                         Icon(
                             Icons.Filled.Close,
-                            contentDescription = "삭제",
+                            contentDescription = stringResource(R.string.action_delete),
                             tint = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.size(18.dp),
                         )
@@ -641,7 +642,7 @@ private fun SeedingOverlay() {
         ) {
             CircularProgressIndicator()
             Text(
-                "장소 데이터를 준비하고 있어요…",
+                stringResource(R.string.map_seeding),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 16.dp),
             )

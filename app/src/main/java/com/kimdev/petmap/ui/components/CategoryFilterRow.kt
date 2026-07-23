@@ -13,7 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.PlaceCategory
 
 /**
@@ -34,7 +36,7 @@ fun CategoryFilterRow(
         FilterChip(
             selected = selected.isEmpty(),
             onClick = onClearAll,
-            label = { Text("전체") },
+            label = { Text(stringResource(R.string.filter_all)) },
             modifier = Modifier
                 .heightIn(min = 48.dp)
                 .padding(end = 8.dp),
@@ -44,7 +46,7 @@ fun CategoryFilterRow(
             FilterChip(
                 selected = isOn,
                 onClick = { onToggle(category) },
-                label = { Text(category.label) },
+                label = { Text(stringResource(category.labelRes)) },
                 leadingIcon = {
                     Icon(
                         imageVector = category.icon,

@@ -11,9 +11,27 @@ import androidx.compose.material.icons.filled.Museum
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.PlaceCategory
+
+/** 카테고리 표시 라벨 리소스 (도메인 enum → UI 문자열). */
+val PlaceCategory.labelRes: Int
+    @StringRes get() = when (this) {
+        PlaceCategory.HOSPITAL -> R.string.category_hospital
+        PlaceCategory.PHARMACY -> R.string.category_pharmacy
+        PlaceCategory.SHOP -> R.string.category_shop
+        PlaceCategory.GROOMING -> R.string.category_grooming
+        PlaceCategory.CAFE -> R.string.category_cafe
+        PlaceCategory.RESTAURANT -> R.string.category_restaurant
+        PlaceCategory.ACCOMMODATION -> R.string.category_accommodation
+        PlaceCategory.CULTURE -> R.string.category_culture
+        PlaceCategory.TRAVEL -> R.string.category_travel
+        PlaceCategory.CARE -> R.string.category_care
+        PlaceCategory.ETC -> R.string.category_etc
+    }
 
 /** 카테고리별 고유 색상 (아이콘/마커/태그용). 원색 톤으로 한눈에 구분된다. */
 val PlaceCategory.color: Color

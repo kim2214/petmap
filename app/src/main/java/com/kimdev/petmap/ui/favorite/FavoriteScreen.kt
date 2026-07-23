@@ -29,9 +29,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
 import kotlinx.coroutines.launch
 import com.kimdev.petmap.ui.components.BannerAd
@@ -48,14 +51,15 @@ fun FavoriteScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // 하트 탭으로 목록에서 즉시 사라지므로, 실수 방지용 실행취소 동선을 준다.
     fun removeWithUndo(place: Place) {
         viewModel.toggleFavorite(place)
         scope.launch {
             val result = snackbarHostState.showSnackbar(
-                message = "'${place.name}' 즐겨찾기에서 제거했어요",
-                actionLabel = "실행취소",
+                message = context.getString(R.string.favorite_removed_format, place.name),
+                actionLabel = context.getString(R.string.action_undo),
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) viewModel.toggleFavorite(place)
@@ -70,13 +74,13 @@ fun FavoriteScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "즐겨찾기",
+                stringResource(R.string.nav_favorite),
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
             if (state.favorites.isNotEmpty()) {
                 Text(
-                    "${state.favorites.size}곳",
+                    stringResource(R.string.favorite_count_format, state.favorites.size),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -98,22 +102,22 @@ fun FavoriteScreen(
 
                 state.totalCount == 0 -> EmptyState(
                     icon = Icons.Filled.FavoriteBorder,
-                    title = "아직 즐겨찾기한 장소가 없어요",
-                    description = "마음에 드는 곳의 ♡ 를 눌러 저장하면\n여기 모아서 볼 수 있어요.",
+                    title = stringResource(R.string.favorite_empty_title),
+                    description = stringResource(R.string.favorite_empty_desc),
                     action = {
                         FilledTonalButton(onClick = onExplore) {
                             Icon(Icons.Filled.Explore, contentDescription = null)
-                            Text("장소 둘러보기", modifier = Modifier.padding(start = 6.dp))
+                            Text(stringResource(R.string.favorite_explore), modifier = Modifier.padding(start = 6.dp))
                         }
                     },
                 )
 
                 state.favorites.isEmpty() -> EmptyState(
                     icon = Icons.Filled.SearchOff,
-                    title = "조건에 맞는 즐겨찾기가 없어요",
-                    description = "다른 카테고리를 선택하거나 필터를 초기화해 보세요.",
+                    title = stringResource(R.string.favorite_filter_empty_title),
+                    description = stringResource(R.string.favorite_filter_empty_desc),
                     action = {
-                        Button(onClick = viewModel::clearCategories) { Text("필터 초기화") }
+                        Button(onClick = viewModel::clearCategories) { Text(stringResource(R.string.action_reset_filter)) }
                     },
                 )
 

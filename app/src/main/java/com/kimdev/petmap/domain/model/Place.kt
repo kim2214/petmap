@@ -36,18 +36,18 @@ data class PetInfo(
  * 한국문화정보원 "반려동물 동반가능 문화시설" 데이터셋의 카테고리3 기준.
  * (동물약국·동물병원·반려동물용품·미용·카페·식당·펜션/호텔·박물관/미술관/문예회관·여행지·위탁관리)
  */
-enum class PlaceCategory(val label: String) {
-    HOSPITAL("동물병원"),
-    PHARMACY("동물약국"),
-    SHOP("용품"),
-    GROOMING("미용"),
-    CAFE("카페"),
-    RESTAURANT("식당"),
-    ACCOMMODATION("숙박"),
-    CULTURE("문화시설"),
-    TRAVEL("여행지"),
-    CARE("위탁관리"),
-    ETC("기타");
+enum class PlaceCategory {
+    HOSPITAL,
+    PHARMACY,
+    SHOP,
+    GROOMING,
+    CAFE,
+    RESTAURANT,
+    ACCOMMODATION,
+    CULTURE,
+    TRAVEL,
+    CARE,
+    ETC;
 
     companion object {
         /** 카테고리3 문자열을 앱 카테고리로 매핑 (정확 일치 우선, 그 외 키워드 폴백) */

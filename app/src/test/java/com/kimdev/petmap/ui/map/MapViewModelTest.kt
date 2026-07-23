@@ -4,6 +4,7 @@ import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.common.MapFocusBus
 import androidx.lifecycle.SavedStateHandle
 import com.kimdev.petmap.domain.model.PlaceCategory
+import com.kimdev.petmap.fake.FakeLocationProvider
 import com.kimdev.petmap.fake.FakePlaceRepository
 import com.kimdev.petmap.fake.FakeRecentSearchStore
 import com.kimdev.petmap.fake.testPlace
@@ -28,7 +29,7 @@ class MapViewModelTest {
     private val focusBus = MapFocusBus()
 
     private fun viewModel(savedState: SavedStateHandle = SavedStateHandle()): MapViewModel =
-        MapViewModel(repo, focusBus, FakeRecentSearchStore(), mainDispatcherRule.testDispatcher, savedState)
+        MapViewModel(repo, focusBus, FakeRecentSearchStore(), FakeLocationProvider(), mainDispatcherRule.testDispatcher, savedState)
 
     @Test
     fun `초기화 후 시딩 완료되고 클러스터가 채워진다`() = runTest(mainDispatcherRule.testDispatcher) {

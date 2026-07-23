@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
 
 /** 이 앱의 설정 화면 열기 (권한 영구 거부 시 안내용) */
@@ -29,15 +30,15 @@ fun Context.sharePlace(place: Place) {
     val text = buildString {
         appendLine(place.name)
         appendLine(place.roadAddress)
-        place.phone?.let { appendLine("전화: $it") }
-        place.operatingTime?.let { appendLine("운영: $it") }
+        place.phone?.let { appendLine(getString(R.string.share_phone_format, it)) }
+        place.operatingTime?.let { appendLine(getString(R.string.share_operating_format, it)) }
     }.trim()
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_SUBJECT, place.name)
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    safeStart(Intent.createChooser(send, "공유"))
+    safeStart(Intent.createChooser(send, getString(R.string.action_share)))
 }
 
 /** 메일 앱으로 문의 보내기 */
@@ -77,7 +78,7 @@ fun Context.copyToClipboard(label: String, text: String) {
     val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-        Toast.makeText(this, "복사했어요", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.toast_copied), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -85,6 +86,6 @@ private fun Context.safeStart(intent: Intent) {
     try {
         startActivity(intent)
     } catch (e: ActivityNotFoundException) {
-        Toast.makeText(this, "실행할 수 있는 앱이 없습니다", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.toast_no_app), Toast.LENGTH_SHORT).show()
     }
 }

@@ -33,17 +33,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.BuildConfig
+import com.kimdev.petmap.R
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sendEmail
 import com.kimdev.petmap.data.local.ThemeMode
+
+/** 테마 모드 표시 라벨 (data enum → UI 문자열). */
+@get:StringRes
+private val ThemeMode.labelRes: Int
+    get() = when (this) {
+        ThemeMode.SYSTEM -> R.string.theme_system
+        ThemeMode.LIGHT -> R.string.theme_light
+        ThemeMode.DARK -> R.string.theme_dark
+    }
 
 private const val PRIVACY_POLICY_URL =
     "https://kim2214.github.io/privacy-policy.html"
@@ -67,45 +79,46 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState()),
     ) {
         Text(
-            "설정",
+            stringResource(R.string.nav_settings),
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 8.dp),
         )
 
-        SectionTitle("화면")
+        SectionTitle(stringResource(R.string.settings_section_screen))
         SettingRow(
             Icons.Filled.DarkMode,
-            "화면 테마",
-            subtitle = themeMode.label,
+            stringResource(R.string.settings_theme),
+            subtitle = stringResource(themeMode.labelRes),
         ) { showThemeDialog = true }
         SettingRow(
             Icons.Filled.Replay,
-            "온보딩 다시 보기",
-            subtitle = "앱 소개 화면을 다시 봅니다",
+            stringResource(R.string.settings_replay_onboarding),
+            subtitle = stringResource(R.string.settings_replay_onboarding_desc),
             onClick = onReplayOnboarding,
         )
 
-        SectionTitle("약관 및 정책")
-        SettingRow(Icons.Filled.Policy, "개인정보처리방침") { context.openUrl(PRIVACY_POLICY_URL) }
-        SettingRow(Icons.AutoMirrored.Filled.Article, "오픈소스 라이선스", onClick = onOpenLicenses)
+        SectionTitle(stringResource(R.string.settings_section_terms))
+        SettingRow(Icons.Filled.Policy, stringResource(R.string.settings_privacy)) { context.openUrl(PRIVACY_POLICY_URL) }
+        SettingRow(Icons.AutoMirrored.Filled.Article, stringResource(R.string.settings_licenses), onClick = onOpenLicenses)
 
-        SectionTitle("문의")
-        SettingRow(Icons.Filled.Email, "이메일 문의", subtitle = CONTACT_EMAIL) {
-            context.sendEmail(CONTACT_EMAIL, subject = "[펫맵] 문의")
+        SectionTitle(stringResource(R.string.settings_section_contact))
+        val emailSubject = stringResource(R.string.settings_email_subject)
+        SettingRow(Icons.Filled.Email, stringResource(R.string.settings_email), subtitle = CONTACT_EMAIL) {
+            context.sendEmail(CONTACT_EMAIL, subject = emailSubject)
         }
 
-        SectionTitle("데이터 출처")
+        SectionTitle(stringResource(R.string.settings_section_data_source))
         SettingRow(
             Icons.Filled.Storage,
-            "한국문화정보원 공공데이터",
-            subtitle = "전국 반려동물 동반 가능 문화시설",
+            stringResource(R.string.settings_data_source),
+            subtitle = stringResource(R.string.settings_data_source_desc),
         )
 
-        SectionTitle("앱 정보")
+        SectionTitle(stringResource(R.string.settings_section_app_info))
         SettingRow(
             Icons.Filled.Info,
-            "버전",
-            subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            stringResource(R.string.settings_version),
+            subtitle = stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
         )
     }
 
@@ -129,7 +142,7 @@ private fun ThemeModeDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("화면 테마") },
+        title = { Text(stringResource(R.string.settings_theme)) },
         text = {
             Column {
                 ThemeMode.entries.forEach { mode ->
@@ -141,13 +154,13 @@ private fun ThemeModeDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = mode == current, onClick = { onSelect(mode) })
-                        Text(mode.label, modifier = Modifier.padding(start = 8.dp))
+                        Text(stringResource(mode.labelRes), modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("닫기") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
         },
     )
 }

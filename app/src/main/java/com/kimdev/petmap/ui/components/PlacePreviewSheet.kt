@@ -18,8 +18,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.formatDistance
 
@@ -81,21 +83,23 @@ fun PlacePreviewSheet(
 
         place.operatingTime?.let {
             Text(
-                text = "운영 $it",
+                text = stringResource(R.string.operating_time_format, it),
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
 
         // 반려동물 동반 요약
+        val indoorLabel = stringResource(R.string.pet_indoor_allowed)
+        val outdoorLabel = stringResource(R.string.pet_outdoor_allowed)
         val petSummary = buildList {
             place.petInfo.allowedPetSize?.let { add(it) }
-            if (place.petInfo.indoorAllowed) add("실내 가능")
-            if (place.petInfo.outdoorAllowed) add("실외 가능")
+            if (place.petInfo.indoorAllowed) add(indoorLabel)
+            if (place.petInfo.outdoorAllowed) add(outdoorLabel)
         }.joinToString(" · ")
         if (petSummary.isNotEmpty()) {
             Text(
-                text = "🐾 $petSummary",
+                text = stringResource(R.string.pet_size_format, petSummary),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 4.dp),
@@ -113,15 +117,15 @@ fun PlacePreviewSheet(
                 Icon(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                     // 스크린리더에 담김/해제 상태 전달
-                    contentDescription = if (isFavorite) "즐겨찾기 해제" else "즐겨찾기 추가",
+                    contentDescription = stringResource(if (isFavorite) R.string.favorite_remove else R.string.favorite_add),
                 )
             }
             FilledTonalButton(onClick = onDirections, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Filled.Directions, contentDescription = null)
-                Text("길찾기", modifier = Modifier.padding(start = 6.dp))
+                Text(stringResource(R.string.action_directions), modifier = Modifier.padding(start = 6.dp))
             }
             Button(onClick = onDetail, modifier = Modifier.weight(1f)) {
-                Text("상세 보기")
+                Text(stringResource(R.string.action_detail))
             }
         }
     }

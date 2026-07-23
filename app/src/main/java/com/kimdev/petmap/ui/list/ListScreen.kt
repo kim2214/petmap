@@ -42,9 +42,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.kimdev.petmap.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -90,13 +92,13 @@ fun ListScreen(
     LaunchedEffect(state.locationUnavailable) {
         if (state.locationUnavailable) {
             viewModel.consumeLocationUnavailable()
-            snackbarHostState.showSnackbar("현재 위치를 확인할 수 없어요")
+            snackbarHostState.showSnackbar(context.getString(R.string.list_location_unavailable))
         }
     }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         Text(
-            "목록",
+            stringResource(R.string.nav_list),
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 4.dp),
         )
@@ -139,13 +141,13 @@ fun ListScreen(
                         else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
                     }
                 },
-                label = { Text("거리순") },
+                label = { Text(stringResource(R.string.filter_distance)) },
                 leadingIcon = leadingCheck(state.sortByDistance),
             )
             FilterChip(
                 selected = state.openNowOnly,
                 onClick = { viewModel.setOpenNowOnly(!state.openNowOnly) },
-                label = { Text("영업중") },
+                label = { Text(stringResource(R.string.label_open_now)) },
                 leadingIcon = leadingCheck(state.openNowOnly),
             )
         }
@@ -169,28 +171,28 @@ fun ListScreen(
                 // 조회 실패 → "결과 없음"과 구분해 에러 상태 + 재시도 동선 제공
                 state.isError && state.places.isEmpty() -> EmptyState(
                     icon = Icons.Filled.CloudOff,
-                    title = "장소를 불러오지 못했어요",
-                    description = "네트워크 상태를 확인하고 다시 시도해 주세요.",
-                    action = { Button(onClick = { viewModel.retry() }) { Text("다시 시도") } },
+                    title = stringResource(R.string.empty_error_title),
+                    description = stringResource(R.string.empty_error_desc),
+                    action = { Button(onClick = { viewModel.retry() }) { Text(stringResource(R.string.action_retry)) } },
                 )
 
                 state.places.isEmpty() -> {
                     val (title, desc) = when {
-                        state.openNowOnly -> "지금 영업중인 장소가 없어요" to "영업중 필터를 끄거나 다른 지역에서 찾아보세요."
-                        state.query.isNotBlank() -> "'${state.query}' 검색 결과가 없어요" to "다른 키워드로 찾아보세요."
-                        state.selectedCategories.isNotEmpty() -> "조건에 맞는 장소가 없어요" to "필터를 줄이면 더 많은 장소가 보여요."
-                        else -> "표시할 장소가 없어요" to null
+                        state.openNowOnly -> stringResource(R.string.empty_open_now_title) to stringResource(R.string.empty_open_now_desc)
+                        state.query.isNotBlank() -> stringResource(R.string.empty_search_title_format, state.query) to stringResource(R.string.empty_search_desc)
+                        state.selectedCategories.isNotEmpty() -> stringResource(R.string.empty_filter_title) to stringResource(R.string.empty_filter_desc)
+                        else -> stringResource(R.string.empty_none_title) to null
                     }
                     // 0건일 때 곧바로 빠져나갈 수 있는 복구 동선
                     val recovery: (@Composable () -> Unit)? = when {
                         state.openNowOnly -> {
-                            { Button(onClick = { viewModel.setOpenNowOnly(false) }) { Text("영업중 필터 끄기") } }
+                            { Button(onClick = { viewModel.setOpenNowOnly(false) }) { Text(stringResource(R.string.action_open_now_off)) } }
                         }
                         state.query.isNotBlank() -> {
-                            { Button(onClick = { viewModel.onQueryChange("") }) { Text("검색 지우기") } }
+                            { Button(onClick = { viewModel.onQueryChange("") }) { Text(stringResource(R.string.action_clear_search)) } }
                         }
                         state.selectedCategories.isNotEmpty() -> {
-                            { Button(onClick = { viewModel.clearCategories() }) { Text("필터 초기화") } }
+                            { Button(onClick = { viewModel.clearCategories() }) { Text(stringResource(R.string.action_reset_filter)) } }
                         }
                         else -> null
                     }
@@ -224,7 +226,7 @@ fun ListScreen(
 
     if (showLocationSettingsDialog) {
         LocationSettingsDialog(
-            message = "거리순 정렬에는 위치 권한이 필요합니다. 설정에서 권한을 허용해 주세요.",
+            message = stringResource(R.string.location_message_list),
             onOpenSettings = { context.openAppSettings() },
             onDismiss = { showLocationSettingsDialog = false },
         )
@@ -247,12 +249,12 @@ private fun RecentSearchList(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "최근 검색",
+                    stringResource(R.string.recent_search),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = onClearAll) { Text("전체 삭제") }
+                TextButton(onClick = onClearAll) { Text(stringResource(R.string.clear_all)) }
             }
         }
         items(recents, key = { it }) { term ->
@@ -281,7 +283,7 @@ private fun RecentSearchList(
                 IconButton(onClick = { onRemove(term) }) {
                     Icon(
                         Icons.Filled.Close,
-                        contentDescription = "삭제",
+                        contentDescription = stringResource(R.string.action_delete),
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(18.dp),
                     )
