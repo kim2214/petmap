@@ -113,7 +113,7 @@ fun PlacePreviewSheet(
                 Icon(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                     // 스크린리더에 담김/해제 상태 전달
-                    contentDescription = if (isFavorite) "즐겨찾기 됨" else "즐겨찾기 안 됨",
+                    contentDescription = if (isFavorite) "즐겨찾기 해제" else "즐겨찾기 추가",
                 )
             }
             FilledTonalButton(onClick = onDirections, modifier = Modifier.weight(1f)) {

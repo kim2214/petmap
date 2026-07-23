@@ -4,7 +4,6 @@ import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
@@ -132,6 +132,8 @@ fun MapScreen(
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    // 시스템 설정이 아니라 앱에 적용된 테마(설정에서 강제 가능)에 맞춰 지도 야간 모드를 켠다.
+    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     // 카메라를 부드럽게 이동. 화면 스코프에서 실행해 호출부(효과/콜백)가 끝나도 애니메이션이 끊기지 않는다.
     fun moveCameraTo(lat: Double, lng: Double, zoom: Double, animation: CameraAnimation = CameraAnimation.Fly) {
@@ -220,7 +222,7 @@ fun MapScreen(
             locationSource = locationSource,
             properties = MapProperties(
                 locationTrackingMode = if (granted) trackingMode else LocationTrackingMode.None,
-                isNightModeEnabled = isSystemInDarkTheme(),
+                isNightModeEnabled = isDarkTheme,
             ),
             uiSettings = MapUiSettings(isLocationButtonEnabled = false),
         ) {

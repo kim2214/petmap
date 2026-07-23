@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -92,6 +93,9 @@ fun FavoriteScreen(
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
+                // 첫 로드 중엔 스피너 (빈 상태 문구가 잘못 깜빡이는 것 방지)
+                state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+
                 state.totalCount == 0 -> EmptyState(
                     icon = Icons.Filled.FavoriteBorder,
                     title = "아직 즐겨찾기한 장소가 없어요",

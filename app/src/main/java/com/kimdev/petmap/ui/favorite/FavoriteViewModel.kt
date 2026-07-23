@@ -21,6 +21,8 @@ data class FavoriteUiState(
     val selectedCategories: Set<PlaceCategory> = emptySet(),
     /** 필터와 무관한 전체 즐겨찾기 수. 0 이면 "아직 없음", >0 인데 favorites 가 비면 "필터 결과 없음" */
     val totalCount: Int = 0,
+    /** 첫 emit 전(초기값)엔 true. 데이터가 오기 전 "즐겨찾기 없음" 이 잘못 깜빡이는 것을 막는다. */
+    val isLoading: Boolean = true,
 )
 
 @HiltViewModel
@@ -37,6 +39,7 @@ class FavoriteViewModel @Inject constructor(
                 else favorites.filter { it.category in selected },
                 selectedCategories = selected,
                 totalCount = favorites.size,
+                isLoading = false,
             )
         }.stateIn(
             scope = viewModelScope,

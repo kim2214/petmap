@@ -2,7 +2,6 @@ package com.kimdev.petmap.ui.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -267,7 +268,7 @@ private fun Header(place: Place) {
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
                     Text(
-                        if (open) "지금 영업중" else "영업종료",
+                        if (open) "영업중" else "영업종료",
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
@@ -283,6 +284,8 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition(LatLng(place.lat, place.lng), 15.0)
     }
+    // 시스템 설정이 아니라 앱에 적용된 테마(설정에서 강제 가능)에 맞춰 야간 모드를 켠다.
+    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -293,7 +296,7 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
         NaverMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(isNightModeEnabled = isSystemInDarkTheme()),
+            properties = MapProperties(isNightModeEnabled = isDarkTheme),
             // 미리보기용: 제스처/버튼 비활성 (네이버 로고는 약관상 노출 유지)
             uiSettings = MapUiSettings(
                 isScrollGesturesEnabled = false,
@@ -344,6 +347,8 @@ private fun InfoRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            // 탭 가능한 행(주소 복사·전화·홈페이지)의 접근성 최소 터치 타깃 확보
+            .heightIn(min = 48.dp)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
