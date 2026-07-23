@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.common.DefaultDispatcher
 import com.kimdev.petmap.core.common.MapFocusBus
+import com.kimdev.petmap.core.location.LocationProvider
+import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
@@ -42,6 +44,8 @@ data class MapUiState(
     val canResearch: Boolean = false,
     /** 조회 결과가 0건 → 스낵바로 안내 (화면이 소비 후 consumeNoResults 호출) */
     val showNoResults: Boolean = false,
+    /** 지도 첫 진입 시 현재 위치로 카메라를 1회 이동시키기 위한 요청 (화면이 소비 후 consumeLocationMove 호출) */
+    val pendingLocationMove: UserLocation? = null,
 )
 
 @OptIn(FlowPreview::class)
@@ -50,6 +54,7 @@ class MapViewModel @Inject constructor(
     private val repository: PlaceRepository,
     private val mapFocusBus: MapFocusBus,
     private val recentSearchStore: RecentSearchStore,
+    private val locationProvider: LocationProvider,
     @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -71,6 +76,8 @@ class MapViewModel @Inject constructor(
     private var places: List<Place> = emptyList()
     // 카메라 이동 시 재클러스터링 잡. 연속 이동하면 이전 계산을 취소하고 최신 것만 반영.
     private var clusterJob: Job? = null
+    // 첫 진입 현재 위치 이동을 이미 처리했는지(중복 이동 방지)
+    private var initialLocationHandled = false
 
     init {
         viewModelScope.launch {
@@ -128,6 +135,24 @@ class MapViewModel @Inject constructor(
     fun consumeFocus() {
         mapFocusBus.consume()
     }
+
+    /**
+     * 지도 첫 진입 시 위치 권한이 허용된 경우 현재 위치로 카메라를 1회 이동한다.
+     * 권한 확인은 호출 측(UI)이 하고, 여기선 위치를 얻지 못하면(null) 아무 것도 하지 않는다.
+     * "지도에서 보기"로 특정 장소를 포커스 중이면 그쪽을 우선하고 초기 이동은 건너뛴다.
+     */
+    fun moveToCurrentLocationOnce() {
+        if (initialLocationHandled || _uiState.value.focusTarget != null) return
+        viewModelScope.launch {
+            val loc = locationProvider.lastLocation() ?: locationProvider.currentLocation() ?: return@launch
+            // 위치를 실제로 얻었을 때만 처리 완료로 표시 → 첫 시도에서 못 얻어도 다음 기회에 재시도.
+            initialLocationHandled = true
+            _uiState.update { it.copy(pendingLocationMove = loc) }
+        }
+    }
+
+    /** 초기 위치 이동을 화면이 처리한 뒤 호출 */
+    fun consumeLocationMove() = _uiState.update { it.copy(pendingLocationMove = null) }
 
     /** 0건 안내를 화면이 표시한 뒤 호출 */
     fun consumeNoResults() = _uiState.update { it.copy(showNoResults = false) }

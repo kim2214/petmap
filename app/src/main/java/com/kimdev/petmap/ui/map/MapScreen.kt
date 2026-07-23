@@ -140,8 +140,27 @@ fun MapScreen(
         }
     }
 
+    // 지도 첫 진입 시 위치 권한이 없으면 1회 자동 요청 (첫 접근에 현재 위치를 보여주기 위함)
+    LaunchedEffect(Unit) {
+        if (!granted && !requestedLocationOnce) {
+            requestedLocationOnce = true
+            locationPermissions.launchMultiplePermissionRequest()
+        }
+    }
+
     LaunchedEffect(granted) {
         trackingMode = if (granted) LocationTrackingMode.Follow else LocationTrackingMode.NoFollow
+        // 권한이 있으면(첫 진입 또는 방금 허용) 현재 위치로 카메라를 1회 이동한다.
+        if (granted) viewModel.moveToCurrentLocationOnce()
+    }
+
+    // 초기 현재 위치 이동 요청 → 카메라 이동 + 그 지점 기준 주변 재조회
+    LaunchedEffect(state.pendingLocationMove) {
+        state.pendingLocationMove?.let { loc ->
+            moveCameraTo(loc.lat, loc.lng, INITIAL_LOCATION_ZOOM)
+            viewModel.researchHere(loc.lat, loc.lng, INITIAL_LOCATION_ZOOM)
+            viewModel.consumeLocationMove()
+        }
     }
 
     // 검색 오버레이(자동완성·최근 검색)가 열려 있으면 뒤로가기로 앱 종료 대신 오버레이를 닫는다
@@ -495,6 +514,8 @@ private const val CLUSTER_ICON_CACHE_MAX = 64
 private const val MAX_CLUSTER_ZOOM = 19.0
 // 멤버들이 이 거리(m) 이내면 사실상 같은 좌표로 보고 목록으로 펼친다.
 private const val CO_LOCATED_M = 25.0
+// 첫 진입 시 현재 위치로 이동할 때의 줌(동네 단위로 주변 장소가 보이는 수준).
+private const val INITIAL_LOCATION_ZOOM = 15.0
 
 @Composable
 private fun RecentSearchPanel(
