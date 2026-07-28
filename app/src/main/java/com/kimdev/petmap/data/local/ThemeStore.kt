@@ -15,7 +15,13 @@ enum class ThemeMode {
     DARK,
 }
 
-/** 사용자가 선택한 화면 테마(기기 로컬). 기본값은 시스템 설정 따름. */
+/**
+ * 사용자가 선택한 화면 테마(기기 로컬). 기본값은 시스템 설정 따름.
+ *
+ * 여기만 생성자에서 동기로 읽는다. 첫 프레임 전에 값이 필요하기 때문이다 —
+ * 비동기로 바꾸면 기본 테마로 한 프레임 그린 뒤 전환되어 화면이 번쩍인다.
+ * (프리퍼런스 하나뿐이라 비용이 작다. 다른 Store 는 비동기 로드를 쓴다)
+ */
 @Singleton
 class ThemeStore @Inject constructor(
     @ApplicationContext context: Context,
