@@ -37,7 +37,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
 import kotlinx.coroutines.launch
-import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.PlaceCard
@@ -139,6 +138,5 @@ fun FavoriteScreen(
             )
         }
 
-        BannerAd()
     }
 }

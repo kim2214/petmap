@@ -66,7 +66,6 @@ import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.core.util.openNaverDirections
-import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
@@ -462,9 +461,6 @@ fun MapScreen(
                 .padding(bottom = 88.dp),
         )
       }
-
-      // 지도 아래 별도 영역에 배너(지도를 덮지 않음)
-      BannerAd()
     }
 
     // 마커 미리보기 바텀시트

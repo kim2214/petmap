@@ -53,7 +53,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.kimdev.petmap.core.util.openAppSettings
-import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.LocationSettingsDialog
@@ -224,7 +223,6 @@ fun ListScreen(
             )
         }
 
-        BannerAd()
     }
 
     if (showLocationSettingsDialog) {

@@ -34,6 +34,10 @@ object AdsConsent {
     private val _privacyOptionsRequired = MutableStateFlow(false)
     val privacyOptionsRequired: StateFlow<Boolean> = _privacyOptionsRequired.asStateFlow()
 
+    /** MobileAds 초기화 완료 여부. 초기화 전에 loadAd 하면 실패하므로 배너가 이 값을 기다린다. */
+    private val _adsReady = MutableStateFlow(false)
+    val adsReady: StateFlow<Boolean> = _adsReady.asStateFlow()
+
     // 테스트 기기: 여기 등록된 기기는 실제 광고 단위 ID 라도 항상 "테스트 광고"만 받는다.
     // → 비공개 테스트(릴리스 빌드)에서 본인/테스터의 실광고 클릭으로 인한 무효 트래픽 방지.
     //   새 테스터 추가 시 logcat 의 "addTestDeviceHashedId(...)" 해시를 아래에 추가하면 됨.
@@ -102,6 +106,6 @@ object AdsConsent {
             RequestConfiguration.Builder().setTestDeviceIds(TEST_DEVICE_IDS).build(),
         )
         // Activity 가 아니라 애플리케이션 컨텍스트로 초기화(수명이 긴 SDK 가 Activity 를 잡지 않게)
-        MobileAds.initialize(context) {}
+        MobileAds.initialize(context) { _adsReady.value = true }
     }
 }

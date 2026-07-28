@@ -44,6 +44,7 @@ import com.kimdev.petmap.core.ads.AdsConsent
 import com.kimdev.petmap.core.review.InAppReview
 import com.kimdev.petmap.data.local.ThemeMode
 import com.kimdev.petmap.data.local.ThemeStore
+import com.kimdev.petmap.ui.components.BannerAd
 import com.kimdev.petmap.ui.onboarding.OnboardingPrefs
 import com.kimdev.petmap.ui.onboarding.OnboardingScreen
 import javax.inject.Inject
@@ -124,6 +125,9 @@ private fun PetMapApp() {
         bottomBar = {
             if (showBottomBar) {
                 Column {
+                    // 배너를 화면마다 두지 않고 여기 한 곳에 둔다 → 탭을 옮겨도 AdView 가
+                    // 파괴·재생성되지 않아 탭 전환마다 새 광고를 요청하지 않는다.
+                    BannerAd()
                     // 콘텐츠와 바를 또렷하게 분리하는 얇은 구분선
                     HorizontalDivider(
                         thickness = Dp.Hairline,
