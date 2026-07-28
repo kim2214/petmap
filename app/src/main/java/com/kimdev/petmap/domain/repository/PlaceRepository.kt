@@ -7,11 +7,12 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * 장소 데이터 접근 추상화.
- * 데이터는 내장 CSV로 시딩된 Room 을 단일 소스로 사용하고, API 로 주기적 갱신(하이브리드)한다.
+ * 프리빌트 에셋 Room DB(assets/petmap.db)가 단일 소스다. 네트워크 갱신 없음.
+ * 데이터 갱신은 CSV → tools/build_db.py 재생성 → 앱 업데이트로만 이뤄진다.
  */
 interface PlaceRepository {
 
-    /** 내장 데이터가 비어 있으면 최초 1회 시딩 */
+    /** 첫 접근 시 에셋 DB 복사가 일어나도록 워밍업 (별도 시딩 없음) */
     suspend fun ensureSeeded()
 
     /** 지도 뷰포트: 중심 좌표 기준 반경 박스 내 장소 (가까운 순, 개수 제한). categories 비면 전체 */
@@ -57,7 +58,4 @@ interface PlaceRepository {
     fun observeFavorites(): Flow<List<Place>>
     fun observeFavoriteIds(): Flow<Set<String>>
     suspend fun toggleFavorite(place: Place)
-
-    /** 하이브리드: 마지막 동기화가 오래됐고 키가 설정돼 있으면 API 로 갱신. 갱신 수행 시 true */
-    suspend fun refreshFromRemoteIfStale(now: Long): Boolean
 }

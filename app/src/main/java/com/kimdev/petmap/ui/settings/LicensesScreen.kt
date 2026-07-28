@@ -25,8 +25,6 @@ import com.kimdev.petmap.R
 private val LICENSES = listOf(
     "Jetpack Compose · AndroidX" to "Apache License 2.0",
     "Hilt (Dagger)" to "Apache License 2.0",
-    "Retrofit · OkHttp" to "Apache License 2.0",
-    "kotlinx.serialization" to "Apache License 2.0",
     "Room" to "Apache License 2.0",
     "Accompanist" to "Apache License 2.0",
     "naver-map-compose (fornewid)" to "Apache License 2.0",

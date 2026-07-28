@@ -21,9 +21,9 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): PetMapDatabase =
         Room.databaseBuilder(context, PetMapDatabase::class.java, PetMapDatabase.NAME)
-            // 미리 시딩된 DB(에셋)를 사용 → 첫 실행 시 CSV 파싱 없이 즉시 사용
+            // 미리 시딩된 DB(에셋, v3·FTS 색인 동봉)를 사용 → 첫 실행 시 파싱/색인 없이 즉시 사용
             .createFromAsset("petmap.db")
-            // v2 에셋을 로드한 뒤 FTS 색인/트리거를 구축(첫 실행 1회)
+            // 구버전 앱(v2 DB, FTS 없음)에서 업그레이드하는 기존 설치용
             .addMigrations(MIGRATION_2_3)
             // 다운그레이드(구 APK 사이드로드 등)만 파괴적 재생성을 허용한다.
             // 업그레이드 경로 누락은 조용히 전체 데이터(즐겨찾기 포함)를 지우는 대신

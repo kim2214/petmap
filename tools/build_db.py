@@ -9,10 +9,11 @@
     python3 tools/build_db.py "<새 CSV 경로>" [출력경로]
     # 출력경로 기본값: app/src/main/assets/petmap.db
 
-버전 주의: 앱의 @Database version 은 3이지만 에셋은 **의도적으로 v2 로 유지**한다.
-첫 실행 시 MIGRATION_2_3 이 FTS 색인(places_fts)을 구축하기 때문이다.
-DB_VERSION 을 3으로 올리면 마이그레이션이 건너뛰어져 검색이 통째로 죽는다 — 절대 올리지 말 것.
-(엔티티 스키마가 같으면 identity_hash 는 버전과 무관하게 동일하다.)
+버전/FTS 주의: 에셋은 v3 로 생성하며 FTS 색인(places_fts)을 **동봉**한다.
+색인을 여기서 만들어 두면 신규 설치가 첫 실행에 2.4만 행을 재색인하는 비용이 사라진다.
+- fts_index() 는 앱의 PlaceFts.index()(글자 단위 유니그램)와 반드시 동일해야 한다.
+  어긋나면 검색이 조용히 빈 결과를 반환한다 (androidTest 의 PetMapDatabaseAssetTest 가 검증).
+- MIGRATION_2_3 은 구버전 앱(v2 DB, FTS 없음)에서 업그레이드하는 기존 설치용으로 남아 있다.
 
 identity_hash 주의: 엔티티(PlaceEntity/FavoriteEntity) 스키마가 바뀌면 ROOM_IDENTITY_HASH 도
 바뀐다. 기준값은 app/schemas/com.kimdev.petmap.data.local.PetMapDatabase/<version>.json 의
@@ -24,8 +25,8 @@ import os
 import sqlite3
 import sys
 
-ROOM_IDENTITY_HASH = "fc2696544a8c13596c2946b867cb4d61"  # @Database version 2 기준
-DB_VERSION = 2
+ROOM_IDENTITY_HASH = "fc2696544a8c13596c2946b867cb4d61"  # app/schemas/**/3.json 의 identityHash
+DB_VERSION = 3  # FTS 동봉(v3). 앱 @Database version 과 동일
 
 DDL = [
     "CREATE TABLE android_metadata (locale TEXT)",
@@ -73,6 +74,23 @@ def category_name(raw):
     return "ETC"
 
 
+def fts_index(field):
+    """앱 PlaceFts.index() 와 동일: 글자(한글/영문/숫자) 유니그램을 공백으로 분리, 소문자화."""
+    if not field:
+        return ""
+    return " ".join(ch.lower() for ch in field if ch.isalnum())
+
+
+def build_fts(db):
+    """places 전체로 places_fts(FTS4) 색인을 생성한다. DDL 은 앱 PlaceFts.create() 와 동일."""
+    db.execute("CREATE VIRTUAL TABLE places_fts USING fts4(name, roadAddress)")
+    rows = db.execute("SELECT rowid, name, roadAddress FROM places").fetchall()
+    db.executemany(
+        "INSERT INTO places_fts(docid, name, roadAddress) VALUES (?,?,?)",
+        ((rid, fts_index(name), fts_index(road)) for rid, name, road in rows),
+    )
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -117,6 +135,7 @@ def main():
     db.executemany(
         "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows.values()
     )
+    build_fts(db)
     db.execute(f"PRAGMA user_version={DB_VERSION}")
     db.commit()
     db.execute("VACUUM")

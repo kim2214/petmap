@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.map
 class FakePlaceRepository : PlaceRepository {
 
     var dataset: List<Place> = emptyList()
-    var refreshResult: Boolean = false
     private val favorites = MutableStateFlow<Set<String>>(emptySet())
 
     // 호출 기록
@@ -101,6 +100,4 @@ class FakePlaceRepository : PlaceRepository {
         favorites.value = if (place.id in favorites.value) favorites.value - place.id
         else favorites.value + place.id
     }
-
-    override suspend fun refreshFromRemoteIfStale(now: Long): Boolean = refreshResult
 }

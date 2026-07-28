@@ -10,8 +10,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * 검색어도 유니그램 **구문(phrase)** 으로 바꿔, 기존 `LIKE '%검색어%'` 와 동일한 부분검색을 유지한다.
  *   예) "100세약국" → 색인 "1 0 0 세 약 국",  검색 "약국" → MATCH `"약 국"` → 매칭.
  *
- * `places_fts` 는 Room 엔티티가 아니라 [MIGRATION_2_3] 이 만드는 비-엔티티 테이블이다
- * (docid == places.rowid). 검색 쿼리는 PlaceDao.searchByFts(RawQuery)로 실행한다.
+ * `places_fts` 는 Room 엔티티가 아닌 비-엔티티 테이블이다(docid == places.rowid).
+ * 에셋 DB(v3)에 색인이 동봉되며(tools/build_db.py 의 fts_index/build_fts 가 이 파일과 동일 로직),
+ * 구버전 설치(v2)만 [MIGRATION_2_3] 이 구축한다. 검색은 PlaceDao.searchByFts(RawQuery)로 실행한다.
  */
 object PlaceFts {
     const val TABLE = "places_fts"

@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -49,8 +48,6 @@ android {
 
         // 네이버 지도 Client ID (NCP key id) — local.properties 의 naver.map.clientId 값
         manifestPlaceholders["naverMapClientId"] = prop("naver.map.clientId", "PLACEHOLDER")
-        // 공공데이터포털 서비스 키
-        buildConfigField("String", "PUBLIC_DATA_SERVICE_KEY", "\"${prop("public.data.serviceKey")}\"")
 
         // AdMob: 디버그 빌드는 Google 공식 테스트 ID 사용(아래 release 에서 실제 ID 로 덮어씀).
         // ID 는 APK 에 포함되어 비밀이 아니므로 하드코딩한다.
@@ -184,13 +181,6 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
-
-    // Network
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.kotlinx.serialization)
-    implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
-    implementation(libs.kotlinx.serialization.json)
 
     // Room (local DB)
     implementation(libs.room.runtime)

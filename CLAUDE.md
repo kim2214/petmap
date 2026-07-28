@@ -31,14 +31,14 @@
 
 ## 데이터: 프리빌트 Room DB
 
-- 단일 소스는 `app/src/main/assets/petmap.db`(약 23,925개 고유 장소). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 시딩 없음.
-- 검색은 FTS4 유니그램 색인. `Migration(2→3)`이 첫 실행 1회 색인 생성(`data/local/PlaceFts.kt`).
+- 단일 소스는 `app/src/main/assets/petmap.db`(약 23,925개 고유 장소, v3). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 경로 없음(원격 동기화 코드는 제거됨).
+- 검색은 FTS4 유니그램 색인(`data/local/PlaceFts.kt`). 색인은 에셋에 동봉되며(`build_db.py`의 `fts_index`가 `PlaceFts.index`와 동일 로직이어야 함), `Migration(2→3)`은 구버전 설치(v2 DB) 업그레이드용.
 - **DB를 새 CSV로 재생성할 때는 `/rebuild-db` 스킬을 사용한다** (`tools/build_db.py`의 identity_hash/버전 주의사항이 얽혀 있음).
-- 엔티티(`PlaceEntity`/`FavoriteEntity`) 스키마를 바꾸면 `@Database` version과 identity_hash가 달라지므로 `tools/build_db.py`의 `ROOM_IDENTITY_HASH`/`DB_VERSION`을 반드시 갱신해야 한다.
+- 엔티티(`PlaceEntity`/`FavoriteEntity`) 스키마를 바꾸면 identity_hash가 달라진다. 기준값은 `app/schemas/**/<version>.json`의 `identityHash`이며 `tools/build_db.py`의 `ROOM_IDENTITY_HASH`를 함께 갱신해야 한다. 동기화가 어긋나면 androidTest `PetMapDatabaseAssetTest`가 실패한다.
 
 ## 비밀 키 (git 제외)
 
-- `local.properties`: `naver.map.clientId`, `public.data.serviceKey`, AdMob 테스트 ID.
+- `local.properties`: `naver.map.clientId` (AdMob ID 는 비밀이 아니라 `app/build.gradle.kts`에 하드코딩).
 - `keystore.properties`, `petmap-upload.jks`: 릴리스 서명.
 - `app/google-services.json`: 있으면 Firebase Crashlytics/Analytics 활성화, 없으면 앱은 정상 빌드(Firebase만 비활성).
 

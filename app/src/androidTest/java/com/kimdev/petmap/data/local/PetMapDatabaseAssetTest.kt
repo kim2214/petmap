@@ -16,12 +16,12 @@ import org.junit.runner.RunWith
 /**
  * 에셋 DB(assets/petmap.db) 로드 계약 테스트.
  *
- * 프리빌트 DB 는 tools/build_db.py 가 identity_hash/user_version 을 손으로 맞추는 구조라,
+ * 프리빌트 DB 는 tools/build_db.py 가 identity_hash/user_version/FTS 색인을 손으로 맞추는 구조라,
  * 엔티티 변경·에셋 재생성 시 동기화가 어긋나면 컴파일/유닛 테스트는 통과하고 런타임에만 터진다.
  * 이 테스트가 그 계약을 고정한다:
- *  1) createFromAsset → MIGRATION_2_3 → Room open (identity_hash 검증 포함) 이 성공한다.
+ *  1) createFromAsset(v3) → Room open (identity_hash 검증 포함) 이 성공한다.
  *  2) places 에 실데이터가 들어 있다.
- *  3) 마이그레이션이 만든 FTS 색인으로 검색이 실제 결과를 반환한다.
+ *  3) 에셋에 동봉된 FTS 색인(build_db.py 의 fts_index == 앱 PlaceFts.index)으로 검색이 결과를 반환한다.
  */
 @RunWith(AndroidJUnit4::class)
 class PetMapDatabaseAssetTest {
@@ -55,7 +55,7 @@ class PetMapDatabaseAssetTest {
     }
 
     @Test
-    fun migration_buildsFtsIndex_andSearchReturnsResults() = runBlocking {
+    fun bundledFtsIndex_searchReturnsResults() = runBlocking {
         val match = PlaceFts.match("카페")
         assertNotNull(match)
         // PlaceRepositoryImpl.ftsQuery 와 동일한 조인 형태

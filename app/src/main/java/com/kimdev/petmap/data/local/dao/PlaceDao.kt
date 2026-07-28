@@ -1,8 +1,6 @@
 package com.kimdev.petmap.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.sqlite.db.SupportSQLiteQuery
@@ -117,10 +115,4 @@ interface PlaceDao {
      */
     @RawQuery
     suspend fun searchByFts(query: SupportSQLiteQuery): List<PlaceEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertAll(places: List<PlaceEntity>)
-
-    @Query("DELETE FROM places")
-    suspend fun clear()
 }

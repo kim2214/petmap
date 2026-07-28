@@ -84,7 +84,6 @@ class MapViewModel @Inject constructor(
             repository.ensureSeeded()
             _uiState.update { it.copy(isSeeding = false) }
             fetch()
-            if (repository.refreshFromRemoteIfStale(System.currentTimeMillis())) fetch()
         }
         viewModelScope.launch {
             repository.observeFavoriteIds().collect { ids ->

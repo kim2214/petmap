@@ -1,28 +1,19 @@
 package com.kimdev.petmap.data.repository
 
-import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
-import com.kimdev.petmap.BuildConfig
-import com.kimdev.petmap.core.common.IoDispatcher
-import com.kimdev.petmap.data.local.PetMapDatabase
 import com.kimdev.petmap.data.local.PlaceFts
-import com.kimdev.petmap.data.local.SyncPreferences
 import com.kimdev.petmap.data.local.dao.FavoriteDao
 import com.kimdev.petmap.data.local.dao.PlaceDao
 import com.kimdev.petmap.data.mapper.toDomain
-import com.kimdev.petmap.data.mapper.toEntity
 import com.kimdev.petmap.data.mapper.toFavoriteEntity
-import com.kimdev.petmap.data.remote.api.PublicDataApi
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.distanceMeters
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
 import kotlin.math.cos
 import kotlin.math.max
 import javax.inject.Inject
@@ -30,12 +21,8 @@ import javax.inject.Singleton
 
 @Singleton
 class PlaceRepositoryImpl @Inject constructor(
-    private val api: PublicDataApi,
     private val placeDao: PlaceDao,
     private val favoriteDao: FavoriteDao,
-    private val syncPrefs: SyncPreferences,
-    private val database: PetMapDatabase,
-    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : PlaceRepository {
 
     /**
@@ -141,7 +128,7 @@ class PlaceRepositoryImpl @Inject constructor(
 
     /**
      * FTS 검색 SQL 을 구성한다(카테고리 IN 절은 개수만큼 `?` 를 동적으로 만든다).
-     * places_fts 는 외부-콘텐츠 FTS4 테이블로 places 의 rowid(docid) 를 참조한다.
+     * places_fts 는 places 의 rowid(docid) 를 참조하는 FTS4 테이블이다.
      * userLat/userLng 가 주어지면 해당 좌표에서 가까운 순, 아니면 이름순.
      */
     private fun ftsQuery(
@@ -192,33 +179,6 @@ class PlaceRepositoryImpl @Inject constructor(
         else favoriteDao.insert(place.toFavoriteEntity())
     }
 
-    override suspend fun refreshFromRemoteIfStale(now: Long): Boolean {
-        val key = BuildConfig.PUBLIC_DATA_SERVICE_KEY
-        if (key.isBlank() || key == "YOUR_PUBLIC_DATA_SERVICE_KEY") return false
-        if (!syncPrefs.isStale(now)) return false
-        // 네트워크 조회 + 약 2만 행 FTS 재색인(PlaceFts.rebuild)은 블로킹 작업이므로 IO 로 오프로딩한다.
-        // (호출부가 viewModelScope=Main 이라 메인 스레드에서 실행되면 ANR 위험)
-        return runCatching {
-            withContext(ioDispatcher) {
-                val entities = api.getPetFriendlyPlaces(serviceKey = key).data.mapNotNull { it.toEntity() }
-                if (entities.isNotEmpty()) {
-                    entities.chunked(1000).forEach { placeDao.upsertAll(it) }
-                    // upsert(REPLACE)로 rowid 가 바뀔 수 있으므로 FTS 색인을 다시 만든다.
-                    PlaceFts.rebuild(database.openHelper.writableDatabase)
-                    syncPrefs.lastSyncAt = now
-                    Log.i(TAG, "Remote refresh upserted ${entities.size} places")
-                }
-            }
-            true
-        }.getOrElse {
-            Log.w(TAG, "Remote refresh failed: ${it.message}")
-            false
-        }
-    }
-
-    companion object {
-        private const val TAG = "PlaceRepository"
-    }
 }
 
 /** 장소 목록에 즐겨찾기 상태를 결합 (ViewModel 에서 사용) */
