@@ -18,7 +18,11 @@ val NanumSquareRound = FontFamily(
 
 private val base = Typography()
 
-/** 굵기 대비 강조: 제목/헤드라인 = ExtraBold, 본문 = Light, 기능 라벨은 가독성 위해 Regular/Bold */
+/**
+ * 굵기 대비 강조: 제목/헤드라인 = ExtraBold, 기능 라벨 = Regular/Bold.
+ * 본문은 Normal 을 쓴다 — Light 는 bodySmall(12sp) 같은 소형 텍스트에서 대비가 부족해
+ * 저시력 사용자에게 읽기 어렵다. 큰 본문만 Light 로 톤을 살린다.
+ */
 val Typography = Typography(
     displayLarge = base.displayLarge.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.ExtraBold),
     displayMedium = base.displayMedium.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.ExtraBold),
@@ -30,8 +34,8 @@ val Typography = Typography(
     titleMedium = base.titleMedium.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.ExtraBold),
     titleSmall = base.titleSmall.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.ExtraBold),
     bodyLarge = base.bodyLarge.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.Light),
-    bodyMedium = base.bodyMedium.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.Light),
-    bodySmall = base.bodySmall.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.Light),
+    bodyMedium = base.bodyMedium.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.Normal),
+    bodySmall = base.bodySmall.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.Normal),
     labelLarge = base.labelLarge.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.Bold),
     labelMedium = base.labelMedium.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.Normal),
     labelSmall = base.labelSmall.copy(fontFamily = NanumSquareRound, fontWeight = FontWeight.Normal),

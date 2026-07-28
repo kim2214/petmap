@@ -1,7 +1,6 @@
 package com.kimdev.petmap.ui.list
 
 import android.Manifest
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,19 +18,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -48,7 +43,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.R
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -60,6 +54,7 @@ import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
+import com.kimdev.petmap.ui.components.RecentSearchList
 import com.kimdev.petmap.ui.components.SearchTextField
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -173,6 +168,7 @@ fun ListScreen(
                         onPick = { viewModel.onQueryChange(it) },
                         onRemove = { viewModel.removeRecentSearch(it) },
                         onClearAll = { viewModel.clearRecentSearches() },
+                        modifier = Modifier.fillMaxSize(),
                     )
 
                 state.isLoading && state.places.isEmpty() ->
@@ -274,66 +270,6 @@ fun ListScreen(
             onOpenSettings = { context.openAppSettings() },
             onDismiss = { showLocationSettingsDialog = false },
         )
-    }
-}
-
-@Composable
-private fun RecentSearchList(
-    recents: List<String>,
-    onPick: (String) -> Unit,
-    onRemove: (String) -> Unit,
-    onClearAll: () -> Unit,
-) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 8.dp, top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.recent_search),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onClearAll) { Text(stringResource(R.string.clear_all)) }
-            }
-        }
-        items(recents, key = { it }) { term ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onPick(term) }
-                    .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.Filled.History,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(20.dp),
-                )
-                Text(
-                    term,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                IconButton(onClick = { onRemove(term) }) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.action_delete),
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        }
     }
 }
 

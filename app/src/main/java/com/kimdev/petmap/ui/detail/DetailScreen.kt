@@ -65,9 +65,9 @@ import com.naver.maps.map.compose.ExperimentalNaverMapApi
 import com.naver.maps.map.compose.MapProperties
 import com.naver.maps.map.compose.MapUiSettings
 import com.naver.maps.map.compose.Marker
-import com.naver.maps.map.compose.MarkerState
 import com.naver.maps.map.compose.NaverMap
 import com.naver.maps.map.compose.rememberCameraPositionState
+import com.naver.maps.map.compose.rememberUpdatedMarkerState
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.util.copyToClipboard
@@ -321,7 +321,9 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
             ),
         ) {
             Marker(
-                state = MarkerState(position = LatLng(place.lat, place.lng)),
+                // rememberUpdatedMarkerState: 즐겨찾기 토글로 place 인스턴스가 바뀔 때마다
+                // MarkerState 를 새로 만들면 마커 오버레이가 재생성되며 깜빡인다.
+                state = rememberUpdatedMarkerState(LatLng(place.lat, place.lng)),
                 iconTintColor = place.category.color,
             )
         }

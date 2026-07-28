@@ -11,6 +11,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,6 +24,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -114,6 +116,9 @@ private fun PetMapApp() {
     val showBottomBar = TopLevelDestination.entries.any { dest ->
         currentDestination?.hierarchy?.any { it.route == dest.route } == true
     }
+    // 키보드가 올라오면 배너·하단탭을 감춘다. 검색 중에는 결과·최근 검색어를 보여줄 공간이
+    // 우선인데, 셋을 모두 키보드 위에 쌓으면 목록 영역이 한 줄도 안 남는다.
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     Scaffold(
         // edge-to-edge(decorFitsSystemWindows=false)라 키보드가 콘텐츠·배너·하단탭을 덮는다.
@@ -123,7 +128,7 @@ private fun PetMapApp() {
         // 각 화면이 필요 시 statusBarsPadding 으로 직접 처리한다.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            if (showBottomBar) {
+            if (showBottomBar && !imeVisible) {
                 Column {
                     // 배너를 화면마다 두지 않고 여기 한 곳에 둔다 → 탭을 옮겨도 AdView 가
                     // 파괴·재생성되지 않아 탭 전환마다 새 광고를 요청하지 않는다.

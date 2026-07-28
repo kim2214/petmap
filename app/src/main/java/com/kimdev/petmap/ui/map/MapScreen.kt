@@ -19,8 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SearchOff
@@ -28,14 +26,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,7 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -70,6 +65,7 @@ import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
+import com.kimdev.petmap.ui.components.RecentSearchList
 import com.kimdev.petmap.ui.components.PlacePreviewSheet
 import com.kimdev.petmap.ui.components.SearchTextField
 import com.kimdev.petmap.ui.components.color
@@ -87,9 +83,9 @@ import com.naver.maps.map.compose.LocationTrackingMode
 import com.naver.maps.map.compose.MapProperties
 import com.naver.maps.map.compose.MapUiSettings
 import com.naver.maps.map.compose.Marker
-import com.naver.maps.map.compose.MarkerState
 import com.naver.maps.map.compose.NaverMap
 import com.naver.maps.map.compose.rememberCameraPositionState
+import com.naver.maps.map.compose.rememberUpdatedMarkerState
 import com.naver.maps.map.compose.rememberFusedLocationSource
 import com.naver.maps.map.NaverMap as NaverMapSdk
 import com.naver.maps.map.overlay.OverlayImage
@@ -244,7 +240,7 @@ fun MapScreen(
                 val single = cluster.single
                 if (single != null) {
                     Marker(
-                        state = MarkerState(position = LatLng(single.lat, single.lng)),
+                        state = rememberUpdatedMarkerState(LatLng(single.lat, single.lng)),
                         captionText = single.name,
                         icon = categoryMarkers.getValue(single.category),
                         anchor = MarkerAnchor,
@@ -255,7 +251,7 @@ fun MapScreen(
                     )
                 } else {
                     Marker(
-                        state = MarkerState(position = LatLng(cluster.lat, cluster.lng)),
+                        state = rememberUpdatedMarkerState(LatLng(cluster.lat, cluster.lng)),
                         icon = clusterIcon(cluster.count),
                         anchor = Offset(0.5f, 0.5f),
                         onClick = {
@@ -355,14 +351,26 @@ fun MapScreen(
                     }
                 }
 
-                // 최근 검색어 (검색창 포커스 + 입력 비어있음)
+                // 최근 검색어 (검색창 포커스 + 입력 비어있음). 지도 위에 카드로 띄운다.
                 searchFocused && state.searchQuery.isBlank() && state.recentSearches.isNotEmpty() ->
-                    RecentSearchPanel(
-                        recents = state.recentSearches,
-                        onPick = { viewModel.onSearchQueryChange(it) },
-                        onRemove = { viewModel.removeRecentSearch(it) },
-                        onClearAll = { viewModel.clearRecentSearches() },
-                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(16.dp),
+                        shadowElevation = 4.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                    ) {
+                        RecentSearchList(
+                            recents = state.recentSearches,
+                            onPick = { viewModel.onSearchQueryChange(it) },
+                            onRemove = { viewModel.removeRecentSearch(it) },
+                            onClearAll = { viewModel.clearRecentSearches() },
+                            modifier = Modifier.heightIn(max = 360.dp),
+                            horizontalPadding = 16.dp,
+                            itemVerticalPadding = 10.dp,
+                        )
+                    }
 
                 // 카테고리 다중 선택 칩
                 else -> Surface(
@@ -531,77 +539,6 @@ private const val CO_LOCATED_M = 25.0
 private const val INITIAL_LOCATION_ZOOM = 15.0
 // "지도에서 보기"로 특정 장소를 비출 때의 줌.
 private const val FOCUS_ZOOM = 16.0
-
-@Composable
-private fun RecentSearchPanel(
-    recents: List<String>,
-    onPick: (String) -> Unit,
-    onRemove: (String) -> Unit,
-    onClearAll: () -> Unit,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(16.dp),
-        shadowElevation = 4.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 6.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .heightIn(max = 360.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            androidx.compose.foundation.layout.Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 8.dp, top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.recent_search),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onClearAll) { Text(stringResource(R.string.clear_all)) }
-            }
-            recents.forEach { term ->
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPick(term) }
-                        .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Filled.History,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        term,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 12.dp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    IconButton(onClick = { onRemove(term) }) {
-                        Icon(
-                            Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.action_delete),
-                            tint = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun SearchResultRow(place: Place, onClick: () -> Unit) {
