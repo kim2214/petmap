@@ -5,7 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * 내장 CSV + API 갱신본을 함께 저장하는 장소 테이블.
+ * 프리빌트 에셋 DB(tools/build_db.py)로 시딩되는 장소 테이블.
  * 지도 뷰포트 쿼리를 위해 위/경도에 인덱스를 둔다.
  */
 @Entity(
