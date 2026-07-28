@@ -120,6 +120,8 @@
     <string name="settings_replay_onboarding_desc">앱 소개 화면을 다시 봅니다</string>
     <string name="settings_section_terms">약관 및 정책</string>
     <string name="settings_privacy">개인정보처리방침</string>
+    <string name="settings_ad_privacy">광고 개인정보 설정</string>
+    <string name="settings_ad_privacy_desc">맞춤 광고 동의를 다시 선택합니다</string>
     <string name="settings_licenses">오픈소스 라이선스</string>
     <string name="settings_section_contact">문의</string>
     <string name="settings_email">이메일 문의</string>

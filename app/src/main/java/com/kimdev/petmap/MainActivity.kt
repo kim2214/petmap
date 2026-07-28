@@ -11,6 +11,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
@@ -114,7 +115,9 @@ private fun PetMapApp() {
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        // edge-to-edge(decorFitsSystemWindows=false)라 키보드가 콘텐츠·배너·하단탭을 덮는다.
+        // Scaffold 전체를 올려 검색 중에도 목록과 하단탭이 가려지지 않게 한다.
+        modifier = Modifier.fillMaxSize().imePadding(),
         // 상단 시스템바 인셋을 콘텐츠에 적용하지 않음 → 지도가 상태바 밑까지 풀블리드.
         // 각 화면이 필요 시 statusBarsPadding 으로 직접 처리한다.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),

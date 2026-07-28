@@ -1,5 +1,6 @@
 package com.kimdev.petmap.ui.settings
 
+import android.app.Activity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.filled.AdUnits
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
@@ -40,10 +42,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.BuildConfig
 import com.kimdev.petmap.R
+import com.kimdev.petmap.core.ads.AdsConsent
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sendEmail
 import com.kimdev.petmap.data.local.ThemeMode
@@ -71,6 +74,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
+    // EEA 등에서만 true. 이 경우 동의를 다시 변경할 진입점 제공이 Google 정책상 필수다.
+    val adPrivacyRequired by AdsConsent.privacyOptionsRequired.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -99,6 +104,16 @@ fun SettingsScreen(
 
         SectionTitle(stringResource(R.string.settings_section_terms))
         SettingRow(Icons.Filled.Policy, stringResource(R.string.settings_privacy)) { context.openUrl(PRIVACY_POLICY_URL) }
+        if (adPrivacyRequired) {
+            SettingRow(
+                Icons.Filled.AdUnits,
+                stringResource(R.string.settings_ad_privacy),
+                subtitle = stringResource(R.string.settings_ad_privacy_desc),
+            ) {
+                // UMP 폼은 Activity 위에 표시된다
+                (context as? Activity)?.let { AdsConsent.showPrivacyOptions(it) }
+            }
+        }
         SettingRow(Icons.AutoMirrored.Filled.Article, stringResource(R.string.settings_licenses), onClick = onOpenLicenses)
 
         SectionTitle(stringResource(R.string.settings_section_contact))

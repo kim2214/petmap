@@ -1,5 +1,6 @@
 package com.kimdev.petmap.ui.navigation
 
+import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import com.kimdev.petmap.R
@@ -16,7 +17,12 @@ object Routes {
     const val DETAIL_ARG_ID = "placeId"
     const val DETAIL_PATTERN = "$DETAIL/{$DETAIL_ARG_ID}"
 
-    fun detail(placeId: String) = "$DETAIL/$placeId"
+    /**
+     * placeId 는 `이름_위도_경도` 형태로 데이터에서 생성되므로 `/`·`?`·`#` 이 섞일 수 있다.
+     * 인코딩하지 않으면 경로 패턴 매칭이 깨져 navigate 가 IllegalArgumentException 으로 크래시한다.
+     * (Navigation 이 인자를 읽을 때 디코딩하므로 DetailViewModel 은 원본 문자열을 받는다)
+     */
+    fun detail(placeId: String) = "$DETAIL/${Uri.encode(placeId)}"
 }
 
 /** 하단 탭 항목. 컬러 일러스트 아이콘(브랜드 커스텀)을 사용. */

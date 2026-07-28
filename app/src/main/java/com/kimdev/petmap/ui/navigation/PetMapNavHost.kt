@@ -34,7 +34,11 @@ fun PetMapNavHost(
         enterTransition = { fadeIn(tween(220)) },
         exitTransition = { fadeOut(tween(180)) },
     ) {
-        val openDetail: (String) -> Unit = { id -> navController.navigate(Routes.detail(id)) }
+        // launchSingleTop: 같은 프레임에 카드가 두 번 탭되면 같은 상세가 백스택에 중복 push 되어
+        // 뒤로가기를 두 번 눌러야 하는 문제를 막는다.
+        val openDetail: (String) -> Unit = { id ->
+            navController.navigate(Routes.detail(id)) { launchSingleTop = true }
+        }
 
         composable(Routes.MAP) {
             MapScreen(onPlaceClick = openDetail)
