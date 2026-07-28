@@ -21,7 +21,18 @@ val keystoreProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-val hasReleaseKeystore = keystoreProps.getProperty("storeFile") != null
+// storeFile 키 존재만으로 판단하면 오타/부분 설정 시 빌드 후반에 모호한 에러가 난다.
+// 파일 실존 + 4개 프로퍼티 전부를 확인하고, 부분 설정은 즉시 명시적으로 실패시킨다.
+val hasReleaseKeystore = keystoreProps.getProperty("storeFile").let { storeFile ->
+    when {
+        storeFile == null -> false
+        !rootProject.file(storeFile).exists() ->
+            error("keystore.properties 의 storeFile 이 존재하지 않습니다: $storeFile")
+        listOf("storePassword", "keyAlias", "keyPassword").any { keystoreProps.getProperty(it) == null } ->
+            error("keystore.properties 에 storePassword/keyAlias/keyPassword 중 누락이 있습니다.")
+        else -> true
+    }
+}
 
 android {
     namespace = "com.kimdev.petmap"
@@ -75,10 +86,15 @@ android {
                 "String", "ADMOB_BANNER_UNIT_ID",
                 "\"ca-app-pub-1641853512361199/6256079867\"",
             )
-            // 실제 keystore 가 있으면 릴리스 서명, 없으면 로컬 검증용으로 디버그 서명
+            // 실제 keystore 가 있으면 릴리스 서명, 없으면 로컬 검증용으로 디버그 서명.
+            // 디버그 서명 산출물도 파일명은 app-release.* 라 배포 사고 여지가 있으므로 경고를 남기고,
+            // 스토어 업로드용 bundleRelease 는 아래 가드에서 아예 실패시킨다.
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
+                logger.warn(
+                    "경고: keystore.properties 없음 → release 빌드가 디버그 키로 서명됩니다(로컬 검증 전용, 배포 불가)."
+                )
                 signingConfigs.getByName("debug")
             }
         }
@@ -120,6 +136,19 @@ kotlin {
 ksp {
     // Room 스키마 JSON 내보내기(exportSchema=true). 생성물은 리포에 커밋한다.
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// 스토어 업로드용 .aab 가 디버그 키로 만들어지는 사고 방지.
+// 로컬 검증이 목적이면 -PallowDebugSigning 으로 명시적으로 우회할 수 있다.
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    doFirst {
+        if (!hasReleaseKeystore && !project.hasProperty("allowDebugSigning")) {
+            throw GradleException(
+                "bundleRelease 는 릴리스 키스토어가 필요합니다. keystore.properties 를 설정하거나 " +
+                    "로컬 검증용이면 -PallowDebugSigning 을 지정하세요."
+            )
+        }
+    }
 }
 
 dependencies {

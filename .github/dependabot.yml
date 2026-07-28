@@ -1,0 +1,19 @@
+# 의존성 노후 방지 (libs.versions.toml 및 GitHub Actions 버전 갱신 PR 자동 생성)
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # AndroidX/Compose 계열은 상호 호환 버전을 묶어서 올린다
+      androidx:
+        patterns:
+          - "androidx.*"
+          - "com.google.dagger*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
