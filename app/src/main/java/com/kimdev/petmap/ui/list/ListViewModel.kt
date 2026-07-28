@@ -18,6 +18,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,8 +45,6 @@ data class ListUiState(
     val recentSearches: List<String> = emptyList(),
     /** 조회 실패 여부. true 면 "결과 없음"이 아니라 에러 상태로 표시한다. */
     val isError: Boolean = false,
-    /** 권한은 있지만 위치를 얻지 못함(위치 꺼짐 등) → 스낵바 안내 (화면이 소비) */
-    val locationUnavailable: Boolean = false,
     /** 다음 페이지가 있을 수 있음 → 목록 끝에서 추가 로드 */
     val canLoadMore: Boolean = false,
     /** 추가 페이지 로딩 중(첫 로딩 스피너와 구분) */
@@ -51,6 +52,15 @@ data class ListUiState(
     /** 상한까지 불러왔다 → 더 보려면 검색어·필터로 좁혀야 한다는 안내 */
     val reachedLimit: Boolean = false,
 )
+
+/**
+ * 목록 화면의 일회성 이벤트. 상태에 담고 consume 하면 `LaunchedEffect(key)` 가 취소되어
+ * 스낵바가 표시 도중 사라진다(실제로 발생했던 버그) → 이벤트로 분리한다.
+ */
+sealed interface ListEvent {
+    /** 권한은 있지만 위치를 얻지 못함(위치 서비스 꺼짐 등) */
+    data object LocationUnavailable : ListEvent
+}
 
 private data class SearchKey(
     val query: String,
@@ -79,6 +89,9 @@ class ListViewModel @Inject constructor(
         )
     )
     val uiState: StateFlow<ListUiState> = _uiState.asStateFlow()
+
+    private val _events = Channel<ListEvent>(Channel.BUFFERED)
+    val events: Flow<ListEvent> = _events.receiveAsFlow()
 
     private var favoriteIds: Set<String> = emptySet()
     private var userLocation: UserLocation? = null
@@ -226,9 +239,9 @@ class ListViewModel @Inject constructor(
                 userLocation = locationProvider.lastLocation() ?: locationProvider.currentLocation()
             }
             val has = userLocation != null
-            _uiState.update { it.copy(hasLocation = has, locationUnavailable = !has) }
+            _uiState.update { it.copy(hasLocation = has) }
             when {
-                !has -> Unit
+                !has -> _events.send(ListEvent.LocationUnavailable)
                 // SearchKey 변경으로 자동 재조회된다
                 !_uiState.value.sortByDistance -> setSortByDistance(true)
                 // 정렬은 이미 켜져 있었지만 위치가 이제 생김 → 거리 반영 재조회
@@ -236,10 +249,6 @@ class ListViewModel @Inject constructor(
             }
         }
     }
-
-    /** 위치 확보 실패 안내를 화면이 표시한 뒤 호출 */
-    fun consumeLocationUnavailable() =
-        _uiState.update { it.copy(locationUnavailable = false) }
 
     fun setOpenNowOnly(enabled: Boolean) =
         _uiState.update { it.copy(openNowOnly = enabled) }

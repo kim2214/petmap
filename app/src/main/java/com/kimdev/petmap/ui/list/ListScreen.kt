@@ -38,6 +38,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,13 +75,19 @@ fun ListScreen(
     var searchFocused by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // rememberSaveable: 화면 재구성(탭 전환·회전) 후 거부한 권한을 다시 묻지 않는다.
+    var requestedLocationOnce by rememberSaveable { mutableStateOf(false) }
+    var pendingDistanceSort by rememberSaveable { mutableStateOf(false) }
+    var showLocationSettingsDialog by remember { mutableStateOf(false) }
+
     // "거리순" 칩에서 위치 권한을 바로 요청할 수 있게 한다 (지도 탭을 안 거쳐도 됨)
     val locationPermissions = rememberMultiplePermissionsState(
         listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-    )
-    var requestedLocationOnce by remember { mutableStateOf(false) }
-    var pendingDistanceSort by remember { mutableStateOf(false) }
-    var showLocationSettingsDialog by remember { mutableStateOf(false) }
+    ) { results ->
+        // 거부됐다면 대기 중인 거리순 요청을 지운다. 남겨두면 사용자가 나중에 시스템 설정에서
+        // 권한을 켜고 돌아왔을 때 의도하지 않은 시점에 거리순이 켜진다.
+        if (results.values.none { it }) pendingDistanceSort = false
+    }
     val granted = locationPermissions.allPermissionsGranted
 
     // 칩 탭으로 권한을 요청했고 사용자가 허용함 → 위치 확보 후 거리순 켜기
@@ -91,12 +98,13 @@ fun ListScreen(
         }
     }
 
-    // 권한은 있는데 위치 확보 실패(위치 서비스 꺼짐 등) 안내
-    // consume 을 먼저 호출하면 key 가 false 로 바뀌며 이 코루틴이 취소되어 스낵바가 뜨자마자 사라진다.
-    LaunchedEffect(state.locationUnavailable) {
-        if (state.locationUnavailable) {
-            snackbarHostState.showSnackbar(resources.getString(R.string.list_location_unavailable))
-            viewModel.consumeLocationUnavailable()
+    // 일회성 이벤트(권한은 있는데 위치 확보 실패 등)는 상태가 아니라 이벤트로 받는다.
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                ListEvent.LocationUnavailable ->
+                    snackbarHostState.showSnackbar(resources.getString(R.string.list_location_unavailable))
+            }
         }
     }
 

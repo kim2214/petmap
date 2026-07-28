@@ -10,6 +10,8 @@ import com.kimdev.petmap.fake.FakeRecentSearchStore
 import com.kimdev.petmap.fake.testPlace
 import com.kimdev.petmap.util.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -159,19 +161,57 @@ class MapViewModelTest {
     }
 
     @Test
-    fun `MapFocusBus 요청 시 해당 장소를 포커스 대상으로 잡고 소비하면 해제된다`() =
+    fun `MapFocusBus 요청은 FocusPlace 이벤트로 한 번만 전달된다`() =
         runTest(mainDispatcherRule.testDispatcher) {
             repo.dataset = listOf(testPlace("target"))
             val vm = viewModel()
             advanceUntilIdle()
 
+            val received = mutableListOf<MapEvent>()
+            val job = launch { vm.events.toList(received) }
+
             focusBus.request("target")
             advanceUntilIdle()
-            assertEquals("target", vm.uiState.value.focusTarget?.id)
 
-            vm.consumeFocus()
+            assertEquals(1, received.size)
+            assertEquals("target", (received.single() as MapEvent.FocusPlace).place.id)
+            job.cancel()
+        }
+
+    @Test
+    fun `같은 장소를 연달아 요청해도 매번 이벤트가 전달된다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            // StateFlow 버스였을 때는 값이 같아 두 번째 요청이 유실됐다.
+            repo.dataset = listOf(testPlace("target"))
+            val vm = viewModel()
             advanceUntilIdle()
-            assertNull(vm.uiState.value.focusTarget)
+
+            val received = mutableListOf<MapEvent>()
+            val job = launch { vm.events.toList(received) }
+
+            focusBus.request("target")
+            advanceUntilIdle()
+            focusBus.request("target")
+            advanceUntilIdle()
+
+            assertEquals(2, received.size)
+            job.cancel()
+        }
+
+    @Test
+    fun `조회 결과가 0건이면 NoResults 이벤트를 보낸다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = emptyList()
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            val received = mutableListOf<MapEvent>()
+            val job = launch { vm.events.toList(received) }
+            vm.researchHere(37.5, 127.0, 16.0)
+            advanceUntilIdle()
+
+            assertTrue(received.contains(MapEvent.NoResults))
+            job.cancel()
         }
 
     @Test

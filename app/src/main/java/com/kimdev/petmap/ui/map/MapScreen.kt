@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -130,7 +131,8 @@ fun MapScreen(
     val locationSource = rememberFusedLocationSource()
     var trackingMode by remember { mutableStateOf(LocationTrackingMode.NoFollow) }
     val granted = locationPermissions.allPermissionsGranted
-    var requestedLocationOnce by remember { mutableStateOf(false) }
+    // rememberSaveable: 탭 전환·회전으로 화면이 재구성될 때마다 거부한 권한을 다시 묻지 않는다.
+    var requestedLocationOnce by rememberSaveable { mutableStateOf(false) }
     var showLocationSettingsDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -161,12 +163,23 @@ fun MapScreen(
         if (granted) viewModel.moveToCurrentLocationOnce()
     }
 
-    // 초기 현재 위치 이동 요청 → 카메라 이동 + 그 지점 기준 주변 재조회
-    LaunchedEffect(state.pendingLocationMove) {
-        state.pendingLocationMove?.let { loc ->
-            moveCameraTo(loc.lat, loc.lng, INITIAL_LOCATION_ZOOM)
-            viewModel.researchHere(loc.lat, loc.lng, INITIAL_LOCATION_ZOOM)
-            viewModel.consumeLocationMove()
+    // 일회성 이벤트는 한 곳에서 순서대로 처리한다. 상태+consume 방식은 consume 이 키를 바꿔
+    // LaunchedEffect 를 취소해 스낵바가 사라지는 문제가 있었다.
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is MapEvent.MoveToLocation -> {
+                    moveCameraTo(event.location.lat, event.location.lng, INITIAL_LOCATION_ZOOM)
+                    viewModel.researchHere(event.location.lat, event.location.lng, INITIAL_LOCATION_ZOOM)
+                }
+                is MapEvent.FocusPlace -> {
+                    moveCameraTo(event.place.lat, event.place.lng, FOCUS_ZOOM)
+                    previewPlace = event.place
+                    viewModel.researchHere(event.place.lat, event.place.lng, FOCUS_ZOOM)
+                }
+                MapEvent.NoResults ->
+                    snackbarHostState.showSnackbar(resources.getString(R.string.map_no_results))
+            }
         }
     }
 
@@ -187,24 +200,6 @@ fun MapScreen(
             }
     }
 
-    // "지도에서 보기"로 들어온 포커스 대상 → 카메라 이동 + 미리보기 + 주변 재조회
-    LaunchedEffect(state.focusTarget) {
-        state.focusTarget?.let { target ->
-            moveCameraTo(target.lat, target.lng, 16.0)
-            previewPlace = target
-            viewModel.researchHere(target.lat, target.lng, 16.0)
-            viewModel.consumeFocus()
-        }
-    }
-
-    // 조회 결과 0건 안내 (다시 검색 후 마커만 사라지면 무반응으로 보이므로)
-    // consume 을 먼저 호출하면 key 가 false 로 바뀌며 이 코루틴이 취소되어 스낵바가 뜨자마자 사라진다.
-    LaunchedEffect(state.showNoResults) {
-        if (state.showNoResults) {
-            snackbarHostState.showSnackbar(resources.getString(R.string.map_no_results))
-            viewModel.consumeNoResults()
-        }
-    }
 
     // 카테고리별 단일 장소 마커 (컬러 핀 + 흰 아이콘). 최초 1회만 생성.
     val categoryMarkers = rememberCategoryMarkers()
@@ -534,6 +529,8 @@ private const val MAX_CLUSTER_ZOOM = 19.0
 private const val CO_LOCATED_M = 25.0
 // 첫 진입 시 현재 위치로 이동할 때의 줌(동네 단위로 주변 장소가 보이는 수준).
 private const val INITIAL_LOCATION_ZOOM = 15.0
+// "지도에서 보기"로 특정 장소를 비출 때의 줌.
+private const val FOCUS_ZOOM = 16.0
 
 @Composable
 private fun RecentSearchPanel(

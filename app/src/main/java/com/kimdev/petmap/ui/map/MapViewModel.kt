@@ -18,6 +18,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,14 +42,25 @@ data class MapUiState(
     val searchQuery: String = "",
     val searchResults: List<Place> = emptyList(),
     val recentSearches: List<String> = emptyList(),
-    val focusTarget: Place? = null,
     /** 지도를 충분히 이동/축소해 현재 표시 데이터가 오래된 상태 → "이 지역에서 다시 검색" 노출 */
     val canResearch: Boolean = false,
-    /** 조회 결과가 0건 → 스낵바로 안내 (화면이 소비 후 consumeNoResults 호출) */
-    val showNoResults: Boolean = false,
-    /** 지도 첫 진입 시 현재 위치로 카메라를 1회 이동시키기 위한 요청 (화면이 소비 후 consumeLocationMove 호출) */
-    val pendingLocationMove: UserLocation? = null,
 )
+
+/**
+ * 지도 화면의 일회성 이벤트.
+ *
+ * 상태(UiState)에 담고 화면이 consume 하는 방식은 위험하다. consume 이 상태를 되돌리면
+ * `LaunchedEffect(state.flag)` 의 키가 바뀌어 실행 중인 코루틴이 취소되고, 스낵바처럼
+ * 완료까지 suspend 하는 작업이 조용히 사라진다(실제로 발생했던 버그).
+ */
+sealed interface MapEvent {
+    /** "지도에서 보기"로 지정된 장소로 카메라 이동 + 미리보기 */
+    data class FocusPlace(val place: Place) : MapEvent
+    /** 지도 첫 진입 시 현재 위치로 카메라 1회 이동 */
+    data class MoveToLocation(val location: UserLocation) : MapEvent
+    /** 조회 결과 0건 안내 */
+    data object NoResults : MapEvent
+}
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
@@ -65,6 +79,10 @@ class MapViewModel @Inject constructor(
     )
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
+    // 화면이 없는 동안(탭 전환 등) 발생한 이벤트는 버퍼에서 대기하다 재진입 시 전달된다.
+    private val _events = Channel<MapEvent>(Channel.BUFFERED)
+    val events: Flow<MapEvent> = _events.receiveAsFlow()
+
     // 현재 카메라 위치
     private var lastCenterLat = Constants.DEFAULT_LAT
     private var lastCenterLng = Constants.DEFAULT_LNG
@@ -80,6 +98,9 @@ class MapViewModel @Inject constructor(
     private var fetchJob: Job? = null
     // 첫 진입 현재 위치 이동을 이미 처리했는지(중복 이동 방지)
     private var initialLocationHandled = false
+    // "지도에서 보기" 요청을 받았는지. 요청이 있으면 초기 현재 위치 이동을 양보한다.
+    // (DB 조회 전에 세팅하므로, 조회 지연 때문에 두 카메라 이동이 경쟁하지 않는다)
+    private var focusRequested = false
 
     init {
         viewModelScope.launch {
@@ -119,22 +140,14 @@ class MapViewModel @Inject constructor(
                 .onEach { savedStateHandle[KEY_CATEGORIES] = SavedFilters.categoriesToNames(it) }
                 .collect {}
         }
-        // "지도에서 보기" 요청 → 해당 장소를 포커스 대상으로
+        // "지도에서 보기" 요청 → 해당 장소를 포커스 이벤트로
         viewModelScope.launch {
-            mapFocusBus.targetPlaceId.collect { id ->
-                if (id == null) {
-                    _uiState.update { it.copy(focusTarget = null) }
-                } else {
-                    val place = repository.getPlace(id)
-                    _uiState.update { it.copy(focusTarget = place) }
-                }
+            mapFocusBus.requests.collect { id ->
+                focusRequested = true
+                val place = repository.getPlace(id)
+                if (place != null) _events.send(MapEvent.FocusPlace(place))
             }
         }
-    }
-
-    /** 포커스 이동을 화면이 처리한 뒤 호출 (버스/상태 초기화) */
-    fun consumeFocus() {
-        mapFocusBus.consume()
     }
 
     /**
@@ -143,20 +156,16 @@ class MapViewModel @Inject constructor(
      * "지도에서 보기"로 특정 장소를 포커스 중이면 그쪽을 우선하고 초기 이동은 건너뛴다.
      */
     fun moveToCurrentLocationOnce() {
-        if (initialLocationHandled || _uiState.value.focusTarget != null) return
+        if (initialLocationHandled || focusRequested) return
         viewModelScope.launch {
             val loc = locationProvider.lastLocation() ?: locationProvider.currentLocation() ?: return@launch
+            // 위치 조회 중에 포커스 요청이 들어왔다면 카메라 이동을 양보한다.
+            if (focusRequested) return@launch
             // 위치를 실제로 얻었을 때만 처리 완료로 표시 → 첫 시도에서 못 얻어도 다음 기회에 재시도.
             initialLocationHandled = true
-            _uiState.update { it.copy(pendingLocationMove = loc) }
+            _events.send(MapEvent.MoveToLocation(loc))
         }
     }
-
-    /** 초기 위치 이동을 화면이 처리한 뒤 호출 */
-    fun consumeLocationMove() = _uiState.update { it.copy(pendingLocationMove = null) }
-
-    /** 0건 안내를 화면이 표시한 뒤 호출 */
-    fun consumeNoResults() = _uiState.update { it.copy(showNoResults = false) }
 
     fun toggleFavorite(place: Place) {
         viewModelScope.launch { repository.toggleFavorite(place) }
@@ -275,13 +284,9 @@ class MapViewModel @Inject constructor(
             places = loaded
             val clusters = withContext(defaultDispatcher) { clusterPlaces(loaded, lastZoom) }
             _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    clusters = clusters,
-                    canResearch = false,
-                    showNoResults = loaded.isEmpty(),
-                )
+                it.copy(isLoading = false, clusters = clusters, canResearch = false)
             }
+            if (loaded.isEmpty()) _events.send(MapEvent.NoResults)
         }.onFailure { e ->
             Log.w(TAG, "getPlacesInBounds failed: ${e.message}")
             // 실패 시 "이 지역에서 다시 검색" 버튼을 다시 노출해 재시도 동선을 준다.
@@ -318,13 +323,9 @@ class MapViewModel @Inject constructor(
                 )
             }
             _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    clusters = clusters,
-                    canResearch = false,
-                    showNoResults = cells.isEmpty(),
-                )
+                it.copy(isLoading = false, clusters = clusters, canResearch = false)
             }
+            if (cells.isEmpty()) _events.send(MapEvent.NoResults)
         }.onFailure { e ->
             Log.w(TAG, "getClusterCells failed: ${e.message}")
             _uiState.update { it.copy(isLoading = false, canResearch = true) }
