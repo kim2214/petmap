@@ -46,7 +46,7 @@ jobs:
 
       - name: 리포트 업로드 (테스트/린트)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: reports
           path: |
@@ -57,7 +57,7 @@ jobs:
       # 난독화 스택트레이스 해독용. 실제 배포 릴리스의 mapping 은 로컬 빌드 산출물이지만,
       # CI 아카이브가 있으면 최소한 동일 커밋 기준 참조가 남는다.
       - name: mapping.txt 업로드
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: r8-mapping
           path: app/build/outputs/mapping/release/mapping.txt
