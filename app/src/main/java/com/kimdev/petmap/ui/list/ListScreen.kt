@@ -89,10 +89,11 @@ fun ListScreen(
     }
 
     // 권한은 있는데 위치 확보 실패(위치 서비스 꺼짐 등) 안내
+    // consume 을 먼저 호출하면 key 가 false 로 바뀌며 이 코루틴이 취소되어 스낵바가 뜨자마자 사라진다.
     LaunchedEffect(state.locationUnavailable) {
         if (state.locationUnavailable) {
-            viewModel.consumeLocationUnavailable()
             snackbarHostState.showSnackbar(context.getString(R.string.list_location_unavailable))
+            viewModel.consumeLocationUnavailable()
         }
     }
 

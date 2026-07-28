@@ -42,6 +42,8 @@ object InAppReview {
                 Log.w(TAG, "requestReviewFlow failed", request.exception)
                 return@addOnCompleteListener
             }
+            // 요청 흐름은 비동기라 콜백 시점에 Activity 가 이미 파괴됐을 수 있다.
+            if (activity.isFinishing || activity.isDestroyed) return@addOnCompleteListener
             manager.launchReviewFlow(activity, request.result).addOnCompleteListener {
                 // 노출 여부와 무관하게 1회 요청 후 다시 묻지 않음
                 prefs.edit().putBoolean(KEY_REQUESTED, true).apply()

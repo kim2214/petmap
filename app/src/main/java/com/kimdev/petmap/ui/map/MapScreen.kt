@@ -79,6 +79,7 @@ import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraAnimation
 import com.naver.maps.map.CameraPosition
 import com.naver.maps.map.CameraUpdate
+import com.naver.maps.map.compose.DisposableMapEffect
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
 import com.naver.maps.map.compose.LocationTrackingMode
 import com.naver.maps.map.compose.MapProperties
@@ -88,6 +89,7 @@ import com.naver.maps.map.compose.MarkerState
 import com.naver.maps.map.compose.NaverMap
 import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.compose.rememberFusedLocationSource
+import com.naver.maps.map.NaverMap as NaverMapSdk
 import com.naver.maps.map.overlay.OverlayImage
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
@@ -194,10 +196,11 @@ fun MapScreen(
     }
 
     // 조회 결과 0건 안내 (다시 검색 후 마커만 사라지면 무반응으로 보이므로)
+    // consume 을 먼저 호출하면 key 가 false 로 바뀌며 이 코루틴이 취소되어 스낵바가 뜨자마자 사라진다.
     LaunchedEffect(state.showNoResults) {
         if (state.showNoResults) {
-            viewModel.consumeNoResults()
             snackbarHostState.showSnackbar(context.getString(R.string.map_no_results))
+            viewModel.consumeNoResults()
         }
     }
 
@@ -227,6 +230,17 @@ fun MapScreen(
             ),
             uiSettings = MapUiSettings(isLocationButtonEnabled = false),
         ) {
+            // 사용자가 지도를 팬하면 SDK 가 Follow → NoFollow 로 스스로 전환하지만 Compose 상태는
+            // Follow 로 남는다. 그 상태에서 "내 위치" FAB 가 Follow 를 재지정해도 값이 같아 SDK 에
+            // 반영되지 않으므로, 지도의 실제 모드를 상태로 되읽어 동기화한다.
+            DisposableMapEffect(Unit) { map ->
+                val listener = NaverMapSdk.OnOptionChangeListener {
+                    trackingMode = LocationTrackingMode.entries
+                        .first { it.value == map.locationTrackingMode }
+                }
+                map.addOnOptionChangeListener(listener)
+                onDispose { map.removeOnOptionChangeListener(listener) }
+            }
             state.clusters.forEach { cluster ->
                 val single = cluster.single
                 if (single != null) {

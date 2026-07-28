@@ -37,8 +37,9 @@ class DetailViewModel @Inject constructor(
             // 로드 실패 시에도 스피너가 멈추도록 예외를 흡수한다(화면은 place==null 을 "찾을 수 없음"으로 표시).
             val place = runCatching { repository.getPlace(placeId) }.getOrNull()
             _uiState.update { it.copy(isLoading = false, place = place) }
-        }
-        viewModelScope.launch {
+            if (place == null) return@launch
+            // 즐겨찾기 구독은 장소 로드 뒤에 시작해야 한다. 별도 코루틴으로 돌리면 첫 emit 이
+            // place==null 시점에 도착해 유실되고, 이미 즐겨찾기한 장소가 빈 하트로 표시된다.
             repository.observeFavoriteIds().collect { ids ->
                 _uiState.update { state ->
                     state.copy(place = state.place?.copy(isFavorite = state.place.id in ids))
