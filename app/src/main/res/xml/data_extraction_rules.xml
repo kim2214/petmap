@@ -1,19 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   백업/기기 이전 규칙 (API 31+. API 30 이하는 backup_rules.xml 적용).
+   장소 DB 를 제외하는 이유는 backup_rules.xml 주석 참고
+   (백업 한도 초과 + 구버전 DB 복원이 createFromAsset 을 막는 사고 차단).
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="database" path="petmap.db" />
+        <exclude domain="database" path="petmap.db-wal" />
+        <exclude domain="database" path="petmap.db-shm" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="database" path="petmap.db" />
+        <exclude domain="database" path="petmap.db-wal" />
+        <exclude domain="database" path="petmap.db-shm" />
     </device-transfer>
-    -->
 </data-extraction-rules>

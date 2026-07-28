@@ -25,7 +25,10 @@ object DatabaseModule {
             .createFromAsset("petmap.db")
             // v2 에셋을 로드한 뒤 FTS 색인/트리거를 구축(첫 실행 1회)
             .addMigrations(MIGRATION_2_3)
-            .fallbackToDestructiveMigration(dropAllTables = true)
+            // 다운그레이드(구 APK 사이드로드 등)만 파괴적 재생성을 허용한다.
+            // 업그레이드 경로 누락은 조용히 전체 데이터(즐겨찾기 포함)를 지우는 대신
+            // 예외로 드러나야 개발 단계에서 잡을 수 있다 — 전체 fallback 금지.
+            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .build()
 
     @Provides

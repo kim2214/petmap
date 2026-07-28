@@ -3,14 +3,21 @@
 공공데이터 CSV → 프리빌트 Room DB(app/src/main/assets/petmap.db) 생성 스크립트.
 
 앱이 Room(`createFromAsset`)으로 그대로 로드하므로, 스키마/인덱스/room_master_table
-(identity_hash)/user_version 을 앱의 Room 스키마(version 2)와 동일하게 맞춘다.
+(identity_hash)/user_version 을 앱의 Room 스키마와 동일하게 맞춘다.
 
 사용법:
     python3 tools/build_db.py "<새 CSV 경로>" [출력경로]
     # 출력경로 기본값: app/src/main/assets/petmap.db
 
-주의: 앱의 엔티티(PlaceEntity/FavoriteEntity) 스키마가 바뀌면 ROOM_IDENTITY_HASH 도
-바뀐다. 그 경우 앱을 한 번 시딩 실행해 생성된 DB의 room_master_table 값으로 갱신할 것.
+버전 주의: 앱의 @Database version 은 3이지만 에셋은 **의도적으로 v2 로 유지**한다.
+첫 실행 시 MIGRATION_2_3 이 FTS 색인(places_fts)을 구축하기 때문이다.
+DB_VERSION 을 3으로 올리면 마이그레이션이 건너뛰어져 검색이 통째로 죽는다 — 절대 올리지 말 것.
+(엔티티 스키마가 같으면 identity_hash 는 버전과 무관하게 동일하다.)
+
+identity_hash 주의: 엔티티(PlaceEntity/FavoriteEntity) 스키마가 바뀌면 ROOM_IDENTITY_HASH 도
+바뀐다. 기준값은 app/schemas/com.kimdev.petmap.data.local.PetMapDatabase/<version>.json 의
+"identityHash" (exportSchema=true 로 빌드 시 자동 갱신됨). 동기화가 어긋나면
+androidTest 의 PetMapDatabaseAssetTest 가 실패한다.
 """
 import csv
 import os

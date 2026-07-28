@@ -117,6 +117,11 @@ kotlin {
     }
 }
 
+ksp {
+    // Room 스키마 JSON 내보내기(exportSchema=true). 생성물은 리포에 커밋한다.
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // Java 8+ API 디슈가링(java.time 등) — minSdk 24 지원
     coreLibraryDesugaring(libs.desugar.jdk.libs)
