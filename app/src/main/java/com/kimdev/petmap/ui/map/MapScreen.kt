@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -132,6 +133,7 @@ fun MapScreen(
     var requestedLocationOnce by remember { mutableStateOf(false) }
     var showLocationSettingsDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -199,7 +201,7 @@ fun MapScreen(
     // consume 을 먼저 호출하면 key 가 false 로 바뀌며 이 코루틴이 취소되어 스낵바가 뜨자마자 사라진다.
     LaunchedEffect(state.showNoResults) {
         if (state.showNoResults) {
-            snackbarHostState.showSnackbar(context.getString(R.string.map_no_results))
+            snackbarHostState.showSnackbar(resources.getString(R.string.map_no_results))
             viewModel.consumeNoResults()
         }
     }

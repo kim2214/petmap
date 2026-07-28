@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +69,7 @@ fun ListScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val resources = LocalResources.current
     var searchFocused by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -92,7 +94,7 @@ fun ListScreen(
     // consume 을 먼저 호출하면 key 가 false 로 바뀌며 이 코루틴이 취소되어 스낵바가 뜨자마자 사라진다.
     LaunchedEffect(state.locationUnavailable) {
         if (state.locationUnavailable) {
-            snackbarHostState.showSnackbar(context.getString(R.string.list_location_unavailable))
+            snackbarHostState.showSnackbar(resources.getString(R.string.list_location_unavailable))
             viewModel.consumeLocationUnavailable()
         }
     }

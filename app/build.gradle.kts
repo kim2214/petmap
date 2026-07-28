@@ -35,7 +35,8 @@ val hasReleaseKeystore = keystoreProps.getProperty("storeFile").let { storeFile 
 
 android {
     namespace = "com.kimdev.petmap"
-    compileSdk = 36
+    // 37: lifecycle 2.11·hilt-navigation-compose 1.4 등이 요구. targetSdk 는 별개(런타임 동작 불변).
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.kimdev.petmap"
@@ -149,6 +150,12 @@ tasks.matching { it.name == "bundleRelease" }.configureEach {
 }
 
 dependencies {
+    constraints {
+        // espresso 3.7/test-core 1.7 이 concurrent-futures 1.2 를 요구하는데, consistent resolution 이
+        // 앱 런타임에서 해석된 1.1 을 androidTest 에 강제해 충돌한다 → 앱 런타임을 1.2 로 정렬.
+        implementation("androidx.concurrent:concurrent-futures:1.2.0")
+    }
+
     // Java 8+ API 디슈가링(java.time 등) — minSdk 24 지원
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 

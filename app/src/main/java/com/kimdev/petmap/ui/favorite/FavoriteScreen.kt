@@ -29,7 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -51,15 +51,16 @@ fun FavoriteScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
+    // 설정 변경(언어 등)에 따라 갱신되는 리소스 접근 (Context 경유는 lint 에러)
+    val resources = LocalResources.current
 
     // 하트 탭으로 목록에서 즉시 사라지므로, 실수 방지용 실행취소 동선을 준다.
     fun removeWithUndo(place: Place) {
         viewModel.toggleFavorite(place)
         scope.launch {
             val result = snackbarHostState.showSnackbar(
-                message = context.getString(R.string.favorite_removed_format, place.name),
-                actionLabel = context.getString(R.string.action_undo),
+                message = resources.getString(R.string.favorite_removed_format, place.name),
+                actionLabel = resources.getString(R.string.action_undo),
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) viewModel.toggleFavorite(place)
