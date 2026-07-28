@@ -1,6 +1,6 @@
 [versions]
 agp = "9.1.1"
-kotlin = "2.3.0"
+kotlin = "2.4.10"
 ksp = "2.3.2"
 desugarJdkLibs = "2.1.2"
 
