@@ -52,6 +52,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
@@ -209,16 +210,18 @@ fun MapScreen(
     // 카테고리별 단일 장소 마커 (컬러 핀 + 흰 아이콘). 최초 1회만 생성.
     val categoryMarkers = rememberCategoryMarkers()
     // 클러스터 아이콘 캐시 (개수별). 숫자는 브랜드 폰트(나눔 ExtraBold)로 렌더링.
-    // 개수 값이 최대 500까지 제각각이라 무제한 증가를 막기 위해 LRU(접근순)로 상한을 둔다.
+    // 개수 값이 제각각이라 무제한 증가를 막기 위해 LRU(접근순)로 상한을 둔다.
     val clusterTypeface = remember { ResourcesCompat.getFont(context, R.font.nanum_square_round_extrabold) }
-    val iconCache = remember {
+    val screenDensity = LocalDensity.current.density
+    val iconCache = remember(screenDensity) {
         object : LinkedHashMap<Int, OverlayImage>(16, 0.75f, true) {
             override fun removeEldestEntry(eldest: Map.Entry<Int, OverlayImage>): Boolean =
                 size > CLUSTER_ICON_CACHE_MAX
         }
     }
-    fun clusterIcon(count: Int): OverlayImage =
-        iconCache.getOrPut(count) { OverlayImage.fromBitmap(makeClusterBitmap(count, clusterTypeface)) }
+    fun clusterIcon(count: Int): OverlayImage = iconCache.getOrPut(count) {
+        OverlayImage.fromBitmap(makeClusterBitmap(count, clusterTypeface, screenDensity))
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
       Box(modifier = Modifier.weight(1f).fillMaxWidth()) {

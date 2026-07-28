@@ -58,6 +58,16 @@ fun isResearchNeeded(
     return moved > radiusForZoom(loadedZoom) * 1000.0 * movedFraction || radiusChanged
 }
 
+/**
+ * 클러스터 버블에 표시할 개수 라벨. 네 자리 이상은 "1.2천" 형태로 줄여 원 안에 들어가게 한다.
+ * (저줌 집계 클러스터는 개수가 수천까지 나온다)
+ */
+fun clusterLabel(count: Int): String = when {
+    count < 1000 -> count.toString()
+    count < 10_000 -> "${count / 1000}.${(count % 1000) / 100}천"
+    else -> "${count / 1000}천"
+}
+
 /** 줌 레벨에 따른 장소 조회 반경(km) 근사 */
 fun radiusForZoom(zoom: Double): Double = when {
     zoom >= 15.0 -> 1.5
@@ -103,13 +113,21 @@ fun clusterPlaces(places: List<Place>, zoom: Double, cellPx: Double = 72.0): Lis
     }
 }
 
-/** 개수가 그려진 원형 클러스터 마커 비트맵 생성 */
-fun makeClusterBitmap(count: Int, typeface: Typeface? = null): Bitmap {
-    val sizePx = when {
-        count >= 100 -> 140
-        count >= 10 -> 120
-        else -> 100
+/**
+ * 개수가 그려진 원형 클러스터 마커 비트맵 생성.
+ *
+ * [density] 는 화면 배율(dp→px). 지정하지 않으면 3.0 기준으로 굽는다.
+ * Marker 의 크기가 SizeAuto 라 비트맵의 실제 px 가 화면 크기를 결정하므로, 배율을 반영하지 않으면
+ * 저배율 기기에서 버블이 과도하게 커져 인접 클러스터끼리 겹친다(카테고리 핀은 이미 dp 기준).
+ */
+fun makeClusterBitmap(count: Int, typeface: Typeface? = null, density: Float = 3f): Bitmap {
+    val sizeDp = when {
+        count >= 1000 -> 52f
+        count >= 100 -> 46f
+        count >= 10 -> 40f
+        else -> 34f
     }
+    val sizePx = (sizeDp * density).toInt().coerceAtLeast(1)
     val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val r = sizePx / 2f
@@ -123,15 +141,19 @@ fun makeClusterBitmap(count: Int, typeface: Typeface? = null): Bitmap {
     // 채워진 원 (브랜드 그린)
     val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF22A75A.toInt() }
     canvas.drawCircle(r, r, r * 0.80f, fill)
-    // 개수 텍스트
+    // 개수 텍스트. 집계 클러스터는 수천 단위도 나오므로 자릿수에 따라 글자 크기를 줄여 원 안에 맞춘다.
+    val label = clusterLabel(count)
     val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textAlign = Paint.Align.CENTER
-        textSize = sizePx * 0.32f
+        textSize = sizePx * when (label.length) {
+            1, 2 -> 0.34f
+            3 -> 0.29f
+            else -> 0.23f
+        }
         this.typeface = typeface ?: Typeface.DEFAULT_BOLD
         isFakeBoldText = typeface == null
     }
-    val label = if (count >= 1000) "999+" else count.toString()
     val ty = r - (tp.descent() + tp.ascent()) / 2f
     canvas.drawText(label, r, ty, tp)
     return bmp

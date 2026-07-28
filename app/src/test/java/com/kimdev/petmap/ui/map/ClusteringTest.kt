@@ -75,6 +75,19 @@ class ClusteringTest {
         assertEquals(0.0, c.spanMeters(), 0.0001)
     }
 
+    @Test fun `clusterLabel - 세 자리까지는 그대로`() {
+        assertEquals("1", clusterLabel(1))
+        assertEquals("48", clusterLabel(48))
+        assertEquals("999", clusterLabel(999))
+    }
+
+    @Test fun `clusterLabel - 네 자리 이상은 천 단위로 축약`() {
+        // 집계 클러스터는 수천까지 나오므로 원 안에 들어가도록 줄인다
+        assertEquals("1.0천", clusterLabel(1000))
+        assertEquals("3.9천", clusterLabel(3903))
+        assertEquals("11천", clusterLabel(11_047))
+    }
+
     @Test fun `spanMeters - 약 1km 차이는 수백m 이상`() {
         // 위도 0.009도 ≈ 1km
         val members = listOf(place("a", 37.5000, 127.0), place("b", 37.5090, 127.0))

@@ -45,8 +45,56 @@ class MapViewModelTest {
         assertFalse(state.isSeeding)
         assertFalse(state.isLoading)
         assertFalse(state.canResearch)
-        assertEquals(500, repo.lastBoundsLimit)
         assertEquals(2, state.clusters.sumOf { it.count })
+    }
+
+    @Test
+    fun `고줌에서는 개별 조회 경로를 쓴다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.researchHere(37.5, 127.0, 16.0)
+        advanceUntilIdle()
+
+        assertEquals(2000, repo.lastBoundsLimit)
+        // 개별 좌표를 갖고 있어야 로컬 재클러스터링·클러스터 펼치기가 가능하다
+        assertEquals(listOf("a"), vm.uiState.value.clusters.mapNotNull { it.single?.id })
+    }
+
+    @Test
+    fun `개별 조회가 한도에 걸리면 집계 경로로 폴백한다`() = runTest(mainDispatcherRule.testDispatcher) {
+        // 한도(2000)만큼 채우면 DAO 가 중심 거리순으로 잘랐다는 뜻 → 그대로 그리면
+        // 화면 가장자리가 비고 개수도 실제보다 작아지므로 집계 경로로 전환해야 한다.
+        repo.dataset = (1..2000).map { testPlace("p$it", lat = 37.5 + it * 1e-5, lng = 127.0) }
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.researchHere(37.5, 127.0, 16.0) // 고줌 = 개별 경로 진입
+        advanceUntilIdle()
+
+        assertEquals(2000, repo.lastBoundsLimit)          // 개별 조회를 먼저 시도했고
+        assertEquals(225, repo.lastClusterCellsLimit)     // 한도에 걸려 집계로 폴백했다
+        val clusters = vm.uiState.value.clusters
+        assertTrue(clusters.isNotEmpty())
+        assertTrue("집계 클러스터는 개별 좌표가 없다", clusters.all { it.members.isEmpty() })
+    }
+
+    @Test
+    fun `줌 버킷이 바뀌면 자동으로 재조회한다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
+        val vm = viewModel()
+        advanceUntilIdle()
+        // 기본 줌 12 = 집계 경로라 개별 조회는 아직 없었다
+        assertNull(repo.lastBoundsLimit)
+
+        // 같은 지점에서 줌만 12 → 16 (조회 반경 12km → 1.5km): 격자 크기가 달라져
+        // 지금 표시된 개수가 의미를 잃으므로 버튼을 기다리지 않고 다시 조회한다.
+        vm.onCameraMove(Constants.DEFAULT_LAT, Constants.DEFAULT_LNG, 16.0)
+        advanceUntilIdle()
+
+        assertEquals(2000, repo.lastBoundsLimit)
+        assertFalse(vm.uiState.value.canResearch)
     }
 
     @Test
@@ -139,7 +187,9 @@ class MapViewModelTest {
         vm.researchHere(37.5, 127.0, 8.0)
         advanceUntilIdle()
 
-        assertEquals(500, repo.lastClusterCellsLimit)
+        // 한도는 격자 수(15²)와 같아야 한다. 더 작으면 어떤 셀이 버려지는지 정의되지 않아
+        // 특정 지역이 통째로 빈 것처럼 보인다.
+        assertEquals(225, repo.lastClusterCellsLimit)
         assertEquals(2, vm.uiState.value.clusters.sumOf { it.count })
         // 집계 클러스터는 개별 좌표를 갖지 않으므로 members 는 비어 있다
         assertTrue(vm.uiState.value.clusters.all { it.members.isEmpty() })

@@ -76,6 +76,8 @@ class MapViewModel @Inject constructor(
     private var places: List<Place> = emptyList()
     // 카메라 이동 시 재클러스터링 잡. 연속 이동하면 이전 계산을 취소하고 최신 것만 반영.
     private var clusterJob: Job? = null
+    // 데이터 조회 잡. 취소하지 않으면 먼저 시작한 조회가 늦게 끝나 오래된 결과가 최신을 덮어쓴다.
+    private var fetchJob: Job? = null
     // 첫 진입 현재 위치 이동을 이미 처리했는지(중복 이동 방지)
     private var initialLocationHandled = false
 
@@ -182,6 +184,14 @@ class MapViewModel @Inject constructor(
         lastZoom = zoom
         if (_uiState.value.isSeeding) return
 
+        // 줌 버킷이 바뀌면 조회 반경과 집계 격자 크기가 달라져, 지금 표시 중인 개수 자체가 의미를
+        // 잃는다(예: 12km 격자로 센 개수를 4km 뷰에 그대로 남기면 오정보). 로컬 DB 쿼리라 비용이
+        // 낮으므로 이 경우만 자동 재조회하고, 같은 줌에서의 팬 이동은 "다시 검색" 버튼을 유지한다.
+        if (radiusForZoom(zoom) != radiusForZoom(loadedZoom)) {
+            fetch()
+            return
+        }
+
         val stale = isResearchNeeded(
             loadedCenterLat, loadedCenterLng, loadedZoom,
             centerLat, centerLng, zoom,
@@ -228,10 +238,12 @@ class MapViewModel @Inject constructor(
         if (_uiState.value.isSeeding) return
         // 재조회가 클러스터 결과를 확정하므로 진행 중인 카메라-이동 클러스터링은 취소.
         clusterJob?.cancel()
+        // 진행 중인 이전 조회도 취소 → 필터 연타/줌 연속 변경 시 결과 역전 방지.
+        fetchJob?.cancel()
         loadedCenterLat = lastCenterLat
         loadedCenterLng = lastCenterLng
         loadedZoom = lastZoom
-        viewModelScope.launch {
+        fetchJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             if (loadedZoom < AGGREGATE_ZOOM_BELOW) {
                 fetchAggregated()
@@ -249,9 +261,17 @@ class MapViewModel @Inject constructor(
                 centerLng = loadedCenterLng,
                 radiusKm = radiusForZoom(loadedZoom),
                 categories = _uiState.value.selectedCategories,
-                limit = 500,
+                limit = EXACT_LIMIT,
             )
         }.onSuccess { loaded ->
+            // 한도에 걸렸다면 이 뷰포트가 개별 조회로 감당할 밀도를 넘었다는 뜻이다.
+            // DAO 가 중심 거리순으로 자르므로 그대로 그리면 화면 가장자리가 텅 비고
+            // 클러스터 개수도 실제보다 작게 표시된다 → 전역을 실제 개수로 덮는 집계 경로로 전환.
+            if (loaded.size >= EXACT_LIMIT) {
+                Log.i(TAG, "exact rows hit limit($EXACT_LIMIT) at zoom $loadedZoom → aggregate")
+                fetchAggregated()
+                return@onSuccess
+            }
             places = loaded
             val clusters = withContext(defaultDispatcher) { clusterPlaces(loaded, lastZoom) }
             _uiState.update {
@@ -282,7 +302,8 @@ class MapViewModel @Inject constructor(
                 radiusKm = radiusForZoom(loadedZoom),
                 categories = _uiState.value.selectedCategories,
                 gridDivisions = GRID_DIVISIONS,
-                limit = 500,
+                // 격자 수보다 작으면 어떤 셀이 버려지는지 정의되지 않아 지역이 통째로 비어 보인다.
+                limit = GRID_DIVISIONS * GRID_DIVISIONS,
             )
         }.onSuccess { cells ->
             // 개별 좌표를 보유하지 않으므로 로컬 재클러스터링 대상(places)은 비운다.
@@ -314,9 +335,27 @@ class MapViewModel @Inject constructor(
         private const val TAG = "MapViewModel"
         private const val KEY_CATEGORIES = "map_categories"
 
-        // 이 줌 미만(광역, 반경 40·120km)에선 개별 로우 대신 SQL 그리드 집계로 개요를 그린다.
-        private const val AGGREGATE_ZOOM_BELOW = 11.0
-        // 뷰포트를 나눌 격자 분할 수(가로/세로). 집계 셀(=클러스터 점) 최대 개수 ≈ 분할²을 제한.
-        private const val GRID_DIVISIONS = 24
+        /**
+         * 이 줌 미만에선 개별 로우 대신 SQL 그리드 집계로 개요를 그린다.
+         *
+         * 13 = 조회 반경 4km 경계. 실측(에셋 DB) 기준 서울·강남에서 반경 4km 는 약 620개인데
+         * 반경 12km(줌 11~13)는 약 3,900개로 개별 조회 한도를 크게 넘는다. 넘는 구간을 개별
+         * 조회로 처리하면 중심 거리순으로 잘려 화면 가장자리 마커가 사라지고 개수도 틀린다.
+         */
+        private const val AGGREGATE_ZOOM_BELOW = 13.0
+
+        /**
+         * 개별 로우 조회 상한. 실측 최대(반경 4km · 강남 약 620)의 3배 여유.
+         * 클러스터링이 마커 수를 줄여주므로 병목은 마커가 아니라 로우 마샬링 비용이다.
+         * 이 값에 걸리면 [fetchExact] 가 집계 경로로 폴백한다(데이터가 늘어나도 안전).
+         */
+        private const val EXACT_LIMIT = 2000
+
+        /**
+         * 뷰포트를 나눌 격자 분할 수(가로/세로). 집계 셀 = 클러스터 버블 하나.
+         * 15 ≈ 1080px 화면을 [clusterPlaces] 와 같은 72px 셀로 나눈 값이라, 집계 경로와
+         * 개별 경로의 클러스터 밀도가 시각적으로 비슷해진다. 더 키우면 버블끼리 겹친다.
+         */
+        private const val GRID_DIVISIONS = 15
     }
 }

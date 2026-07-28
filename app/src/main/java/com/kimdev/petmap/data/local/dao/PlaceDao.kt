@@ -53,6 +53,7 @@ interface PlaceDao {
      * 저줌(광역) 개요용 그리드 집계. 뷰포트 박스를 latStep×lngStep 격자로 나눠
      * 셀별 대표 좌표(평균)와 개수만 반환한다.
      * 개별 로우/거리 정렬 없이 화면 전역을 커버하며, 반환 로우 수가 격자 수로 제한된다.
+     * limit 이 격자 수보다 작아 잘릴 경우 큰 셀이 남도록 개수 내림차순으로 정렬한다.
      */
     @Query(
         """
@@ -63,6 +64,7 @@ interface PlaceDao {
           AND (:catCount = 0 OR category IN (:cats))
         GROUP BY CAST((lat - :minLat) / :latStep AS INTEGER),
                  CAST((lng - :minLng) / :lngStep AS INTEGER)
+        ORDER BY cnt DESC
         LIMIT :limit
         """
     )

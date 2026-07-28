@@ -123,6 +123,13 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests {
+            // android.util.Log 등 스텁 프레임워크 호출이 예외 대신 기본값을 반환하게 한다.
+            // (없으면 로깅이 있는 코드 경로를 유닛 테스트로 덮을 수 없다)
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 kotlin {
