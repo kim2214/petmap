@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -33,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -206,14 +208,47 @@ fun ListScreen(
                     )
                 }
 
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(state.places, key = { it.id }) { place ->
-                        PlaceCard(
-                            place = place,
-                            onClick = { onPlaceClick(place.id) },
-                            onToggleFavorite = { viewModel.toggleFavorite(place) },
-                            modifier = Modifier.animateItem(),
-                        )
+                else -> {
+                    val listState = rememberLazyListState()
+                    // 마지막에서 몇 칸 앞에 도달하면 다음 페이지를 미리 불러온다(스크롤이 끊기지 않게).
+                    val shouldLoadMore by remember(listState, state.places.size) {
+                        derivedStateOf {
+                            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                            last >= state.places.size - LOAD_MORE_THRESHOLD
+                        }
+                    }
+                    LaunchedEffect(shouldLoadMore) {
+                        if (shouldLoadMore) viewModel.loadMore()
+                    }
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                        items(state.places, key = { it.id }) { place ->
+                            PlaceCard(
+                                place = place,
+                                onClick = { onPlaceClick(place.id) },
+                                onToggleFavorite = { viewModel.toggleFavorite(place) },
+                                modifier = Modifier.animateItem(),
+                            )
+                        }
+                        if (state.isLoadingMore) {
+                            item(key = "loading_more") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) { CircularProgressIndicator() }
+                            }
+                        } else if (state.reachedLimit) {
+                            // 상한까지 불러왔음을 숨기지 않고 좁히는 방법을 안내한다
+                            item(key = "reached_limit") {
+                                Text(
+                                    stringResource(R.string.list_reached_limit),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -300,3 +335,6 @@ private fun leadingCheck(selected: Boolean): (@Composable () -> Unit)? =
     } else {
         null
     }
+
+/** 목록 끝에서 이만큼 앞에 도달하면 다음 페이지를 미리 불러온다. */
+private const val LOAD_MORE_THRESHOLD = 5

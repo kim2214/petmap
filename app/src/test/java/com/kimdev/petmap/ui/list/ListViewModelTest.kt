@@ -176,4 +176,73 @@ class ListViewModelTest {
 
         assertTrue(vm.uiState.value.places.first().isFavorite)
     }
+
+    @Test
+    fun `첫 페이지는 200건이고 더 있으면 canLoadMore true`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = (1..250).map { testPlace("p$it") }
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(200, repo.lastSearchLimit)
+        assertEquals(200, vm.uiState.value.places.size)
+        assertTrue(vm.uiState.value.canLoadMore)
+        assertFalse(vm.uiState.value.reachedLimit)
+    }
+
+    @Test
+    fun `결과가 페이지보다 적으면 canLoadMore false`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = (1..20).map { testPlace("p$it") }
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(20, vm.uiState.value.places.size)
+        assertFalse(vm.uiState.value.canLoadMore)
+    }
+
+    @Test
+    fun `loadMore 는 다음 페이지를 이어 붙인다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = (1..450).map { testPlace("p$it") }
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertEquals(200, vm.uiState.value.places.size)
+
+        vm.loadMore()
+        advanceUntilIdle()
+        assertEquals(400, repo.lastSearchLimit)
+        assertEquals(400, vm.uiState.value.places.size)
+        assertTrue(vm.uiState.value.canLoadMore)
+        assertFalse(vm.uiState.value.isLoadingMore)
+    }
+
+    @Test
+    fun `검색 조건이 바뀌면 페이지가 첫 페이지로 초기화된다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = (1..450).map { testPlace("p$it", name = "카페$it") }
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.loadMore()
+        advanceUntilIdle()
+        assertEquals(400, repo.lastSearchLimit)
+
+        vm.onQueryChange("카페")
+        advanceUntilIdle()
+        assertEquals(200, repo.lastSearchLimit)
+        assertEquals(200, vm.uiState.value.places.size)
+    }
+
+    @Test
+    fun `상한에 닿으면 canLoadMore 대신 reachedLimit 을 알린다`() = runTest(mainDispatcherRule.testDispatcher) {
+        // 상한(2000)을 넘는 데이터: 10회 loadMore 후에는 더 불러오지 않고 안내로 전환
+        repo.dataset = (1..2500).map { testPlace("p$it") }
+        val vm = viewModel()
+        advanceUntilIdle()
+        repeat(20) {
+            vm.loadMore()
+            advanceUntilIdle()
+        }
+
+        assertEquals(2000, repo.lastSearchLimit)
+        assertEquals(2000, vm.uiState.value.places.size)
+        assertFalse(vm.uiState.value.canLoadMore)
+        assertTrue(vm.uiState.value.reachedLimit)
+    }
 }

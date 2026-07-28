@@ -17,6 +17,7 @@ import com.kimdev.petmap.ui.common.SavedFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +44,12 @@ data class ListUiState(
     val isError: Boolean = false,
     /** 권한은 있지만 위치를 얻지 못함(위치 꺼짐 등) → 스낵바 안내 (화면이 소비) */
     val locationUnavailable: Boolean = false,
+    /** 다음 페이지가 있을 수 있음 → 목록 끝에서 추가 로드 */
+    val canLoadMore: Boolean = false,
+    /** 추가 페이지 로딩 중(첫 로딩 스피너와 구분) */
+    val isLoadingMore: Boolean = false,
+    /** 상한까지 불러왔다 → 더 보려면 검색어·필터로 좁혀야 한다는 안내 */
+    val reachedLimit: Boolean = false,
 )
 
 private data class SearchKey(
@@ -75,6 +82,9 @@ class ListViewModel @Inject constructor(
 
     private var favoriteIds: Set<String> = emptySet()
     private var userLocation: UserLocation? = null
+    // 현재까지 불러온 페이지 크기. 검색 조건이 바뀌면 첫 페이지로 되돌린다.
+    private var pageLimit = PAGE_SIZE
+    private var loadMoreJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -94,7 +104,12 @@ class ListViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .onEach { persist(it) }
                 .debounce(250)
-                .collect { runSearch(it) }
+                .collect { key ->
+                    // 조건이 바뀌면 페이지를 처음부터 다시 센다
+                    pageLimit = PAGE_SIZE
+                    loadMoreJob?.cancel()
+                    runSearch(key)
+                }
         }
         viewModelScope.launch {
             repository.observeFavoriteIds().collect { ids ->
@@ -109,11 +124,14 @@ class ListViewModel @Inject constructor(
         }
     }
 
-    private suspend fun runSearch(key: SearchKey) {
-        _uiState.update { it.copy(isLoading = true, isError = false) }
+    private suspend fun runSearch(key: SearchKey, loadingMore: Boolean = false) {
+        _uiState.update {
+            if (loadingMore) it.copy(isLoadingMore = true, isError = false)
+            else it.copy(isLoading = true, isError = false)
+        }
         val loc = userLocation
-        // 영업중 필터가 켜지면 걸러진 뒤에도 충분히 남도록 더 넉넉히 가져온다
-        val fetchLimit = if (key.openNowOnly) 400 else 200
+        // 영업중 필터가 켜지면 걸러진 뒤에도 페이지가 채워지도록 더 넉넉히 가져온다
+        val fetchLimit = if (key.openNowOnly) pageLimit * 2 else pageLimit
 
         runCatching {
             val fetched = if (key.sortByDistance && loc != null) {
@@ -121,24 +139,52 @@ class ListViewModel @Inject constructor(
             } else {
                 repository.search(key.query, key.categories, fetchLimit)
             }
-            if (key.openNowOnly) {
+            val visible = if (key.openNowOnly) {
                 val now = LocalDateTime.now()
-                // 운영시간 파싱(정규식) × 최대 400건은 CPU 작업이라 백그라운드에서 처리
+                // 운영시간 파싱(정규식)은 CPU 작업이라 백그라운드에서 처리
                 withContext(defaultDispatcher) {
                     fetched.filter { OpeningHours.isOpenNow(it.operatingTime, it.closedDays, now) == true }
                 }
             } else {
                 fetched
             }
-        }.onSuccess { results ->
+            // 한도를 꽉 채워 돌아왔다면 DB 에 더 남아 있을 수 있다(필터 후 개수가 아니라 조회 개수로 판단)
+            FetchResult(visible.take(pageLimit), hasMore = fetched.size >= fetchLimit)
+        }.onSuccess { result ->
             _uiState.update {
-                it.copy(isLoading = false, places = results.take(200).withFavorites(favoriteIds))
+                it.copy(
+                    isLoading = false,
+                    isLoadingMore = false,
+                    places = result.places.withFavorites(favoriteIds),
+                    canLoadMore = result.hasMore && pageLimit < MAX_LIMIT,
+                    reachedLimit = result.hasMore && pageLimit >= MAX_LIMIT,
+                )
             }
         }.onFailure { e ->
             Log.w(TAG, "search failed: ${e.message}")
-            _uiState.update { it.copy(isLoading = false, isError = true) }
+            _uiState.update { it.copy(isLoading = false, isLoadingMore = false, isError = true) }
         }
     }
+
+    /**
+     * 목록 끝에 도달했을 때 다음 페이지를 이어 붙인다.
+     * 로컬 DB 라 한도를 늘려 재조회하는 방식으로 충분하다(거리 정렬·영업중 필터가 조회 후
+     * 후처리라 오프셋 기반 페이징과 맞지 않는다).
+     */
+    fun loadMore() {
+        val s = _uiState.value
+        if (s.isLoading || s.isLoadingMore || !s.canLoadMore) return
+        pageLimit = (pageLimit + PAGE_SIZE).coerceAtMost(MAX_LIMIT)
+        loadMoreJob?.cancel()
+        loadMoreJob = viewModelScope.launch {
+            runSearch(
+                SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly),
+                loadingMore = true,
+            )
+        }
+    }
+
+    private data class FetchResult(val places: List<Place>, val hasMore: Boolean)
 
     /** 현재 검색 조건으로 즉시 재조회(위치 뒤늦은 확보·에러 후 재시도). */
     private fun refreshSearch() {
@@ -212,6 +258,11 @@ class ListViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "ListViewModel"
+
+        /** 한 페이지 크기와 총 상한. 상한에 닿으면 검색어·필터로 좁히도록 안내한다. */
+        private const val PAGE_SIZE = 200
+        private const val MAX_LIMIT = 2000
+
         private const val KEY_QUERY = "list_query"
         private const val KEY_CATEGORIES = "list_categories"
         private const val KEY_SORT_BY_DISTANCE = "list_sort_by_distance"
