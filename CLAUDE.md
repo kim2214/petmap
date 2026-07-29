@@ -28,6 +28,7 @@
 
 - 서명은 `keystore.properties`(git 제외)에서 읽고, 없으면 디버그 서명으로 폴백(로컬 검증용).
 - 릴리스 빌드만 **실제 AdMob ID** 사용(`app/build.gradle.kts` release 블록). 디버그는 Google 테스트 ID.
+- **배포 순서 (필수)**: ① versionCode/versionName 범프를 커밋 → ② 그 커밋에 `vX.Y` 태그 → ③ 그 상태에서 `bundleRelease` → 업로드. 커밋 없이 배포하면 스토어 빌드를 재현할 소스가 사라진다(1.5 때 실제 발생, 히스토리 재작성으로 복구).
 
 ## 데이터: 프리빌트 Room DB
 
