@@ -1,13 +1,14 @@
 package com.kimdev.petmap.data.local
 
 import android.content.Context
+import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** 최근 검색어 저장(기기 로컬, 최대 8개, 최신 우선·중복 제거). */
 interface RecentSearchStore {
@@ -63,7 +64,7 @@ class RecentSearchStoreImpl @Inject constructor(
      */
     private fun persist() {
         val encoded = _recent.value.mapIndexed { i, q -> "$i$SEP$q" }.toSet()
-        prefs.edit().putStringSet(KEY, encoded).apply()
+        prefs.edit { putStringSet(KEY, encoded) }
     }
 
     companion object {

@@ -135,6 +135,9 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        // 생성자 val 파라미터의 어노테이션(@StringRes 등)을 파라미터+프로퍼티 양쪽에 적용
+        // (Kotlin 2.x 의 미래 기본값을 미리 채택 — KT-73255 경고 제거)
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 

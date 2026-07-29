@@ -1,12 +1,13 @@
 package com.kimdev.petmap.data.local
 
 import android.content.Context
+import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** 화면 테마 모드 (표시 라벨은 UI 계층에서 문자열 리소스로 해석) */
 enum class ThemeMode {
@@ -31,7 +32,7 @@ class ThemeStore @Inject constructor(
     val mode: StateFlow<ThemeMode> = _mode.asStateFlow()
 
     fun setMode(mode: ThemeMode) {
-        prefs.edit().putString(KEY, mode.name).apply()
+        prefs.edit { putString(KEY, mode.name) }
         _mode.value = mode
     }
 

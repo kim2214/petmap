@@ -1,6 +1,7 @@
 package com.kimdev.petmap.ui.onboarding
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -34,13 +35,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.annotation.StringRes
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import com.kimdev.petmap.R
 import kotlinx.coroutines.launch
 
@@ -54,7 +55,7 @@ object OnboardingPrefs {
 
     fun setCompleted(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_DONE, true).apply()
+            .edit { putBoolean(KEY_DONE, true) }
     }
 }
 

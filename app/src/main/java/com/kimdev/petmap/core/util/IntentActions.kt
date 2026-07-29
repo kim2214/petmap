@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.core.net.toUri
 import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
 
@@ -22,7 +23,7 @@ fun Context.openAppSettings() {
 /** 전화 앱 열기(다이얼러) */
 fun Context.dialPhone(phone: String) {
     val number = phone.filter { it.isDigit() || it == '+' }
-    safeStart(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
+    safeStart(Intent(Intent.ACTION_DIAL, "tel:$number".toUri()))
 }
 
 /** 장소 정보 공유 */
@@ -43,7 +44,7 @@ fun Context.sharePlace(place: Place) {
 
 /** 메일 앱으로 문의 보내기 */
 fun Context.sendEmail(address: String, subject: String = "") {
-    val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$address")).apply {
+    val intent = Intent(Intent.ACTION_SENDTO, "mailto:$address".toUri()).apply {
         if (subject.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, subject)
     }
     safeStart(intent)
@@ -52,7 +53,7 @@ fun Context.sendEmail(address: String, subject: String = "") {
 /** 외부 브라우저로 URL 열기 */
 fun Context.openUrl(url: String) {
     val normalized = if (url.startsWith("http", ignoreCase = true)) url else "http://$url"
-    safeStart(Intent(Intent.ACTION_VIEW, Uri.parse(normalized)))
+    safeStart(Intent(Intent.ACTION_VIEW, normalized.toUri()))
 }
 
 /**
@@ -63,7 +64,7 @@ fun Context.openNaverDirections(place: Place) {
     val name = Uri.encode(place.name)
     val deepLink = "nmap://route/walk?dlat=${place.lat}&dlng=${place.lng}" +
         "&dname=$name&appname=$packageName"
-    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(deepLink))
+    val appIntent = Intent(Intent.ACTION_VIEW, deepLink.toUri())
         .setPackage("com.nhn.android.nmap")
     try {
         startActivity(appIntent)

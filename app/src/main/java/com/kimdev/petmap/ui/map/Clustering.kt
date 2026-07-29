@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import androidx.core.graphics.createBitmap
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.distanceMeters
 import kotlin.math.cos
@@ -128,7 +129,7 @@ fun makeClusterBitmap(count: Int, typeface: Typeface? = null, density: Float = 3
         else -> 34f
     }
     val sizePx = (sizeDp * density).toInt().coerceAtLeast(1)
-    val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val bmp = createBitmap(sizePx, sizePx)
     val canvas = Canvas(bmp)
     val r = sizePx / 2f
 

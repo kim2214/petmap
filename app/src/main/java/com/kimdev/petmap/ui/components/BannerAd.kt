@@ -11,8 +11,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -45,10 +46,15 @@ fun BannerAd(modifier: Modifier = Modifier) {
     // 재시도가 없으면 첫 세션 내내 빈 배너가 된다.
     val adsReady by AdsConsent.adsReady.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    // 화면 전체 폭이 아니라 현재 구성의 폭(멀티윈도우·폴더블 대응)
-    val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val adSize = remember(screenWidthDp) {
-        AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, screenWidthDp)
+    // 화면 전체 폭이 아니라 실제 윈도우 폭(멀티윈도우·폴더블 대응). Configuration.screenWidthDp 는
+    // 이런 환경에서 부정확할 수 있어 containerSize(px) → dp 변환을 쓴다.
+    val density = LocalDensity.current
+    val windowWidthDp = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }.value.toInt()
+    // 25.x 에서 getCurrentOrientation... 은 deprecated 지만, 대체인 getLarge*(더 큰 배너)는
+    // 화면 점유가 달라지는 별개 상품이라 의도적으로 유지한다. 전환은 수익/UX 검토 후 결정할 것.
+    @Suppress("DEPRECATION")
+    val adSize = remember(windowWidthDp) {
+        AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, windowWidthDp)
     }
     val adView = remember(adSize) {
         AdView(context).apply {

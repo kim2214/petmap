@@ -3,6 +3,7 @@ package com.kimdev.petmap.core.review
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import com.google.android.play.core.review.ReviewManagerFactory
 import com.google.android.play.core.review.testing.FakeReviewManager
 import com.kimdev.petmap.BuildConfig
@@ -27,7 +28,7 @@ object InAppReview {
         if (prefs.getBoolean(KEY_REQUESTED, false)) return
 
         val launches = prefs.getInt(KEY_LAUNCHES, 0) + 1
-        prefs.edit().putInt(KEY_LAUNCHES, launches).apply()
+        prefs.edit { putInt(KEY_LAUNCHES, launches) }
         if (launches < LAUNCH_THRESHOLD) return
 
         // 디버그 빌드에서는 실제 다이얼로그가 뜨지 않으므로 Fake 매니저로 흐름만 검증
@@ -46,7 +47,7 @@ object InAppReview {
             if (activity.isFinishing || activity.isDestroyed) return@addOnCompleteListener
             manager.launchReviewFlow(activity, request.result).addOnCompleteListener {
                 // 노출 여부와 무관하게 1회 요청 후 다시 묻지 않음
-                prefs.edit().putBoolean(KEY_REQUESTED, true).apply()
+                prefs.edit { putBoolean(KEY_REQUESTED, true) }
             }
         }
     }
