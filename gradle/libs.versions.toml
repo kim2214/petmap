@@ -26,7 +26,7 @@ hiltNavigationCompose = "1.4.0"
 room = "2.8.4"
 
 naverMapCompose = "1.9.0"
-playServicesLocation = "21.3.0"
+playServicesLocation = "21.4.0"
 coroutinesPlayServices = "1.8.1"
 coroutinesTest = "1.8.1"
 accompanistPermissions = "0.37.3"
