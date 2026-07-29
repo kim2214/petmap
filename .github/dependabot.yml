@@ -1,11 +1,19 @@
 # 의존성 노후 방지 (libs.versions.toml 및 GitHub Actions 버전 갱신 PR 자동 생성)
+#
+# 주의: 여기서 설정하는 것은 "버전 업데이트"(노후 방지)다. 보안 취약점 대응인
+# "Dependabot 보안 업데이트"는 별개 기능이며 리포 Settings 에서 켠다 — 이 파일과
+# 무관하게, 아래 스케줄과도 무관하게 동작한다.
+#
+# 주간 스캔은 실익 없는 minor/patch 범프가 매주 쏟아져 잡무만 늘었다(2026-07 경험:
+# 이틀간 PR 14건, 그중 앱 동작에 영향 있는 것은 play-services-ads 하나뿐).
+# → 월간으로 낮추고 동시 PR 수도 줄여 배치를 작게 유지한다.
 version: 2
 updates:
   - package-ecosystem: gradle
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
     ignore:
       # app/build.gradle.kts 의 constraints 블록에 있는 수동 핀.
       # espresso/test-core 와 앱 런타임 간 consistent resolution 충돌을 막으려고
@@ -22,4 +30,4 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
