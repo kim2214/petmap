@@ -6,6 +6,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # app/build.gradle.kts 의 constraints 블록에 있는 수동 핀.
+      # espresso/test-core 와 앱 런타임 간 consistent resolution 충돌을 막으려고
+      # 손으로 고정한 값인데, Dependabot 은 constraints 안의 버전 리터럴도
+      # 일반 직접 의존성으로 보고 올린다 → 자동 범프 제외하고 수동 관리한다.
+      - dependency-name: "androidx.concurrent:concurrent-futures"
     groups:
       # AndroidX/Compose 계열은 상호 호환 버전을 묶어서 올린다
       androidx:
