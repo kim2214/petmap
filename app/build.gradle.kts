@@ -160,7 +160,7 @@ dependencies {
     constraints {
         // espresso 3.7/test-core 1.7 이 concurrent-futures 1.2 를 요구하는데, consistent resolution 이
         // 앱 런타임에서 해석된 1.1 을 androidTest 에 강제해 충돌한다 → 앱 런타임을 1.2 로 정렬.
-        implementation("androidx.concurrent:concurrent-futures:1.2.0")
+        implementation("androidx.concurrent:concurrent-futures:1.3.0")
     }
 
     // Java 8+ API 디슈가링(java.time 등) — minSdk 24 지원
