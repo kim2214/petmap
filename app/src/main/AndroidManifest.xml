@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -37,12 +36,6 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="${admobAppId}" />
-
-        <!-- AdMob 과 Firebase 가 모두 선언하는 AD_SERVICES_CONFIG 충돌 해결 -->
-        <property
-            android:name="android.adservices.AD_SERVICES_CONFIG"
-            android:resource="@xml/gma_ad_services_config"
-            tools:replace="android:resource" />
 
         <!-- 네이버 지도 Client ID. 값은 local.properties 의 naver.map.clientId 에서 주입됨.
              구버전 SDK는 com.naver.maps.map.CLIENT_ID 를 사용하므로 SDK 버전에 맞게 키 이름을 조정하세요. -->
