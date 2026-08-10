@@ -43,6 +43,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.ads.AdsConsent
+import com.kimdev.petmap.core.common.TabReselectBus
 import com.kimdev.petmap.core.review.InAppReview
 import com.kimdev.petmap.data.local.ThemeMode
 import com.kimdev.petmap.data.local.ThemeStore
@@ -58,6 +59,7 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var themeStore: ThemeStore
+    @Inject lateinit var tabReselectBus: TabReselectBus
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -99,7 +101,7 @@ class MainActivity : ComponentActivity() {
                         showOnboarding = false
                     })
                 } else {
-                    PetMapApp()
+                    PetMapApp(tabReselectBus)
                 }
             }
         }
@@ -107,7 +109,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun PetMapApp() {
+private fun PetMapApp(tabReselectBus: TabReselectBus) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -147,12 +149,17 @@ private fun PetMapApp() {
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = {
-                                    navController.navigate(dest.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
+                                    if (selected) {
+                                        // 재선택: 이동 대신 화면별 동작(맨 위로/재센터링)에 위임
+                                        tabReselectBus.emit(dest.route)
+                                    } else {
+                                        navController.navigate(dest.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
                                     }
                                 },
                                 icon = {
@@ -180,6 +187,7 @@ private fun PetMapApp() {
     ) { innerPadding ->
         PetMapNavHost(
             navController = navController,
+            tabReselects = tabReselectBus.events,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),

@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -20,10 +21,15 @@ import com.kimdev.petmap.ui.map.MapScreen
 import com.kimdev.petmap.ui.onboarding.OnboardingScreen
 import com.kimdev.petmap.ui.settings.LicensesScreen
 import com.kimdev.petmap.ui.settings.SettingsScreen
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 
 @Composable
 fun PetMapNavHost(
     navController: NavHostController,
+    tabReselects: Flow<String> = emptyFlow(),
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -43,14 +49,18 @@ fun PetMapNavHost(
         }
 
         composable(Routes.MAP) {
-            MapScreen(onPlaceClick = openDetail)
+            val reselects = remember { tabReselects.filter { it == Routes.MAP }.map { } }
+            MapScreen(onPlaceClick = openDetail, reselects = reselects)
         }
         composable(Routes.LIST) {
-            ListScreen(onPlaceClick = openDetail)
+            val reselects = remember { tabReselects.filter { it == Routes.LIST }.map { } }
+            ListScreen(onPlaceClick = openDetail, reselects = reselects)
         }
         composable(Routes.FAVORITE) {
+            val reselects = remember { tabReselects.filter { it == Routes.FAVORITE }.map { } }
             FavoriteScreen(
                 onPlaceClick = openDetail,
+                reselects = reselects,
                 onExplore = {
                     navController.navigate(Routes.MAP) {
                         popUpTo(navController.graph.findStartDestination().id) { saveState = true }

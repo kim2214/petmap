@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Explore
@@ -23,6 +24,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,6 +38,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
@@ -45,11 +49,18 @@ import com.kimdev.petmap.ui.components.PlaceCard
 fun FavoriteScreen(
     onPlaceClick: (String) -> Unit,
     onExplore: () -> Unit = {},
+    reselects: Flow<Unit> = emptyFlow(),
     viewModel: FavoriteViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val listState = rememberLazyListState()
+
+    // 하단 탭 "즐겨찾기" 재선택 → 맨 위로
+    LaunchedEffect(Unit) {
+        reselects.collect { listState.animateScrollToItem(0) }
+    }
     // 설정 변경(언어 등)에 따라 갱신되는 리소스 접근 (Context 경유는 lint 에러)
     val resources = LocalResources.current
 
@@ -121,7 +132,7 @@ fun FavoriteScreen(
                     },
                 )
 
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     items(state.favorites, key = { it.id }) { place ->
                         PlaceCard(
                             place = place,
