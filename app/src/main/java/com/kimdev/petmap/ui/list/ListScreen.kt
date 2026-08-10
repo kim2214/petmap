@@ -1,6 +1,7 @@
 package com.kimdev.petmap.ui.list
 
 import android.Manifest
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -56,11 +58,16 @@ import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.RecentSearchList
 import com.kimdev.petmap.ui.components.SearchTextField
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.emptyFlow
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ListScreen(
     onPlaceClick: (String) -> Unit,
+    reselects: Flow<Unit> = emptyFlow(),
     viewModel: ListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -69,6 +76,30 @@ fun ListScreen(
     val resources = LocalResources.current
     var searchFocused by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // when 분기 안에서 만들면 최근 검색어 오버레이로 갈아탈 때 컴포지션에서 제거되어
+    // 스크롤 위치가 사라진다 → 분기 밖에서 생성해 유지한다.
+    val listState = rememberLazyListState()
+    // 검색 조건이 바뀌면 새 결과를 처음부터 보여준다. drop(1): 최초 구성·회전 복원 시에는
+    // 조건이 "바뀐" 게 아니므로 보던 위치를 유지한다.
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            listOf(state.query, state.selectedCategories, state.sortByDistance, state.openNowOnly)
+        }
+            .distinctUntilChanged()
+            .drop(1)
+            .collect { listState.scrollToItem(0) }
+    }
+    // 하단 탭 "목록" 재선택 → 맨 위로
+    LaunchedEffect(Unit) {
+        reselects.collect { listState.animateScrollToItem(0) }
+    }
+
+    // 검색 오버레이/검색어가 있으면 뒤로가기로 화면을 나가는 대신 검색을 닫는다(지도 화면과 동일)
+    BackHandler(enabled = searchFocused || state.query.isNotBlank()) {
+        viewModel.onQueryChange("")
+        focusManager.clearFocus()
+    }
 
     // rememberSaveable: 화면 재구성(탭 전환·회전) 후 거부한 권한을 다시 묻지 않는다.
     var requestedLocationOnce by rememberSaveable { mutableStateOf(false) }
@@ -165,7 +196,12 @@ fun ListScreen(
                 searchFocused && state.query.isBlank() && state.recentSearches.isNotEmpty() ->
                     RecentSearchList(
                         recents = state.recentSearches,
-                        onPick = { viewModel.onQueryChange(it) },
+                        onPick = {
+                            viewModel.onQueryChange(it)
+                            // 재선택도 최근 검색 최상단으로 승격 + 키보드를 내려 결과가 보이게 한다
+                            viewModel.recordRecentSearch(it)
+                            focusManager.clearFocus()
+                        },
                         onRemove = { viewModel.removeRecentSearch(it) },
                         onClearAll = { viewModel.clearRecentSearches() },
                         modifier = Modifier.fillMaxSize(),
@@ -213,7 +249,6 @@ fun ListScreen(
                 }
 
                 else -> {
-                    val listState = rememberLazyListState()
                     // 마지막에서 몇 칸 앞에 도달하면 다음 페이지를 미리 불러온다(스크롤이 끊기지 않게).
                     val shouldLoadMore by remember(listState, state.places.size) {
                         derivedStateOf {
@@ -228,7 +263,11 @@ fun ListScreen(
                         items(state.places, key = { it.id }) { place ->
                             PlaceCard(
                                 place = place,
-                                onClick = { onPlaceClick(place.id) },
+                                onClick = {
+                                    // 가장 흔한 동선(타이핑 → 결과 카드 탭)에서도 검색어를 기록한다
+                                    if (state.query.isNotBlank()) viewModel.recordRecentSearch(state.query)
+                                    onPlaceClick(place.id)
+                                },
                                 onToggleFavorite = { viewModel.toggleFavorite(place) },
                                 modifier = Modifier.animateItem(),
                             )
