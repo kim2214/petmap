@@ -21,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,9 +29,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
-import com.kimdev.petmap.domain.util.OpeningHours
 import com.kimdev.petmap.domain.util.formatDistance
-import java.time.LocalDateTime
+import com.kimdev.petmap.ui.common.rememberIsOpenNow
 
 @Composable
 fun PlaceCard(
@@ -171,10 +169,7 @@ private fun PetBadges(place: Place) {
 
 @Composable
 fun OpenBadge(place: Place) {
-    // 리스트의 각 카드가 재구성마다 정규식 파싱을 반복하지 않도록 캐시(초 단위 정확도는 불필요).
-    val isOpen = remember(place.operatingTime, place.closedDays) {
-        OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())
-    }
+    val isOpen = rememberIsOpenNow(place.operatingTime, place.closedDays)
     when (isOpen) {
         true -> Text(
             stringResource(R.string.label_open_now),

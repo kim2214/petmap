@@ -78,4 +78,43 @@ class OpeningHoursTest {
         assertNull(OpeningHours.isOpenNow(null, "연중무휴", at(24, 12)))
         assertNull(OpeningHours.isOpenNow("", null, at(24, 12)))
     }
+
+    @Test fun `연중무휴여도 시간표가 있으면 시간표를 따름`() {
+        val ot = "연중무휴 09:00~18:00"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 10)))
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 3)))   // 새벽엔 종료
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 20)))
+    }
+
+    @Test fun `연중 키워드만 있고 시간표 없으면 상시 영업`() {
+        assertEquals(true, OpeningHours.isOpenNow("연중무휴", null, at(24, 3)))
+        assertEquals(true, OpeningHours.isOpenNow("연중 개방", null, at(24, 3)))
+    }
+
+    @Test fun `브레이크타임 구간에는 영업중 아님`() {
+        val ot = "매일 11:00~21:00, 브레이크타임 15:00~17:00"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 13)))
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 16)))  // 브레이크
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 18)))
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 22))) // 마감 후
+    }
+
+    @Test fun `휴게시간 표기도 브레이크로 처리`() {
+        val ot = "09:00~18:00, 휴게시간 12:00~13:00"
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 12, 30)))
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 14)))
+    }
+
+    @Test fun `라스트오더 표기는 영업 판정에 영향 없음`() {
+        val ot = "매일 10:00~21:00, 라스트오더 20:00~20:30"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 20, 15))) // LO 중이어도 영업중
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 21, 30)))
+    }
+
+    @Test fun `세그먼트 단위 상시 표기 - 주말 24시간`() {
+        val ot = "평일 09:00~18:00, 주말 24시간"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(29, 3)))    // 토 새벽
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 3)))   // 월 새벽
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 10)))   // 월 오전
+    }
 }

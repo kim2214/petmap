@@ -45,7 +45,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,12 +76,11 @@ import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sharePlace
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.R
-import com.kimdev.petmap.domain.util.OpeningHours
+import com.kimdev.petmap.ui.common.rememberIsOpenNow
 import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
 import com.kimdev.petmap.ui.components.labelRes
 import com.kimdev.petmap.ui.components.softColor
-import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -235,10 +233,7 @@ private fun DetailContent(
 
 @Composable
 private fun Header(place: Place) {
-    // 재구성마다 정규식 파싱을 반복하지 않도록 영업 여부를 캐시(초 단위 정확도는 불필요).
-    val open = remember(place.operatingTime, place.closedDays) {
-        OpeningHours.isOpenNow(place.operatingTime, place.closedDays, LocalDateTime.now())
-    }
+    val open = rememberIsOpenNow(place.operatingTime, place.closedDays)
     Surface(
         color = place.category.softColor,
         contentColor = MaterialTheme.colorScheme.onSurface,

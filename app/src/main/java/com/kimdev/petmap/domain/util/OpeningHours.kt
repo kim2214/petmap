@@ -11,6 +11,8 @@ import java.time.LocalDateTime
  *  - "화~일 09:00~18:00"
  *  - "매일 15:00~11:00"  (자정 넘김)
  *  - "매일 00:00~24:00", "24시간", "상시 개방", "연중무휴"
+ *  - "연중무휴 09:00~18:00"  (무휴 키워드가 있어도 시간표가 있으면 시간표를 따름)
+ *  - "매일 11:00~21:00, 브레이크타임 15:00~17:00"  (브레이크 구간은 영업중이 아님)
  * 휴무일 예: "매주 일요일", "매주 토, 일", "연중무휴", "법정공휴일"
  */
 object OpeningHours {
@@ -18,6 +20,15 @@ object OpeningHours {
 
     private val TIME = Regex("""(\d{1,2}):(\d{2})\s*[~\-]\s*(\d{1,2}):(\d{2})""")
     private val DAY_RANGE = Regex("""([월화수목금토일])\s*~\s*([월화수목금토일])""")
+
+    // "연중무휴"는 휴무 없음의 신호이지 24시간 영업의 신호가 아니므로 시간표가 없을 때만 상시 영업으로 본다.
+    private val ALWAYS_OPEN = listOf("24시간", "상시", "연중")
+
+    // 이 구간에 있으면 오히려 이용 불가(영업 구간으로 세면 안 됨)
+    private val BREAK_KEYWORDS = listOf("브레이크", "휴게", "준비")
+
+    // 정보성 표기 — 영업 구간도 휴게 구간도 아니므로 무시
+    private val INFO_KEYWORDS = listOf("라스트오더", "주문마감", "입장마감")
 
     /** true=영업중, false=영업종료/휴무, null=정보없음·판단불가 */
     fun isOpenNow(operatingTime: String?, closedDays: String?, now: LocalDateTime): Boolean? {
@@ -28,26 +39,37 @@ object OpeningHours {
         }
 
         if (operatingTime.isNullOrBlank()) return null
-        if (operatingTime.contains("24시간") || operatingTime.contains("상시") ||
-            operatingTime.contains("00:00~24:00") || operatingTime.contains("00:00-24:00") ||
-            operatingTime.contains("연중")
-        ) return true
+        if (!TIME.containsMatchIn(operatingTime)) {
+            return if (ALWAYS_OPEN.any { operatingTime.contains(it) }) true else null
+        }
 
         val nowMin = now.hour * 60 + now.minute
-        var anyForToday = false
-        for (seg in operatingTime.split(",")) {
+        val segments = operatingTime.split(",")
+
+        // 브레이크/휴게 구간이 영업 구간과 겹치므로 먼저 확인한다.
+        for (seg in segments) {
+            if (BREAK_KEYWORDS.none { seg.contains(it) }) continue
             if (!segmentAppliesToday(seg, today)) continue
+            val m = TIME.find(seg) ?: continue
+            val open = m.groupValues[1].toInt() * 60 + m.groupValues[2].toInt()
+            val close = m.groupValues[3].toInt() * 60 + m.groupValues[4].toInt()
+            if (inTimeRange(nowMin, open, close)) return false
+        }
+
+        var anyForToday = false
+        for (seg in segments) {
+            if ((BREAK_KEYWORDS + INFO_KEYWORDS).any { seg.contains(it) }) continue
+            if (!segmentAppliesToday(seg, today)) continue
+            // "주말 24시간"처럼 시간 없이 상시 키워드만 있는 세그먼트
+            if (!TIME.containsMatchIn(seg) && ALWAYS_OPEN.any { seg.contains(it) }) return true
             anyForToday = true
             val m = TIME.find(seg) ?: continue
             val open = m.groupValues[1].toInt() * 60 + m.groupValues[2].toInt()
             val close = m.groupValues[3].toInt() * 60 + m.groupValues[4].toInt()
             if (inTimeRange(nowMin, open, close)) return true
         }
-        return when {
-            anyForToday -> false                        // 오늘 영업시간대가 있는데 그 밖
-            TIME.containsMatchIn(operatingTime) -> false // 시간표는 있으나 오늘 해당 요일 아님
-            else -> null                                 // 시간 패턴 자체가 없음
-        }
+        // 시간표는 있으나 지금은 영업 구간 밖(오늘 해당 없음 포함)
+        return false
     }
 
     private fun isClosedToday(closedDays: String, today: Int): Boolean {
