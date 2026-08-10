@@ -103,7 +103,7 @@ class PlaceRepositoryImpl @Inject constructor(
         val (cats, catCount) = catsOf(categories)
         val match = PlaceFts.match(query)
         val rows = if (match == null) placeDao.browse(cats, catCount, limit)
-        else placeDao.searchByFts(ftsQuery(match, cats, catCount, userLat = null, userLng = null, limit = limit))
+        else placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat = null, userLng = null, limit = limit))
         return rows.map { it.toDomain() }
     }
 
@@ -119,7 +119,7 @@ class PlaceRepositoryImpl @Inject constructor(
         val rows = if (match == null) {
             placeDao.browseByDistance(cats, catCount, userLat, userLng, lngScaleSq(userLat), limit)
         } else {
-            placeDao.searchByFts(ftsQuery(match, cats, catCount, userLat, userLng, limit))
+            placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat, userLng, limit))
         }
         // SQL 정렬은 근사(cos 보정)로 top-N 을 뽑고, 표시 순서는 정확한 거리로 다시 정렬한다.
         return rows.map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
@@ -129,10 +129,11 @@ class PlaceRepositoryImpl @Inject constructor(
     /**
      * FTS 검색 SQL 을 구성한다(카테고리 IN 절은 개수만큼 `?` 를 동적으로 만든다).
      * places_fts 는 places 의 rowid(docid) 를 참조하는 FTS4 테이블이다.
-     * userLat/userLng 가 주어지면 해당 좌표에서 가까운 순, 아니면 이름순.
+     * userLat/userLng 가 주어지면 해당 좌표에서 가까운 순, 아니면 관련도(이름 매칭 우선)순.
      */
     private fun ftsQuery(
         match: String,
+        rawQuery: String,
         cats: List<String>,
         catCount: Int,
         userLat: Double?,
@@ -159,7 +160,18 @@ class PlaceRepositoryImpl @Inject constructor(
             args.add(userLat); args.add(userLat); args.add(userLng); args.add(userLng)
             args.add(lngScaleSq(userLat))
         } else {
-            sql.append(" ORDER BY places.name ASC")
+            // FTS 는 이름뿐 아니라 주소 매칭도 돌려주므로, 단순 이름 가나다순이면 상호를 정확히
+            // 입력해도 무관한 결과 뒤로 밀린다 → 이름 시작 일치 > 이름 포함 > 그 외 순으로 정렬.
+            val escaped = rawQuery.trim()
+                .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            sql.append(
+                " ORDER BY CASE" +
+                    " WHEN places.name LIKE ? ESCAPE '\\' THEN 0" +
+                    " WHEN places.name LIKE ? ESCAPE '\\' THEN 1" +
+                    " ELSE 2 END ASC, places.name ASC"
+            )
+            args.add("$escaped%")
+            args.add("%$escaped%")
         }
         sql.append(" LIMIT ?")
         args.add(limit)
