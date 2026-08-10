@@ -80,7 +80,7 @@
     <string name="empty_error_title">장소를 불러오지 못했어요</string>
     <string name="empty_error_desc">잠시 후 다시 시도해 주세요.</string>
     <string name="empty_open_now_title">지금 영업중인 장소가 없어요</string>
-    <string name="empty_open_now_desc">영업중 필터를 끄거나 다른 지역에서 찾아보세요.</string>
+    <string name="empty_open_now_desc">영업시간 정보가 없는 장소는 제외돼요. 필터를 끄거나 다른 지역에서 찾아보세요.</string>
     <string name="empty_search_title_format">\'%1$s\' 검색 결과가 없어요</string>
     <string name="empty_search_desc">다른 키워드로 찾아보세요.</string>
     <string name="empty_filter_title">조건에 맞는 장소가 없어요</string>
