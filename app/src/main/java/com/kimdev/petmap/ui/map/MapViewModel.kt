@@ -60,6 +60,8 @@ sealed interface MapEvent {
     data class MoveToLocation(val location: UserLocation) : MapEvent
     /** 조회 결과 0건 안내 */
     data object NoResults : MapEvent
+    /** 조회 실패 안내 (재시도 액션 동반) — 실패를 숨기면 빈 지도가 "데이터 없음"으로 오해된다 */
+    data object LoadFailed : MapEvent
 }
 
 @OptIn(FlowPreview::class)
@@ -82,6 +84,10 @@ class MapViewModel @Inject constructor(
     // 화면이 없는 동안(탭 전환 등) 발생한 이벤트는 버퍼에서 대기하다 재진입 시 전달된다.
     private val _events = Channel<MapEvent>(Channel.BUFFERED)
     val events: Flow<MapEvent> = _events.receiveAsFlow()
+
+    // 미리보기 시트의 거리 표시용 사용자 위치. 없으면(권한 거부 등) 거리만 생략된다.
+    private val _userLocation = MutableStateFlow<UserLocation?>(null)
+    val userLocation: StateFlow<UserLocation?> = _userLocation.asStateFlow()
 
     // 현재 카메라 위치
     private var lastCenterLat = Constants.DEFAULT_LAT
@@ -107,6 +113,10 @@ class MapViewModel @Inject constructor(
             repository.ensureSeeded()
             _uiState.update { it.copy(isSeeding = false) }
             fetch()
+        }
+        // 거리 표시용 마지막 위치(권한 없으면 null). 카메라 이동과 무관하게 조용히 확보한다.
+        viewModelScope.launch {
+            _userLocation.value = locationProvider.lastLocation()
         }
         viewModelScope.launch {
             repository.observeFavoriteIds().collect { ids ->
@@ -159,6 +169,7 @@ class MapViewModel @Inject constructor(
         if (initialLocationHandled || focusRequested) return
         viewModelScope.launch {
             val loc = locationProvider.lastLocation() ?: locationProvider.currentLocation() ?: return@launch
+            _userLocation.value = loc
             // 위치 조회 중에 포커스 요청이 들어왔다면 카메라 이동을 양보한다.
             if (focusRequested) return@launch
             // 위치를 실제로 얻었을 때만 처리 완료로 표시 → 첫 시도에서 못 얻어도 다음 기회에 재시도.
@@ -291,6 +302,7 @@ class MapViewModel @Inject constructor(
             Log.w(TAG, "getPlacesInBounds failed: ${e.message}")
             // 실패 시 "이 지역에서 다시 검색" 버튼을 다시 노출해 재시도 동선을 준다.
             _uiState.update { it.copy(isLoading = false, canResearch = true) }
+            _events.send(MapEvent.LoadFailed)
         }
     }
 
@@ -329,6 +341,7 @@ class MapViewModel @Inject constructor(
         }.onFailure { e ->
             Log.w(TAG, "getClusterCells failed: ${e.message}")
             _uiState.update { it.copy(isLoading = false, canResearch = true) }
+            _events.send(MapEvent.LoadFailed)
         }
     }
 

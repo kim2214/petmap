@@ -68,6 +68,7 @@
     <string name="map_my_location">내 위치</string>
     <string name="map_research_here">이 지역에서 다시 검색</string>
     <string name="map_no_results">이 지역엔 표시할 장소가 없어요</string>
+    <string name="map_load_failed">장소를 불러오지 못했어요</string>
     <string name="map_seeding">장소 데이터를 준비하고 있어요…</string>
     <string name="map_search_no_result_format">\'%1$s\' 검색 결과가 없어요</string>
     <string name="map_cluster_places_format">이 위치의 장소 %1$d곳</string>

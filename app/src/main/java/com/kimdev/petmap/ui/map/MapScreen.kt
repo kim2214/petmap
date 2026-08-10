@@ -9,15 +9,21 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
@@ -30,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -48,11 +55,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
@@ -62,6 +71,7 @@ import com.kimdev.petmap.R
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.domain.util.distanceMeters
 import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.LocationSettingsDialog
@@ -91,7 +101,9 @@ import com.naver.maps.map.compose.rememberFusedLocationSource
 import com.naver.maps.map.NaverMap as NaverMapSdk
 import com.naver.maps.map.overlay.OverlayImage
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 
 @OptIn(
@@ -103,9 +115,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun MapScreen(
     onPlaceClick: (String) -> Unit,
+    reselects: Flow<Unit> = emptyFlow(),
     viewModel: MapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
 
     // 마커 탭 시 미리보기할 장소
     var previewPlace by remember { mutableStateOf<Place?>(null) }
@@ -185,7 +199,24 @@ fun MapScreen(
                 }
                 MapEvent.NoResults ->
                     snackbarHostState.showSnackbar(resources.getString(R.string.map_no_results))
+                MapEvent.LoadFailed -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = resources.getString(R.string.map_load_failed),
+                        actionLabel = resources.getString(R.string.action_retry),
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        val pos = cameraPositionState.position
+                        viewModel.researchHere(pos.target.latitude, pos.target.longitude, pos.zoom)
+                    }
+                }
             }
+        }
+    }
+
+    // 하단 탭 "지도" 재선택 → 내 위치로 재센터링(내 위치 FAB 와 동일한 Follow 전환)
+    LaunchedEffect(granted) {
+        reselects.collect {
+            if (granted) trackingMode = LocationTrackingMode.Follow
         }
     }
 
@@ -234,6 +265,11 @@ fun MapScreen(
                 isNightModeEnabled = isDarkTheme,
             ),
             uiSettings = MapUiSettings(isLocationButtonEnabled = false),
+            // 지도가 상태바까지 풀블리드라 SDK 컨트롤(나침반 등)이 검색바 뒤에 깔린다.
+            // 검색바 높이만큼 내려 접근 가능하게 하고, 카메라 이동도 가시 영역 기준으로 센터링한다.
+            contentPadding = PaddingValues(
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 76.dp,
+            ),
         ) {
             // 사용자가 지도를 팬하면 SDK 가 Follow → NoFollow 로 스스로 전환하지만 Compose 상태는
             // Follow 로 남는다. 그 상태에서 "내 위치" FAB 가 Follow 를 재지정해도 값이 같아 SDK 에
@@ -255,6 +291,8 @@ fun MapScreen(
                         Marker(
                             state = rememberUpdatedMarkerState(LatLng(single.lat, single.lng)),
                             captionText = single.name,
+                            // 밀집 지역에서 장소명 캡션이 서로 겹쳐 읽을 수 없는 것을 방지
+                            isHideCollidedCaptions = true,
                             icon = categoryMarkers.getValue(single.category),
                             anchor = MarkerAnchor,
                             onClick = {
@@ -306,6 +344,12 @@ fun MapScreen(
                     viewModel.clearSearch()
                     focusManager.clearFocus()
                 },
+                // 목록 화면과 동일하게 키보드 "검색" 키 지원 (기록 + 키보드 내리기)
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    if (state.searchQuery.isNotBlank()) viewModel.recordRecentSearch(state.searchQuery)
+                    focusManager.clearFocus()
+                }),
                 onFocusChanged = { searchFocused = it },
             )
 
@@ -483,12 +527,16 @@ fun MapScreen(
     // 마커 미리보기 바텀시트
     previewPlace?.let { place ->
         val sheetState = rememberModalBottomSheetState()
+        // 지도 조회 경로는 distanceMeters 를 채우지 않으므로 표시 직전에 계산한다(위치 없으면 생략)
+        val placeWithDistance = userLocation?.let { loc ->
+            place.copy(distanceMeters = distanceMeters(loc.lat, loc.lng, place.lat, place.lng))
+        } ?: place
         ModalBottomSheet(
             onDismissRequest = { previewPlace = null },
             sheetState = sheetState,
         ) {
             PlacePreviewSheet(
-                place = place,
+                place = placeWithDistance,
                 isFavorite = place.id in state.favoriteIds,
                 onToggleFavorite = { viewModel.toggleFavorite(place) },
                 onDirections = { context.openNaverDirections(place) },
@@ -597,7 +645,14 @@ private fun SearchResultRow(place: Place, onClick: () -> Unit) {
 
 @Composable
 private fun SeedingOverlay() {
-    Surface(modifier = Modifier.fillMaxSize()) {
+    // Surface 만으로는 히트 테스트를 막지 못해 오버레이 뒤의 검색창·지도가 눌린다 → 입력을 삼킨다.
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope { while (true) awaitPointerEvent() }
+            },
+    ) {
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.Center,
