@@ -36,6 +36,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -125,7 +126,11 @@ fun MapScreen(
         listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
     )
     val locationSource = rememberFusedLocationSource()
-    var trackingMode by remember { mutableStateOf(LocationTrackingMode.NoFollow) }
+    // rememberSaveable: 탭 전환·회전 시 NoFollow 로 초기화되면 아래 효과가 Follow 를 재지정해
+    // 보고 있던 지역에서 내 위치로 카메라가 튀어 버린다.
+    var trackingMode by rememberSaveable { mutableStateOf(LocationTrackingMode.NoFollow) }
+    // 권한이 "이미 있음"이 아니라 "처음 확인/방금 허용"일 때만 Follow 를 켜기 위한 플래그
+    var followInitialized by rememberSaveable { mutableStateOf(false) }
     val granted = locationPermissions.allPermissionsGranted
     // rememberSaveable: 탭 전환·회전으로 화면이 재구성될 때마다 거부한 권한을 다시 묻지 않는다.
     var requestedLocationOnce by rememberSaveable { mutableStateOf(false) }
@@ -154,9 +159,14 @@ fun MapScreen(
     }
 
     LaunchedEffect(granted) {
-        trackingMode = if (granted) LocationTrackingMode.Follow else LocationTrackingMode.NoFollow
-        // 권한이 있으면(첫 진입 또는 방금 허용) 현재 위치로 카메라를 1회 이동한다.
-        if (granted) viewModel.moveToCurrentLocationOnce()
+        if (granted && !followInitialized) {
+            followInitialized = true
+            trackingMode = LocationTrackingMode.Follow
+            // 첫 진입 또는 방금 허용 시에만 현재 위치로 카메라를 1회 이동한다.
+            viewModel.moveToCurrentLocationOnce()
+        } else if (!granted) {
+            trackingMode = LocationTrackingMode.NoFollow
+        }
     }
 
     // 일회성 이벤트는 한 곳에서 순서대로 처리한다. 상태+consume 방식은 consume 이 키를 바꿔
@@ -236,43 +246,47 @@ fun MapScreen(
                 map.addOnOptionChangeListener(listener)
                 onDispose { map.removeOnOptionChangeListener(listener) }
             }
+            // key(cluster.id): 재클러스터링으로 리스트 순서·개수가 바뀔 때 위치 기반 슬롯 재사용으로
+            // 마커가 "제자리에서 다른 장소로 변신"하며 깜빡이는 것을 막는다.
             state.clusters.forEach { cluster ->
-                val single = cluster.single
-                if (single != null) {
-                    Marker(
-                        state = rememberUpdatedMarkerState(LatLng(single.lat, single.lng)),
-                        captionText = single.name,
-                        icon = categoryMarkers.getValue(single.category),
-                        anchor = MarkerAnchor,
-                        onClick = {
-                            previewPlace = single
-                            true
-                        },
-                    )
-                } else {
-                    Marker(
-                        state = rememberUpdatedMarkerState(LatLng(cluster.lat, cluster.lng)),
-                        icon = clusterIcon(cluster.count),
-                        anchor = Offset(0.5f, 0.5f),
-                        onClick = {
-                            val z = cameraPositionState.position.zoom
-                            // 더 줌인해도 안 쪼개지면(같은 좌표/최대 줌) 목록으로 펼친다.
-                            // 저줌 집계 클러스터(members 비어 있음)는 펼칠 수 없으므로 항상 줌인한다.
-                            val canExpand = cluster.members.size >= 2 &&
-                                (z >= MAX_CLUSTER_ZOOM || cluster.spanMeters() < CO_LOCATED_M)
-                            if (canExpand) {
-                                clusterList = cluster.members
-                            } else {
-                                moveCameraTo(
-                                    cluster.lat,
-                                    cluster.lng,
-                                    (z + 2.0).coerceAtMost(MAX_CLUSTER_ZOOM),
-                                    CameraAnimation.Easing,
-                                )
-                            }
-                            true
-                        },
-                    )
+                key(cluster.id) {
+                    val single = cluster.single
+                    if (single != null) {
+                        Marker(
+                            state = rememberUpdatedMarkerState(LatLng(single.lat, single.lng)),
+                            captionText = single.name,
+                            icon = categoryMarkers.getValue(single.category),
+                            anchor = MarkerAnchor,
+                            onClick = {
+                                previewPlace = single
+                                true
+                            },
+                        )
+                    } else {
+                        Marker(
+                            state = rememberUpdatedMarkerState(LatLng(cluster.lat, cluster.lng)),
+                            icon = clusterIcon(cluster.count),
+                            anchor = Offset(0.5f, 0.5f),
+                            onClick = {
+                                val z = cameraPositionState.position.zoom
+                                // 더 줌인해도 안 쪼개지면(같은 좌표/최대 줌) 목록으로 펼친다.
+                                // 저줌 집계 클러스터(members 비어 있음)는 펼칠 수 없으므로 항상 줌인한다.
+                                val canExpand = cluster.members.size >= 2 &&
+                                    (z >= MAX_CLUSTER_ZOOM || cluster.spanMeters() < CO_LOCATED_M)
+                                if (canExpand) {
+                                    clusterList = cluster.members
+                                } else {
+                                    moveCameraTo(
+                                        cluster.lat,
+                                        cluster.lng,
+                                        (z + 2.0).coerceAtMost(MAX_CLUSTER_ZOOM),
+                                        CameraAnimation.Easing,
+                                    )
+                                }
+                                true
+                            },
+                        )
+                    }
                 }
             }
         }
