@@ -1,6 +1,7 @@
 package com.kimdev.petmap.data.mapper
 
 import com.kimdev.petmap.data.local.entity.FavoriteEntity
+import com.kimdev.petmap.data.local.entity.FavoriteWithPlace
 import com.kimdev.petmap.data.local.entity.PlaceEntity
 import com.kimdev.petmap.domain.model.PetInfo
 import com.kimdev.petmap.domain.model.Place
@@ -32,6 +33,14 @@ fun Place.toFavoriteEntity(): FavoriteEntity = FavoriteEntity(
     lng = lng,
     phone = phone,
 )
+
+/**
+ * 즐겨찾기 조인 결과 → 도메인.
+ * places 원본이 있으면 영업시간·반려동물 정보까지 완성된 모델을,
+ * 데이터 갱신으로 원본이 사라졌으면 저장 시점 스냅샷(최소 정보)을 돌려준다.
+ */
+fun FavoriteWithPlace.toDomain(): Place =
+    place?.toDomain()?.copy(isFavorite = true) ?: favorite.toDomain()
 
 /** 즐겨찾기 Entity → 도메인 (목록 표시용 최소 정보) */
 fun FavoriteEntity.toDomain(): Place = Place(
