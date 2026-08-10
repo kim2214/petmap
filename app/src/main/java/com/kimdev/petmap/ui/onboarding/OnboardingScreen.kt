@@ -1,6 +1,7 @@
 package com.kimdev.petmap.ui.onboarding
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -93,6 +94,16 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     val scope = rememberCoroutineScope()
     // currentPage 를 직접 읽으면 스와이프 매 프레임 재구성 → 마지막 페이지 진입 시에만 갱신.
     val isLast by remember { derivedStateOf { pagerState.currentPage == pages.lastIndex } }
+
+    // 뒤로가기: 이전 페이지로. 첫 페이지에선 건너뛰기와 동일하게 완료 처리 —
+    // 첫 실행에서 앱만 종료되고 완료 마킹이 안 돼 다음 실행에 온보딩이 또 뜨는 것을 막는다.
+    BackHandler {
+        if (pagerState.currentPage > 0) {
+            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+        } else {
+            onFinish()
+        }
+    }
 
     Column(
         modifier = Modifier

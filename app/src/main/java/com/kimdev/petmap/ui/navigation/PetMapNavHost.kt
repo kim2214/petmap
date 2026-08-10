@@ -34,10 +34,12 @@ fun PetMapNavHost(
         enterTransition = { fadeIn(tween(220)) },
         exitTransition = { fadeOut(tween(180)) },
     ) {
-        // launchSingleTop: 같은 프레임에 카드가 두 번 탭되면 같은 상세가 백스택에 중복 push 되어
-        // 뒤로가기를 두 번 눌러야 하는 문제를 막는다.
+        // launchSingleTop 은 "같은 라우트"의 중복만 막으므로, 서로 다른 두 카드를 같은 프레임에
+        // 탭하면 상세가 2장 쌓인다 → 이미 상세가 떠 있으면 추가 push 를 막는다.
         val openDetail: (String) -> Unit = { id ->
-            navController.navigate(Routes.detail(id)) { launchSingleTop = true }
+            if (navController.currentDestination?.route != Routes.DETAIL_PATTERN) {
+                navController.navigate(Routes.detail(id)) { launchSingleTop = true }
+            }
         }
 
         composable(Routes.MAP) {
@@ -82,12 +84,10 @@ fun PetMapNavHost(
             DetailScreen(
                 onBack = { navController.popBackStack() },
                 onShowOnMap = {
-                    // 지도 탭으로 전환 (포커스는 MapFocusBus 가 전달)
-                    navController.navigate(Routes.MAP) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                    // 지도 화면을 상세 "위에" 쌓는다 (포커스는 MapFocusBus 가 전달).
+                    // popUpTo(start)로 백스택을 비우면 위치만 확인하고 돌아올 목록/상세가
+                    // 사라져 뒤로가기가 곧장 앱 종료가 된다.
+                    navController.navigate(Routes.MAP) { launchSingleTop = true }
                 },
             )
         }
