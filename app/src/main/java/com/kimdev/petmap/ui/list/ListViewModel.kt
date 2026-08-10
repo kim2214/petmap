@@ -13,6 +13,7 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.OpeningHours
+import com.kimdev.petmap.domain.util.distanceMeters
 import com.kimdev.petmap.ui.common.SavedFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
@@ -150,7 +151,10 @@ class ListViewModel @Inject constructor(
             val fetched = if (key.sortByDistance && loc != null) {
                 repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, fetchLimit)
             } else {
-                repository.search(key.query, key.categories, fetchLimit)
+                val results = repository.search(key.query, key.categories, fetchLimit)
+                // 위치를 알면 거리순 정렬을 켜지 않아도 카드에 거리를 표시한다
+                if (loc == null) results
+                else results.map { it.copy(distanceMeters = distanceMeters(loc.lat, loc.lng, it.lat, it.lng)) }
             }
             val visible = if (key.openNowOnly) {
                 val now = LocalDateTime.now()
