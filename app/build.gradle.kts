@@ -149,8 +149,12 @@ ksp {
 // 스토어 업로드용 .aab 가 디버그 키로 만들어지는 사고 방지.
 // 로컬 검증이 목적이면 -PallowDebugSigning 으로 명시적으로 우회할 수 있다.
 tasks.matching { it.name == "bundleRelease" }.configureEach {
+    // doFirst 람다는 configuration cache 에 직렬화된다 — 빌드스크립트 객체(project 등)를
+    // 캡처하면 안 되므로 구성 시점에 Boolean 으로 평가해 값만 캡처한다.
+    val keystoreReady = hasReleaseKeystore
+    val allowDebugSigning = providers.gradleProperty("allowDebugSigning").isPresent
     doFirst {
-        if (!hasReleaseKeystore && !project.hasProperty("allowDebugSigning")) {
+        if (!keystoreReady && !allowDebugSigning) {
             throw GradleException(
                 "bundleRelease 는 릴리스 키스토어가 필요합니다. keystore.properties 를 설정하거나 " +
                     "로컬 검증용이면 -PallowDebugSigning 을 지정하세요."
