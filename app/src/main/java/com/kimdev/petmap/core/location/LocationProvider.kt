@@ -8,6 +8,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,10 +45,13 @@ class LocationProviderImpl @Inject constructor(
     @SuppressLint("MissingPermission")
     override suspend fun currentLocation(): UserLocation? =
         runCatching {
-            client.getCurrentLocation(
-                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                CancellationTokenSource().token,
-            ).await()?.let { UserLocation(it.latitude, it.longitude) }
+            // 실내·기내 모드 등 fix 를 못 잡는 상황에서 무기한 대기하지 않도록 타임아웃을 두고,
+            // 초과 시 토큰을 취소해 GPS 요청 자체를 정리한다.
+            val cts = CancellationTokenSource()
+            withTimeoutOrNull(CURRENT_LOCATION_TIMEOUT_MS) {
+                client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
+                    .await()?.let { UserLocation(it.latitude, it.longitude) }
+            }.also { if (it == null) cts.cancel() }
         }.getOrElse {
             Log.w(TAG, "currentLocation failed: ${it.message}")
             null
@@ -55,5 +59,6 @@ class LocationProviderImpl @Inject constructor(
 
     companion object {
         private const val TAG = "LocationProvider"
+        private const val CURRENT_LOCATION_TIMEOUT_MS = 8_000L
     }
 }
