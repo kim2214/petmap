@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -36,14 +37,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.kimdev.petmap.R
+import com.kimdev.petmap.ui.theme.LocalIsDarkTheme
 import kotlinx.coroutines.launch
 
 /** 첫 실행 여부 플래그 (SharedPreferences) */
@@ -64,7 +69,10 @@ private data class OnboardingPage(
     val icon: ImageVector,
     @StringRes val titleRes: Int,
     @StringRes val descRes: Int,
-    val accent: Color,
+    // 다크 배경에선 중간 명도 원색의 대비가 떨어지므로 밝힌 변형을 함께 정의한다.
+    // (라이트 값은 테마 primary·카테고리 팔레트와 맞춘 색)
+    val accentLight: Color,
+    val accentDark: Color,
 )
 
 private val pages = listOf(
@@ -72,19 +80,22 @@ private val pages = listOf(
         icon = Icons.Filled.Map,
         titleRes = R.string.onboarding_page1_title,
         descRes = R.string.onboarding_page1_desc,
-        accent = Color(0xFF22A75A),
+        accentLight = Color(0xFF22A75A),
+        accentDark = Color(0xFF6FDB91),
     ),
     OnboardingPage(
         icon = Icons.Filled.FilterAlt,
         titleRes = R.string.onboarding_page2_title,
         descRes = R.string.onboarding_page2_desc,
-        accent = Color(0xFF3D8BD4),
+        accentLight = Color(0xFF3D8BD4),
+        accentDark = Color(0xFF85BCEB),
     ),
     OnboardingPage(
         icon = Icons.Filled.Pets,
         titleRes = R.string.onboarding_page3_title,
         descRes = R.string.onboarding_page3_desc,
-        accent = Color(0xFFF2913C),
+        accentLight = Color(0xFFF2913C),
+        accentDark = Color(0xFFF6B678),
     ),
 )
 
@@ -112,11 +123,15 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             .systemBarsPadding()
             .padding(24.dp),
     ) {
-        // 건너뛰기
+        // 건너뛰기 — 마지막 페이지에선 "시작하기"와 CTA 가 중복되므로 숨긴다
+        // (alpha 로 숨겨 자리는 유지 → 페이저 높이가 튀지 않고, disabled 로 탭·포커스도 차단)
         Box(modifier = Modifier.fillMaxWidth()) {
             TextButton(
                 onClick = onFinish,
-                modifier = Modifier.align(Alignment.CenterEnd),
+                enabled = !isLast,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .alpha(if (isLast) 0f else 1f),
             ) { Text(stringResource(R.string.onboarding_skip)) }
         }
 
@@ -130,11 +145,18 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         }
 
         // 페이지 인디케이터
+        val pageDesc = stringResource(
+            R.string.onboarding_page_indicator_format,
+            pagerState.currentPage + 1,
+            pages.size,
+        )
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
                 .padding(vertical = 24.dp)
-                .align(Alignment.CenterHorizontally),
+                .align(Alignment.CenterHorizontally)
+                // 점들은 장식이므로 진행도를 텍스트로 대신 읽어준다
+                .semantics { contentDescription = pageDesc },
         ) {
             repeat(pages.size) { i ->
                 val selected = pagerState.currentPage == i
@@ -161,7 +183,8 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
+                // 고정 height 는 큰 글꼴 배율에서 텍스트가 잘린다
+                .heightIn(min = 52.dp),
         ) {
             Text(stringResource(if (isLast) R.string.onboarding_start else R.string.onboarding_next))
         }
@@ -170,6 +193,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
 
 @Composable
 private fun PageContent(page: OnboardingPage) {
+    val accent = if (LocalIsDarkTheme.current) page.accentDark else page.accentLight
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -179,13 +203,13 @@ private fun PageContent(page: OnboardingPage) {
             modifier = Modifier
                 .size(160.dp)
                 .clip(CircleShape)
-                .background(page.accent.copy(alpha = 0.15f)),
+                .background(accent.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 page.icon,
                 contentDescription = null,
-                tint = page.accent,
+                tint = accent,
                 modifier = Modifier.size(80.dp),
             )
         }

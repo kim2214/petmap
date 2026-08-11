@@ -169,7 +169,8 @@ private fun PetMapApp(tabReselectBus: TabReselectBus) {
                                         tint = Color.Unspecified, // 컬러 일러스트 원본 색 유지
                                         modifier = Modifier
                                             .size(26.dp)
-                                            .alpha(if (selected) 1f else 0.5f), // 비선택은 흐리게 de-emphasis
+                                            // 비선택 de-emphasis. 0.5 는 다크 배경에서 대비가 부족했다
+                                            .alpha(if (selected) 1f else 0.72f),
                                     )
                                 },
                                 label = { Text(stringResource(dest.labelRes)) },

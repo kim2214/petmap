@@ -2,6 +2,7 @@ package com.kimdev.petmap.ui.settings
 
 import android.app.Activity
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,6 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -86,7 +90,9 @@ fun SettingsScreen(
         Text(
             stringResource(R.string.nav_settings),
             style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 8.dp),
+            modifier = Modifier
+                .padding(start = 20.dp, top = 24.dp, bottom = 8.dp)
+                .semantics { heading() },
         )
 
         SectionTitle(stringResource(R.string.settings_section_screen))
@@ -160,23 +166,28 @@ private fun ThemeModeDialog(
         title = { Text(stringResource(R.string.settings_theme)) },
         text = {
             Column {
+                // selectable + null onClick: 행과 라디오가 별개 타깃으로 두 번 읽히지 않게
+                // 하나의 라디오버튼 시맨틱으로 병합한다.
                 ThemeMode.entries.forEach { mode ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSelect(mode) }
+                            .selectable(
+                                selected = mode == current,
+                                role = Role.RadioButton,
+                                onClick = { onSelect(mode) },
+                            )
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = mode == current, onClick = { onSelect(mode) })
+                        RadioButton(selected = mode == current, onClick = null)
                         Text(stringResource(mode.labelRes), modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
-        },
+        // 선택 즉시 적용·닫힘이라 확인 버튼이 없다. 닫기는 바깥 탭/뒤로가기로 충분.
+        confirmButton = {},
     )
 }
 
@@ -186,7 +197,9 @@ private fun SectionTitle(text: String) {
         text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 4.dp),
+        modifier = Modifier
+            .padding(start = 20.dp, top = 20.dp, bottom = 4.dp)
+            .semantics { heading() },
     )
 }
 

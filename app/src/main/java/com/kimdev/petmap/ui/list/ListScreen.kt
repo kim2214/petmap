@@ -44,6 +44,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.R
@@ -138,7 +140,9 @@ fun ListScreen(
         Text(
             stringResource(R.string.nav_list),
             style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 4.dp),
+            modifier = Modifier
+                .padding(start = 20.dp, top = 24.dp, bottom = 4.dp)
+                .semantics { heading() },
         )
         SearchTextField(
             value = state.query,

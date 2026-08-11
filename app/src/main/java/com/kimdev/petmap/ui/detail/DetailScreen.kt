@@ -49,14 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import com.kimdev.petmap.ui.theme.LocalIsDarkTheme
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraPosition
@@ -95,7 +97,13 @@ fun DetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(place?.name ?: stringResource(R.string.detail_title_fallback), maxLines = 1) },
+                title = {
+                    Text(
+                        place?.name ?: stringResource(R.string.detail_title_fallback),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
@@ -196,12 +204,19 @@ private fun DetailContent(
                 place.roadAddress,
                 tint = accent,
                 onClick = { context.copyToClipboard(addressLabel, place.roadAddress) },
+                onClickLabel = stringResource(R.string.row_action_copy_address),
             )
             place.operatingTime?.let { InfoRow(Icons.Filled.Schedule, it, tint = accent) }
             place.closedDays?.let { InfoRow(Icons.Filled.CalendarMonth, stringResource(R.string.closed_days_format, it), tint = accent) }
             // 상단 전화 버튼과 별개로, 번호 행 자체도 탭하면 다이얼로 연결 (홈페이지 행과 동작 일관)
             place.phone?.let { phone ->
-                InfoRow(Icons.Filled.Phone, phone, tint = accent, onClick = { context.dialPhone(phone) })
+                InfoRow(
+                    Icons.Filled.Phone,
+                    phone,
+                    tint = accent,
+                    onClick = { context.dialPhone(phone) },
+                    onClickLabel = stringResource(R.string.row_action_call),
+                )
             }
             place.homepage?.let { hp ->
                 InfoRow(
@@ -211,6 +226,7 @@ private fun DetailContent(
                     underline = true,
                     tint = accent,
                     onClick = { context.openUrl(hp) },
+                    onClickLabel = stringResource(R.string.row_action_open_homepage),
                 )
             }
 
@@ -290,7 +306,7 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
         position = CameraPosition(LatLng(place.lat, place.lng), 15.0)
     }
     // 시스템 설정이 아니라 앱에 적용된 테마(설정에서 강제 가능)에 맞춰 야간 모드를 켠다.
-    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val isDarkTheme = LocalIsDarkTheme.current
     val mapContentDesc = stringResource(R.string.detail_map_content_desc_format, place.name)
     Box(
         modifier = Modifier
@@ -350,11 +366,19 @@ private fun InfoRow(
     underline: Boolean = false,
     tint: Color = MaterialTheme.colorScheme.primary,
     onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .then(
+                if (onClick != null) {
+                    // onClickLabel: TalkBack 이 "두 번 탭하여 주소 복사"처럼 동작을 읽어준다
+                    Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel) { onClick() }
+                } else {
+                    Modifier
+                }
+            )
             // 탭 가능한 행(주소 복사·전화·홈페이지)의 접근성 최소 터치 타깃 확보
             .heightIn(min = 48.dp)
             .padding(vertical = 8.dp),

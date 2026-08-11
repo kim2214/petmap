@@ -88,7 +88,8 @@ fun RecentSearchList(
                 IconButton(onClick = { onRemove(term) }) {
                     Icon(
                         Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.action_delete),
+                        // 어떤 항목의 삭제인지 특정해 읽어준다 (모든 버튼이 "삭제"로 동일하게 읽히지 않게)
+                        contentDescription = stringResource(R.string.recent_search_delete_format, term),
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(18.dp),
                     )

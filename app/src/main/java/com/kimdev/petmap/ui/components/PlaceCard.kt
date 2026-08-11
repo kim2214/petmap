@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,6 +35,7 @@ import com.kimdev.petmap.domain.util.formatDistance
 import com.kimdev.petmap.ui.common.rememberIsOpenNow
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun PlaceCard(
     place: Place,
     onClick: () -> Unit,
@@ -61,7 +64,8 @@ fun PlaceCard(
                 Text(
                     place.name,
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
+                    // 한국 상호는 "○○동물병원 ○○점"처럼 구분 정보가 뒤에 와서 1줄 말줄임이 치명적
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
@@ -72,8 +76,10 @@ fun PlaceCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                // FlowRow: 큰 글꼴 배율이나 긴 카테고리 라벨에서 뒤쪽 요소(영업중 뱃지)가
+                // 화면 밖으로 잘리는 대신 다음 줄로 흐르게 한다.
+                FlowRow(
+                    itemVerticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
@@ -135,6 +141,7 @@ fun CategoryTag(place: Place) {
 }
 
 /** 반려동물 동반 정보 뱃지 (소형견 가능 / 실내·실외 가능 등) */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PetBadges(place: Place) {
     val paw = place.petInfo.allowedPetSize?.let { stringResource(R.string.pet_size_format, it) }
@@ -146,8 +153,9 @@ private fun PetBadges(place: Place) {
         if (place.petInfo.outdoorAllowed) add(outdoorLabel)
     }.take(3)
     if (badges.isEmpty()) return
-    Row(
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.padding(top = 6.dp),
     ) {
         badges.forEach { text ->
@@ -160,6 +168,7 @@ private fun PetBadges(place: Place) {
                     text,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                 )
             }
