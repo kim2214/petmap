@@ -16,9 +16,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class FavoriteUiState(
-    /** 카테고리 필터가 적용된 목록 */
+    /** 카테고리·검색어 필터가 적용된 목록 */
     val favorites: List<Place> = emptyList(),
     val selectedCategories: Set<PlaceCategory> = emptySet(),
+    val query: String = "",
     /** 필터와 무관한 전체 즐겨찾기 수. 0 이면 "아직 없음", >0 인데 favorites 가 비면 "필터 결과 없음" */
     val totalCount: Int = 0,
     /** 첫 emit 전(초기값)엔 true. 데이터가 오기 전 "즐겨찾기 없음" 이 잘못 깜빡이는 것을 막는다. */
@@ -31,13 +32,21 @@ class FavoriteViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val selectedCategories = MutableStateFlow<Set<PlaceCategory>>(emptySet())
+    private val query = MutableStateFlow("")
 
     val uiState: StateFlow<FavoriteUiState> =
-        combine(repository.observeFavorites(), selectedCategories) { favorites, selected ->
+        combine(repository.observeFavorites(), selectedCategories, query) { favorites, selected, q ->
+            // 로컬 목록(수십~수백 건)이라 DB 검색 없이 이름/주소 부분 일치로 충분하다
+            val filtered = favorites
+                .filter { selected.isEmpty() || it.category in selected }
+                .filter {
+                    q.isBlank() || it.name.contains(q, ignoreCase = true) ||
+                        it.roadAddress.contains(q, ignoreCase = true)
+                }
             FavoriteUiState(
-                favorites = if (selected.isEmpty()) favorites
-                else favorites.filter { it.category in selected },
+                favorites = filtered,
                 selectedCategories = selected,
+                query = q,
                 totalCount = favorites.size,
                 isLoading = false,
             )
@@ -46,6 +55,10 @@ class FavoriteViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = FavoriteUiState(),
         )
+
+    fun onQueryChange(q: String) {
+        query.value = q
+    }
 
     fun toggleCategory(category: PlaceCategory) = selectedCategories.update {
         if (category in it) it - category else it + category

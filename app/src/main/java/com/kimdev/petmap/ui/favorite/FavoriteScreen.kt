@@ -46,6 +46,7 @@ import kotlinx.coroutines.launch
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.PlaceCard
+import com.kimdev.petmap.ui.components.SearchTextField
 
 @Composable
 fun FavoriteScreen(
@@ -101,13 +102,19 @@ fun FavoriteScreen(
                 )
             }
         }
-        // 즐겨찾기가 쌓이면 카테고리로 좁혀 볼 수 있게 한다 (하나도 없을 땐 숨김)
+        // 즐겨찾기가 쌓이면 검색·카테고리로 좁혀 볼 수 있게 한다 (하나도 없을 땐 숨김)
         if (state.totalCount > 0) {
+            SearchTextField(
+                value = state.query,
+                onValueChange = viewModel::onQueryChange,
+                onClear = { viewModel.onQueryChange("") },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
             CategoryFilterRow(
                 selected = state.selectedCategories,
                 onToggle = viewModel::toggleCategory,
                 onClearAll = viewModel::clearCategories,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -132,7 +139,12 @@ fun FavoriteScreen(
                     title = stringResource(R.string.favorite_filter_empty_title),
                     description = stringResource(R.string.favorite_filter_empty_desc),
                     action = {
-                        Button(onClick = viewModel::clearCategories) { Text(stringResource(R.string.action_reset_filter)) }
+                        // 0건의 원인(검색어/카테고리)에 맞는 복구 버튼
+                        if (state.query.isNotBlank()) {
+                            Button(onClick = { viewModel.onQueryChange("") }) { Text(stringResource(R.string.action_clear_search)) }
+                        } else {
+                            Button(onClick = viewModel::clearCategories) { Text(stringResource(R.string.action_reset_filter)) }
+                        }
                     },
                 )
 
