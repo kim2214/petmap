@@ -136,6 +136,9 @@ object OpeningHours {
     }
 
     private fun segmentAppliesToday(seg: String, today: Int): Boolean {
+        // "법정공휴일 10:00~19:00" 같은 공휴일 전용 구간은 특정 요일이 아니다 —
+        // "공휴일"의 '일' 글자가 아래 개별 요일 추출에서 일요일로 오인되는 것을 막는다.
+        if (seg.contains("공휴일")) return false
         if (seg.contains("매일")) return true
         if (seg.contains("평일")) return today in 0..4
         if (seg.contains("주말")) return today in 5..6

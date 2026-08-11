@@ -151,4 +151,13 @@ class OpeningHoursTest {
         assertEquals("24시간", table[0].hours)
         assertEquals("24시간", table[6].hours)
     }
+
+    @Test fun `법정공휴일 구간을 일요일 시간으로 오인하지 않음`() {
+        // "공휴일"의 '일' 글자가 요일 추출에서 일요일로 매칭되면 안 된다
+        val ot = "토~목 10:00~22:00, 법정공휴일 10:00~19:00"
+        val table = OpeningHours.weeklySchedule(ot, "매주 금요일")!!
+        assertEquals("10:00~22:00", table[6].hours)  // 일 — 공휴일 구간 제외
+        assertEquals(true, table[4].isClosed)        // 금 = 정기휴무
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(30, 20))) // 일 20시 → 영업중
+    }
 }
