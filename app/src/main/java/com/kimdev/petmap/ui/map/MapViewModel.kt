@@ -15,6 +15,7 @@ import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.ui.common.SavedFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -299,6 +300,9 @@ class MapViewModel @Inject constructor(
             }
             if (loaded.isEmpty()) _events.send(MapEvent.NoResults)
         }.onFailure { e ->
+            // 잡 취소(연속 카메라 이동·권한 허용 직후 재조회 등)는 실패가 아니다 —
+            // runCatching 이 CancellationException 까지 잡으면 LoadFailed 가 오발된다.
+            if (e is CancellationException) throw e
             Log.w(TAG, "getPlacesInBounds failed: ${e.message}")
             // 실패 시 "이 지역에서 다시 검색" 버튼을 다시 노출해 재시도 동선을 준다.
             _uiState.update { it.copy(isLoading = false, canResearch = true) }
@@ -339,6 +343,7 @@ class MapViewModel @Inject constructor(
             }
             if (cells.isEmpty()) _events.send(MapEvent.NoResults)
         }.onFailure { e ->
+            if (e is CancellationException) throw e
             Log.w(TAG, "getClusterCells failed: ${e.message}")
             _uiState.update { it.copy(isLoading = false, canResearch = true) }
             _events.send(MapEvent.LoadFailed)
