@@ -25,13 +25,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
@@ -99,6 +104,7 @@ import com.naver.maps.map.compose.DisposableMapEffect
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
 import com.naver.maps.map.compose.LocationTrackingMode
 import com.naver.maps.map.compose.MapProperties
+import com.naver.maps.map.compose.MapType
 import com.naver.maps.map.compose.MapUiSettings
 import com.naver.maps.map.compose.Marker
 import com.naver.maps.map.compose.NaverMap
@@ -150,6 +156,9 @@ fun MapScreen(
     // rememberSaveable: 탭 전환·회전 시 NoFollow 로 초기화되면 아래 효과가 Follow 를 재지정해
     // 보고 있던 지역에서 내 위치로 카메라가 튀어 버린다.
     var trackingMode by rememberSaveable { mutableStateOf(LocationTrackingMode.NoFollow) }
+    // 지도 유형 (기본/위성/지형). 공원·여행지 탐색 시 실제 지형 확인용.
+    var mapType by rememberSaveable { mutableStateOf(MapType.Basic) }
+    var showMapTypeMenu by remember { mutableStateOf(false) }
     // 권한이 "이미 있음"이 아니라 "처음 확인/방금 허용"일 때만 Follow 를 켜기 위한 플래그
     var followInitialized by rememberSaveable { mutableStateOf(false) }
     val granted = locationPermissions.allPermissionsGranted
@@ -269,7 +278,9 @@ fun MapScreen(
             locationSource = locationSource,
             properties = MapProperties(
                 locationTrackingMode = if (granted) trackingMode else LocationTrackingMode.None,
-                isNightModeEnabled = isDarkTheme,
+                // 야간 모드는 기본 지도에만 의미가 있다(위성/지형은 SDK 가 지원 안 함)
+                isNightModeEnabled = isDarkTheme && mapType == MapType.Basic,
+                mapType = mapType,
             ),
             uiSettings = MapUiSettings(isLocationButtonEnabled = false),
             // 지도가 상태바까지 풀블리드라 SDK 컨트롤(나침반 등)이 검색바 뒤에 깔린다.
@@ -461,24 +472,61 @@ fun MapScreen(
             }
         }
 
-        FloatingActionButton(
-            onClick = {
-                when {
-                    granted -> trackingMode = LocationTrackingMode.Follow
-                    locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
-                        requestedLocationOnce = true
-                        locationPermissions.launchMultiplePermissionRequest()
-                    }
-                    else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.primary,
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(Icons.Filled.MyLocation, contentDescription = stringResource(R.string.map_my_location))
+            Box {
+                SmallFloatingActionButton(
+                    onClick = { showMapTypeMenu = true },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ) {
+                    Icon(Icons.Filled.Layers, contentDescription = stringResource(R.string.map_type))
+                }
+                DropdownMenu(
+                    expanded = showMapTypeMenu,
+                    onDismissRequest = { showMapTypeMenu = false },
+                ) {
+                    listOf(
+                        MapType.Basic to R.string.map_type_basic,
+                        MapType.Hybrid to R.string.map_type_satellite, // 위성 + 도로/라벨
+                        MapType.Terrain to R.string.map_type_terrain,
+                    ).forEach { (type, labelRes) ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(labelRes)) },
+                            trailingIcon = if (mapType == type) {
+                                { Icon(Icons.Filled.Check, contentDescription = null) }
+                            } else {
+                                null
+                            },
+                            onClick = {
+                                mapType = type
+                                showMapTypeMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+            FloatingActionButton(
+                onClick = {
+                    when {
+                        granted -> trackingMode = LocationTrackingMode.Follow
+                        locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
+                            requestedLocationOnce = true
+                            locationPermissions.launchMultiplePermissionRequest()
+                        }
+                        else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Icon(Icons.Filled.MyLocation, contentDescription = stringResource(R.string.map_my_location))
+            }
         }
 
         when {
