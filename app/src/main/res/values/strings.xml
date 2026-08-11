@@ -101,6 +101,9 @@
 
     <!-- 즐겨찾기 화면 -->
     <string name="favorite_count_format">%1$d곳</string>
+    <!-- 목록 결과 개수. 페이징 상한이 있어 더 있을 수 있으면 + 표기 -->
+    <string name="list_count_format">%1$d곳</string>
+    <string name="list_count_more_format">%1$d+곳</string>
     <string name="favorite_empty_title">아직 즐겨찾기한 장소가 없어요</string>
     <string name="favorite_empty_desc">마음에 드는 곳의 ♡ 를 눌러 저장하면\n여기 모아서 볼 수 있어요.</string>
     <string name="favorite_explore">장소 둘러보기</string>

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -163,10 +164,13 @@ fun ListScreen(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
-        // 정렬/필터 토글
+        // 정렬/필터 토글 + 결과 개수
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             FilterChip(
                 selected = state.sortByDistance,
@@ -192,6 +196,18 @@ fun ListScreen(
                 label = { Text(stringResource(R.string.label_open_now)) },
                 leadingIcon = leadingCheck(state.openNowOnly),
             )
+            Spacer(modifier = Modifier.weight(1f))
+            // 검색어·필터를 좁힌 효과를 가늠할 수 있게 결과 개수를 보여준다
+            if (!state.isLoading && state.places.isNotEmpty()) {
+                val countRes =
+                    if (state.canLoadMore || state.reachedLimit) R.string.list_count_more_format
+                    else R.string.list_count_format
+                Text(
+                    stringResource(countRes, state.places.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
