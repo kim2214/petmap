@@ -54,13 +54,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.luminance
+import com.kimdev.petmap.ui.theme.LocalIsDarkTheme
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,9 +90,11 @@ import com.kimdev.petmap.ui.components.softColor
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.naver.maps.geometry.LatLng
+import com.kimdev.petmap.domain.model.PlaceCategory
 import com.naver.maps.map.CameraAnimation
 import com.naver.maps.map.CameraPosition
 import com.naver.maps.map.CameraUpdate
+import com.naver.maps.map.compose.CameraPositionState
 import com.naver.maps.map.compose.DisposableMapEffect
 import com.naver.maps.map.compose.ExperimentalNaverMapApi
 import com.naver.maps.map.compose.LocationTrackingMode
@@ -155,7 +162,7 @@ fun MapScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     // 시스템 설정이 아니라 앱에 적용된 테마(설정에서 강제 가능)에 맞춰 지도 야간 모드를 켠다.
-    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val isDarkTheme = LocalIsDarkTheme.current
 
     // 카메라를 부드럽게 이동. 화면 스코프에서 실행해 호출부(효과/콜백)가 끝나도 애니메이션이 끊기지 않는다.
     fun moveCameraTo(lat: Double, lng: Double, zoom: Double, animation: CameraAnimation = CameraAnimation.Fly) {
@@ -282,51 +289,17 @@ fun MapScreen(
                 map.addOnOptionChangeListener(listener)
                 onDispose { map.removeOnOptionChangeListener(listener) }
             }
-            // key(cluster.id): 재클러스터링으로 리스트 순서·개수가 바뀔 때 위치 기반 슬롯 재사용으로
-            // 마커가 "제자리에서 다른 장소로 변신"하며 깜빡이는 것을 막는다.
-            state.clusters.forEach { cluster ->
-                key(cluster.id) {
-                    val single = cluster.single
-                    if (single != null) {
-                        Marker(
-                            state = rememberUpdatedMarkerState(LatLng(single.lat, single.lng)),
-                            captionText = single.name,
-                            // 밀집 지역에서 장소명 캡션이 서로 겹쳐 읽을 수 없는 것을 방지
-                            isHideCollidedCaptions = true,
-                            icon = categoryMarkers.getValue(single.category),
-                            anchor = MarkerAnchor,
-                            onClick = {
-                                previewPlace = single
-                                true
-                            },
-                        )
-                    } else {
-                        Marker(
-                            state = rememberUpdatedMarkerState(LatLng(cluster.lat, cluster.lng)),
-                            icon = clusterIcon(cluster.count),
-                            anchor = Offset(0.5f, 0.5f),
-                            onClick = {
-                                val z = cameraPositionState.position.zoom
-                                // 더 줌인해도 안 쪼개지면(같은 좌표/최대 줌) 목록으로 펼친다.
-                                // 저줌 집계 클러스터(members 비어 있음)는 펼칠 수 없으므로 항상 줌인한다.
-                                val canExpand = cluster.members.size >= 2 &&
-                                    (z >= MAX_CLUSTER_ZOOM || cluster.spanMeters() < CO_LOCATED_M)
-                                if (canExpand) {
-                                    clusterList = cluster.members
-                                } else {
-                                    moveCameraTo(
-                                        cluster.lat,
-                                        cluster.lng,
-                                        (z + 2.0).coerceAtMost(MAX_CLUSTER_ZOOM),
-                                        CameraAnimation.Easing,
-                                    )
-                                }
-                                true
-                            },
-                        )
-                    }
-                }
-            }
+            // 별도 컴포저블로 분리: MapUiState 의 다른 필드(검색어 타이핑, favoriteIds 등)가
+            // 바뀔 때마다 모든 마커가 재조합되는 것을 막는다. clusters 인스턴스가 같으면 스킵된다.
+            MapMarkers(
+                clusters = state.clusters,
+                categoryMarkers = categoryMarkers,
+                clusterIcon = { clusterIcon(it) },
+                cameraPositionState = cameraPositionState,
+                onSingleClick = { previewPlace = it },
+                onExpandCluster = { clusterList = it },
+                onZoomTo = { lat, lng, zoom -> moveCameraTo(lat, lng, zoom, CameraAnimation.Easing) },
+            )
         }
 
         // 상단 오버레이: 검색바 + (자동완성 결과 | 카테고리 칩)
@@ -460,7 +433,11 @@ fun MapScreen(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(top = 10.dp)
-                        .clickable {
+                        // 지도 갱신의 유일한 수동 수단 — 스크린리더에 버튼으로 읽히게 한다
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = stringResource(R.string.map_research_here),
+                        ) {
                             val pos = cameraPositionState.position
                             viewModel.researchHere(pos.target.latitude, pos.target.longitude, pos.zoom)
                         },
@@ -506,12 +483,19 @@ fun MapScreen(
 
         when {
             state.isSeeding -> SeedingOverlay()
-            state.isLoading -> CircularProgressIndicator(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(16.dp)
-            )
+            state.isLoading -> {
+                val loadingDesc = stringResource(R.string.map_loading)
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(16.dp)
+                        .semantics {
+                            contentDescription = loadingDesc
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                )
+            }
         }
 
         SnackbarHost(
@@ -602,12 +586,71 @@ private const val INITIAL_LOCATION_ZOOM = 15.0
 // "지도에서 보기"로 특정 장소를 비출 때의 줌.
 private const val FOCUS_ZOOM = 16.0
 
+/**
+ * 지도 위 마커/클러스터 렌더링. [MapScreen] 본문에서 분리해, 지도와 무관한 상태 변경
+ * (검색어 타이핑 등)이 마커 전체 재조합으로 번지지 않게 한다.
+ * key(cluster.id): 재클러스터링으로 리스트 순서·개수가 바뀔 때 위치 기반 슬롯 재사용으로
+ * 마커가 "제자리에서 다른 장소로 변신"하며 깜빡이는 것을 막는다.
+ */
+@OptIn(ExperimentalNaverMapApi::class)
+@Composable
+private fun MapMarkers(
+    clusters: List<MapCluster>,
+    categoryMarkers: Map<PlaceCategory, OverlayImage>,
+    clusterIcon: (Int) -> OverlayImage,
+    cameraPositionState: CameraPositionState,
+    onSingleClick: (Place) -> Unit,
+    onExpandCluster: (List<Place>) -> Unit,
+    onZoomTo: (lat: Double, lng: Double, zoom: Double) -> Unit,
+) {
+    clusters.forEach { cluster ->
+        key(cluster.id) {
+            val single = cluster.single
+            if (single != null) {
+                Marker(
+                    state = rememberUpdatedMarkerState(LatLng(single.lat, single.lng)),
+                    captionText = single.name,
+                    // 밀집 지역에서 장소명 캡션이 서로 겹쳐 읽을 수 없는 것을 방지
+                    isHideCollidedCaptions = true,
+                    icon = categoryMarkers.getValue(single.category),
+                    anchor = MarkerAnchor,
+                    onClick = {
+                        onSingleClick(single)
+                        true
+                    },
+                )
+            } else {
+                Marker(
+                    state = rememberUpdatedMarkerState(LatLng(cluster.lat, cluster.lng)),
+                    icon = clusterIcon(cluster.count),
+                    anchor = Offset(0.5f, 0.5f),
+                    onClick = {
+                        val z = cameraPositionState.position.zoom
+                        // 더 줌인해도 안 쪼개지면(같은 좌표/최대 줌) 목록으로 펼친다.
+                        // 저줌 집계 클러스터(members 비어 있음)는 펼칠 수 없으므로 항상 줌인한다.
+                        val canExpand = cluster.members.size >= 2 &&
+                            (z >= MAX_CLUSTER_ZOOM || cluster.spanMeters() < CO_LOCATED_M)
+                        if (canExpand) {
+                            onExpandCluster(cluster.members)
+                        } else {
+                            onZoomTo(cluster.lat, cluster.lng, (z + 2.0).coerceAtMost(MAX_CLUSTER_ZOOM))
+                        }
+                        true
+                    },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun SearchResultRow(place: Place, onClick: () -> Unit) {
     androidx.compose.foundation.layout.Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            // 스크린리더가 행 전체를 하나의 버튼(이름+주소)으로 읽게 한다
+            .clickable(role = Role.Button) { onClick() }
+            .semantics(mergeDescendants = true) {}
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
