@@ -21,8 +21,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import com.kimdev.petmap.domain.model.PlaceCategory
-import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
+import com.kimdev.petmap.ui.components.markerColor
 import com.naver.maps.map.overlay.OverlayImage
 import kotlin.math.acos
 import kotlin.math.ceil
@@ -48,7 +48,7 @@ fun rememberCategoryMarkers(): Map<PlaceCategory, OverlayImage> {
     return remember(density, layoutDirection, painters) {
         PlaceCategory.values().associateWith { category ->
             OverlayImage.fromBitmap(
-                renderMarkerBitmap(category.color, painters.getValue(category), density, layoutDirection),
+                renderMarkerBitmap(category.markerColor, painters.getValue(category), density, layoutDirection),
             )
         }
     }

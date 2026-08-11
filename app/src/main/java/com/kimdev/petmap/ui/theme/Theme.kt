@@ -7,6 +7,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
@@ -28,6 +29,15 @@ private val LightColors = lightColorScheme(
     surfaceVariant = WarmVariant,
     onSurfaceVariant = OnWarmVariant,
     outline = OutlineLight,
+    outlineVariant = OutlineVariantLight,
+    surfaceContainerLowest = CardSurface,
+    surfaceContainerLow = ContainerLow,
+    surfaceContainer = Container,
+    surfaceContainerHigh = ContainerHigh,
+    surfaceContainerHighest = ContainerHighest,
+    inverseSurface = InverseSurfaceLight,
+    inverseOnSurface = InverseOnSurfaceLight,
+    inversePrimary = GreenDark,
 )
 
 private val DarkColors = darkColorScheme(
@@ -49,7 +59,23 @@ private val DarkColors = darkColorScheme(
     onSurface = Color(0xFFE3E3DB),
     surfaceVariant = NightVariant,
     onSurfaceVariant = OnNightVariant,
+    outline = OutlineDark,
+    outlineVariant = OutlineVariantDark,
+    surfaceContainerLowest = NightBg,
+    surfaceContainerLow = NightContainerLow,
+    surfaceContainer = NightContainer,
+    surfaceContainerHigh = NightContainerHigh,
+    surfaceContainerHighest = NightContainerHighest,
+    inverseSurface = InverseSurfaceDark,
+    inverseOnSurface = InverseOnSurfaceDark,
+    inversePrimary = Green40,
 )
+
+/**
+ * 앱에 실제 적용된 다크 여부. 설정에서 라이트/다크를 강제할 수 있으므로
+ * `isSystemInDarkTheme()` 이나 배경 luminance 추정 대신 이 값을 쓴다.
+ */
+val LocalIsDarkTheme = staticCompositionLocalOf { false }
 
 /**
  * 브랜드 그린/크림 테마. 디바이스 다이내믹 컬러 대신 브랜드 색을 항상 적용한다.
@@ -66,6 +92,7 @@ fun PetMapTheme(
         // 스타일을 지정하지 않은 Text 도 나눔스퀘어라운드를 쓰도록 전역 기본값 제공
         CompositionLocalProvider(
             LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = NanumSquareRound),
+            LocalIsDarkTheme provides darkTheme,
             content = content,
         )
     }
