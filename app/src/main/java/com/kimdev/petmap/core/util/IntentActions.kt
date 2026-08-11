@@ -52,10 +52,11 @@ fun Context.sharePlace(place: Place) {
     safeStart(Intent.createChooser(send, getString(R.string.action_share)))
 }
 
-/** 메일 앱으로 문의 보내기 */
-fun Context.sendEmail(address: String, subject: String = "") {
+/** 메일 앱으로 문의 보내기. [body] 를 주면 본문이 미리 채워진다(정보 오류 신고 등). */
+fun Context.sendEmail(address: String, subject: String = "", body: String = "") {
     val intent = Intent(Intent.ACTION_SENDTO, "mailto:$address".toUri()).apply {
         if (subject.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, subject)
+        if (body.isNotEmpty()) putExtra(Intent.EXTRA_TEXT, body)
     }
     safeStart(intent)
 }

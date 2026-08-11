@@ -111,6 +111,25 @@
     <string name="section_info">정보</string>
     <string name="section_pet_info">반려동물 동반 정보</string>
     <string name="closed_days_format">휴무 %1$s</string>
+    <!-- 요일별 영업시간 표 -->
+    <string-array name="weekday_labels">
+        <item>월</item>
+        <item>화</item>
+        <item>수</item>
+        <item>목</item>
+        <item>금</item>
+        <item>토</item>
+        <item>일</item>
+    </string-array>
+    <string name="hours_closed_day">정기휴무</string>
+    <string name="hours_unknown">정보 없음</string>
+    <string name="hours_break_format">브레이크 %1$s</string>
+    <string name="hours_expand">요일별 영업시간 펼치기</string>
+    <string name="hours_collapse">요일별 영업시간 접기</string>
+    <!-- 정보 오류 신고 -->
+    <string name="report_wrong_info">정보가 달라요</string>
+    <string name="report_email_subject_format">[PetMap] 정보 오류 신고: %1$s</string>
+    <string name="report_email_body_format">장소: %1$s\nID: %2$s\n주소: %3$s\n\n어떤 정보가 실제와 다른가요?\n</string>
     <string name="operating_time_format">운영 %1$s</string>
     <string name="clipboard_label_address">주소</string>
     <!-- 탭 가능한 정보 행의 동작 라벨 (TalkBack "두 번 탭하여 ○○") -->

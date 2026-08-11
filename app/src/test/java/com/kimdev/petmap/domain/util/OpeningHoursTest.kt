@@ -117,4 +117,38 @@ class OpeningHoursTest {
         assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 3)))   // 월 새벽
         assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 10)))   // 월 오전
     }
+
+    // ===== weeklySchedule (요일별 표) =====
+
+    @Test fun `요일 표 - 요일범위와 별도 토요일 시간`() {
+        val table = OpeningHours.weeklySchedule("월~금 09:00~19:00, 토 09:00~14:00", "매주 일요일")!!
+        assertEquals("09:00~19:00", table[0].hours)  // 월
+        assertEquals("09:00~19:00", table[4].hours)  // 금
+        assertEquals("09:00~14:00", table[5].hours)  // 토
+        assertEquals(true, table[6].isClosed)        // 일 = 정기휴무
+    }
+
+    @Test fun `요일 표 - 브레이크타임은 별도 필드로`() {
+        val table = OpeningHours.weeklySchedule("매일 11:00~21:00, 브레이크타임 15:00~17:00", null)!!
+        assertEquals("11:00~21:00", table[2].hours)
+        assertEquals(listOf("15:00~17:00"), table[2].breaks)
+    }
+
+    @Test fun `요일 표 - 주말 24시간 세그먼트`() {
+        val table = OpeningHours.weeklySchedule("평일 09:00~18:00, 주말 24시간", null)!!
+        assertEquals("09:00~18:00", table[0].hours)  // 월
+        assertEquals("24시간", table[5].hours)        // 토
+    }
+
+    @Test fun `요일 표 - 시간 패턴 없으면 null`() {
+        assertNull(OpeningHours.weeklySchedule("연중무휴", null))
+        assertNull(OpeningHours.weeklySchedule("문의 요망", null))
+        assertNull(OpeningHours.weeklySchedule(null, null))
+    }
+
+    @Test fun `요일 표 - 24시간 키워드만 있으면 전 요일 24시간`() {
+        val table = OpeningHours.weeklySchedule("24시간", null)!!
+        assertEquals("24시간", table[0].hours)
+        assertEquals("24시간", table[6].hours)
+    }
 }

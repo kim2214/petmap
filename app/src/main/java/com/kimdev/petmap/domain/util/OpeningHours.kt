@@ -24,11 +24,65 @@ object OpeningHours {
     // "연중무휴"는 휴무 없음의 신호이지 24시간 영업의 신호가 아니므로 시간표가 없을 때만 상시 영업으로 본다.
     private val ALWAYS_OPEN = listOf("24시간", "상시", "연중")
 
+    // 요일 표에 "24시간"으로 적어도 되는 키워드. "연중(무휴)"은 휴무 없음의 신호일 뿐
+    // 24시간 영업이 아니므로 제외한다.
+    private val ALWAYS_OPEN_TABLE = listOf("24시간", "상시")
+
+    /** 요일 표에서 상시 영업 세그먼트를 나타내는 표기 */
+    const val ALWAYS_OPEN_LABEL = "24시간"
+
     // 이 구간에 있으면 오히려 이용 불가(영업 구간으로 세면 안 됨)
     private val BREAK_KEYWORDS = listOf("브레이크", "휴게", "준비")
 
     // 정보성 표기 — 영업 구간도 휴게 구간도 아니므로 무시
     private val INFO_KEYWORDS = listOf("라스트오더", "주문마감", "입장마감")
+
+    /**
+     * 요일 하루치 표. [hours] 는 영업 구간 표기("09:00~18:00" 또는 "24시간"),
+     * [breaks] 는 브레이크/휴게 구간, [isClosed] 는 정기휴무 여부.
+     * hours 가 null 이고 휴무도 아니면 해당 요일 정보를 알 수 없다는 뜻.
+     */
+    data class DayHours(
+        val day: Int, // 0=월 .. 6=일
+        val hours: String?,
+        val breaks: List<String> = emptyList(),
+        val isClosed: Boolean = false,
+    )
+
+    /**
+     * 운영시간 원문을 요일별 표로 파싱한다(상세 화면 표시용).
+     * 시간 패턴이 전혀 없으면 표로 만들 수 없으므로 null (호출부는 원문을 그대로 표시).
+     */
+    fun weeklySchedule(operatingTime: String?, closedDays: String?): List<DayHours>? {
+        if (operatingTime.isNullOrBlank()) return null
+        if (!TIME.containsMatchIn(operatingTime) &&
+            ALWAYS_OPEN_TABLE.none { operatingTime.contains(it) }
+        ) {
+            return null
+        }
+        val segments = operatingTime.split(",")
+        return (0..6).map { day ->
+            val closed = closedDays != null && !closedDays.contains("무휴") &&
+                isClosedToday(closedDays, day)
+            val hours = segments
+                .filter { seg -> (BREAK_KEYWORDS + INFO_KEYWORDS).none { seg.contains(it) } }
+                .filter { segmentAppliesToday(it, day) }
+                .mapNotNull { seg ->
+                    TIME.find(seg)?.value
+                        ?: if (ALWAYS_OPEN_TABLE.any { seg.contains(it) }) ALWAYS_OPEN_LABEL else null
+                }
+            val breaks = segments
+                .filter { seg -> BREAK_KEYWORDS.any { seg.contains(it) } }
+                .filter { segmentAppliesToday(it, day) }
+                .mapNotNull { TIME.find(it)?.value }
+            DayHours(
+                day = day,
+                hours = hours.takeIf { it.isNotEmpty() }?.joinToString(", "),
+                breaks = breaks,
+                isClosed = closed,
+            )
+        }
+    }
 
     /** true=영업중, false=영업종료/휴무, null=정보없음·판단불가 */
     fun isOpenNow(operatingTime: String?, closedDays: String?, now: LocalDateTime): Boolean? {

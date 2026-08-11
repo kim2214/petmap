@@ -22,6 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Language
@@ -41,10 +44,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,11 +60,13 @@ import androidx.compose.ui.graphics.Color
 import com.kimdev.petmap.ui.theme.LocalIsDarkTheme
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,18 +81,22 @@ import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.compose.rememberUpdatedMarkerState
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.copyToClipboard
 import com.kimdev.petmap.core.util.dialPhone
+import com.kimdev.petmap.core.util.sendEmail
 import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sharePlace
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.R
+import com.kimdev.petmap.domain.util.OpeningHours
 import com.kimdev.petmap.ui.common.rememberIsOpenNow
 import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
 import com.kimdev.petmap.ui.components.labelRes
 import com.kimdev.petmap.ui.components.softColor
+import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -206,7 +220,17 @@ private fun DetailContent(
                 onClick = { context.copyToClipboard(addressLabel, place.roadAddress) },
                 onClickLabel = stringResource(R.string.row_action_copy_address),
             )
-            place.operatingTime?.let { InfoRow(Icons.Filled.Schedule, it, tint = accent) }
+            place.operatingTime?.let { ot ->
+                val schedule = remember(ot, place.closedDays) {
+                    OpeningHours.weeklySchedule(ot, place.closedDays)
+                }
+                // 요일별로 파싱되면 표로, 아니면(자유 서식) 원문 그대로
+                if (schedule == null) {
+                    InfoRow(Icons.Filled.Schedule, ot, tint = accent)
+                } else {
+                    OperatingHoursRows(schedule, tint = accent)
+                }
+            }
             place.closedDays?.let { InfoRow(Icons.Filled.CalendarMonth, stringResource(R.string.closed_days_format, it), tint = accent) }
             // 상단 전화 버튼과 별개로, 번호 행 자체도 탭하면 다이얼로 연결 (홈페이지 행과 동작 일관)
             place.phone?.let { phone ->
@@ -242,6 +266,32 @@ private fun DetailContent(
                     highlight = place.petInfo.outdoorAllowed,
                 )
                 place.petInfo.restriction?.let { Pill(it, highlight = false) }
+            }
+
+            // 공공데이터 특성상 오류가 불가피 → 사용자 제보로 보완하는 진입점.
+            // 장소 정보를 본문에 프리필해 사용자가 이름/주소를 옮겨 적지 않아도 된다.
+            val reportSubject = stringResource(R.string.report_email_subject_format, place.name)
+            val reportBody = stringResource(
+                R.string.report_email_body_format,
+                place.name,
+                place.id,
+                place.roadAddress,
+            )
+            TextButton(
+                onClick = { context.sendEmail(Constants.CONTACT_EMAIL, reportSubject, reportBody) },
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 12.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Flag,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    stringResource(R.string.report_wrong_info),
+                    modifier = Modifier.padding(start = 6.dp),
+                )
             }
         }
     }
@@ -395,6 +445,76 @@ private fun InfoRow(
             style = MaterialTheme.typography.bodyLarge,
             color = valueColor,
             textDecoration = if (underline) TextDecoration.Underline else null,
+            modifier = Modifier.padding(start = 12.dp),
+        )
+    }
+}
+
+/**
+ * 요일별 영업시간. 접힌 상태에선 오늘 요일만, 탭하면 월~일 7행으로 펼친다.
+ * 오늘 행은 굵게 강조, 정기휴무는 회색으로 표시한다.
+ */
+@Composable
+private fun OperatingHoursRows(schedule: List<OpeningHours.DayHours>, tint: Color) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val today = remember { LocalDateTime.now().dayOfWeek.value - 1 } // 0=월 .. 6=일
+    val dayLabels = stringArrayResource(R.array.weekday_labels)
+    val toggleLabel = stringResource(
+        if (expanded) R.string.hours_collapse else R.string.hours_expand
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClickLabel = toggleLabel) { expanded = !expanded }
+            .heightIn(min = 48.dp)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            Icons.Filled.Schedule,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(20.dp),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            val visible = if (expanded) schedule else listOf(schedule[today])
+            visible.forEach { day -> DayHoursLine(day, dayLabels[day.day], emphasized = day.day == today) }
+        }
+        Icon(
+            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun DayHoursLine(day: OpeningHours.DayHours, label: String, emphasized: Boolean) {
+    val hoursText = when {
+        day.isClosed -> stringResource(R.string.hours_closed_day)
+        day.hours == null -> stringResource(R.string.hours_unknown)
+        day.breaks.isEmpty() -> day.hours
+        else -> day.hours + " · " + stringResource(R.string.hours_break_format, day.breaks.joinToString(", "))
+    }
+    val dimmed = day.isClosed || day.hours == null
+    Row {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (emphasized) FontWeight.Bold else null,
+            color = if (dimmed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            hoursText,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (emphasized) FontWeight.Bold else null,
+            color = if (dimmed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(start = 12.dp),
         )
     }
