@@ -1,5 +1,6 @@
 package com.kimdev.petmap.ui.onboarding
 
+import android.Manifest
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -47,6 +49,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.kimdev.petmap.R
 import com.kimdev.petmap.ui.theme.LocalIsDarkTheme
 import kotlinx.coroutines.launch
@@ -97,14 +101,30 @@ private val pages = listOf(
         accentLight = Color(0xFFF2913C),
         accentDark = Color(0xFFF6B678),
     ),
+    // 위치 권한 사전 안내: 지도 화면에서 맥락 없이 튀어나오는 것보다 이유를 먼저 설명하면
+    // 허용률이 올라간다. 실제 요청은 마지막 "시작하기" 탭에서 이뤄진다.
+    OnboardingPage(
+        icon = Icons.Filled.MyLocation,
+        titleRes = R.string.onboarding_page4_title,
+        descRes = R.string.onboarding_page4_desc,
+        accentLight = Color(0xFF18A89B),
+        accentDark = Color(0xFF82D6CC),
+    ),
 )
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
     // currentPage 를 직접 읽으면 스와이프 매 프레임 재구성 → 마지막 페이지 진입 시에만 갱신.
     val isLast by remember { derivedStateOf { pagerState.currentPage == pages.lastIndex } }
+
+    // 마지막 페이지(위치 안내)의 "시작하기"에서 권한을 요청한다.
+    // 허용/거부와 무관하게 온보딩은 종료 — 거부해도 앱은 정상 동작한다(거리 기능만 제한).
+    val locationPermissions = rememberMultiplePermissionsState(
+        listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+    ) { onFinish() }
 
     // 뒤로가기: 이전 페이지로. 첫 페이지에선 건너뛰기와 동일하게 완료 처리 —
     // 첫 실행에서 앱만 종료되고 완료 마킹이 안 돼 다음 실행에 온보딩이 또 뜨는 것을 막는다.
@@ -178,8 +198,11 @@ fun OnboardingScreen(onFinish: () -> Unit) {
 
         Button(
             onClick = {
-                if (isLast) onFinish()
-                else scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                when {
+                    !isLast -> scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    locationPermissions.allPermissionsGranted -> onFinish()
+                    else -> locationPermissions.launchMultiplePermissionRequest() // 콜백에서 onFinish
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
