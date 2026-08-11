@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.AdUnits
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Replay
@@ -51,8 +52,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.BuildConfig
 import com.kimdev.petmap.R
 import com.kimdev.petmap.core.ads.AdsConsent
+import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sendEmail
+import com.kimdev.petmap.data.local.FontScale
 import com.kimdev.petmap.data.local.ThemeMode
 
 /** 테마 모드 표시 라벨 (data enum → UI 문자열). */
@@ -64,9 +67,18 @@ private val ThemeMode.labelRes: Int
         ThemeMode.DARK -> R.string.theme_dark
     }
 
+/** 글자 크기 표시 라벨. */
+@get:StringRes
+private val FontScale.labelRes: Int
+    get() = when (this) {
+        FontScale.NORMAL -> R.string.font_scale_normal
+        FontScale.LARGE -> R.string.font_scale_large
+        FontScale.EXTRA_LARGE -> R.string.font_scale_extra_large
+    }
+
 private const val PRIVACY_POLICY_URL =
     "https://kim2214.github.io/privacy-policy.html"
-private const val CONTACT_EMAIL = "kimdev0821@gmail.com"
+private const val CONTACT_EMAIL = Constants.CONTACT_EMAIL
 
 @Composable
 fun SettingsScreen(
@@ -78,6 +90,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
+    val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
+    var showFontScaleDialog by remember { mutableStateOf(false) }
     // EEA 등에서만 true. 이 경우 동의를 다시 변경할 진입점 제공이 Google 정책상 필수다.
     val adPrivacyRequired by AdsConsent.privacyOptionsRequired.collectAsStateWithLifecycle()
 
@@ -101,6 +115,11 @@ fun SettingsScreen(
             stringResource(R.string.settings_theme),
             subtitle = stringResource(themeMode.labelRes),
         ) { showThemeDialog = true }
+        SettingRow(
+            Icons.Filled.FormatSize,
+            stringResource(R.string.settings_font_scale),
+            subtitle = stringResource(fontScale.labelRes),
+        ) { showFontScaleDialog = true }
         SettingRow(
             Icons.Filled.Replay,
             stringResource(R.string.settings_replay_onboarding),
@@ -144,8 +163,11 @@ fun SettingsScreen(
     }
 
     if (showThemeDialog) {
-        ThemeModeDialog(
+        RadioDialog(
+            title = stringResource(R.string.settings_theme),
+            options = ThemeMode.entries,
             current = themeMode,
+            labelOf = { stringResource(it.labelRes) },
             onSelect = {
                 viewModel.setThemeMode(it)
                 showThemeDialog = false
@@ -153,35 +175,52 @@ fun SettingsScreen(
             onDismiss = { showThemeDialog = false },
         )
     }
+    if (showFontScaleDialog) {
+        RadioDialog(
+            title = stringResource(R.string.settings_font_scale),
+            options = FontScale.entries,
+            current = fontScale,
+            labelOf = { stringResource(it.labelRes) },
+            onSelect = {
+                viewModel.setFontScale(it)
+                showFontScaleDialog = false
+            },
+            onDismiss = { showFontScaleDialog = false },
+        )
+    }
 }
 
+/** 라디오 선택 다이얼로그 (테마·글자 크기 공용). 선택 즉시 적용되고 닫힌다. */
 @Composable
-private fun ThemeModeDialog(
-    current: ThemeMode,
-    onSelect: (ThemeMode) -> Unit,
+private fun <T> RadioDialog(
+    title: String,
+    options: List<T>,
+    current: T,
+    labelOf: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_theme)) },
+        title = { Text(title) },
         text = {
             Column {
                 // selectable + null onClick: 행과 라디오가 별개 타깃으로 두 번 읽히지 않게
                 // 하나의 라디오버튼 시맨틱으로 병합한다.
-                ThemeMode.entries.forEach { mode ->
+                options.forEach { option ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .selectable(
-                                selected = mode == current,
+                                selected = option == current,
                                 role = Role.RadioButton,
-                                onClick = { onSelect(mode) },
+                                onClick = { onSelect(option) },
                             )
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = mode == current, onClick = null)
-                        Text(stringResource(mode.labelRes), modifier = Modifier.padding(start = 8.dp))
+                        RadioButton(selected = option == current, onClick = null)
+                        Text(labelOf(option), modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             }

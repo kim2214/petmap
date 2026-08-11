@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,6 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.ads.AdsConsent
 import com.kimdev.petmap.core.common.TabReselectBus
 import com.kimdev.petmap.core.review.InAppReview
+import androidx.compose.ui.unit.Density
+import com.kimdev.petmap.data.local.FontScaleStore
 import com.kimdev.petmap.data.local.ThemeMode
 import com.kimdev.petmap.data.local.ThemeStore
 import com.kimdev.petmap.ui.components.BannerAd
@@ -59,6 +62,7 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var themeStore: ThemeStore
+    @Inject lateinit var fontScaleStore: FontScaleStore
     @Inject lateinit var tabReselectBus: TabReselectBus
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,16 +96,26 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
             PetMapTheme(darkTheme = darkTheme) {
-                var showOnboarding by rememberSaveable {
-                    mutableStateOf(!OnboardingPrefs.isCompleted(this@MainActivity))
-                }
-                if (showOnboarding) {
-                    OnboardingScreen(onFinish = {
-                        OnboardingPrefs.setCompleted(this@MainActivity)
-                        showOnboarding = false
-                    })
-                } else {
-                    PetMapApp(tabReselectBus)
+                // 앱 내 글자 크기 배율: 시스템 fontScale 위에 곱으로 적용
+                val fontScale by fontScaleStore.scale.collectAsStateWithLifecycle()
+                val density = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(
+                        density = density.density,
+                        fontScale = density.fontScale * fontScale.factor,
+                    ),
+                ) {
+                    var showOnboarding by rememberSaveable {
+                        mutableStateOf(!OnboardingPrefs.isCompleted(this@MainActivity))
+                    }
+                    if (showOnboarding) {
+                        OnboardingScreen(onFinish = {
+                            OnboardingPrefs.setCompleted(this@MainActivity)
+                            showOnboarding = false
+                        })
+                    } else {
+                        PetMapApp(tabReselectBus)
+                    }
                 }
             }
         }
