@@ -16,6 +16,7 @@ import com.kimdev.petmap.domain.util.OpeningHours
 import com.kimdev.petmap.domain.util.distanceMeters
 import com.kimdev.petmap.ui.common.SavedFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -178,6 +179,9 @@ class ListViewModel @Inject constructor(
                 )
             }
         }.onFailure { e ->
+            // 취소(조건 변경으로 이전 조회가 밀려남)는 실패가 아니다 — 삼키면 교체된 검색의
+            // 로딩 상태를 죽이고 isError 를 잘못 세운다(지도 쪽과 동일 패턴).
+            if (e is CancellationException) throw e
             Log.w(TAG, "search failed: ${e.message}")
             _uiState.update { it.copy(isLoading = false, isLoadingMore = false, isError = true) }
         }

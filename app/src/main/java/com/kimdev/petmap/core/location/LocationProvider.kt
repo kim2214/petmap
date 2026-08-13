@@ -7,6 +7,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -43,19 +44,25 @@ class LocationProviderImpl @Inject constructor(
         }
 
     @SuppressLint("MissingPermission")
-    override suspend fun currentLocation(): UserLocation? =
-        runCatching {
-            // 실내·기내 모드 등 fix 를 못 잡는 상황에서 무기한 대기하지 않도록 타임아웃을 두고,
-            // 초과 시 토큰을 취소해 GPS 요청 자체를 정리한다.
-            val cts = CancellationTokenSource()
+    override suspend fun currentLocation(): UserLocation? {
+        // 실내·기내 모드 등 fix 를 못 잡는 상황에서 무기한 대기하지 않도록 타임아웃을 둔다.
+        val cts = CancellationTokenSource()
+        return try {
             withTimeoutOrNull(CURRENT_LOCATION_TIMEOUT_MS) {
                 client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
                     .await()?.let { UserLocation(it.latitude, it.longitude) }
-            }.also { if (it == null) cts.cancel() }
-        }.getOrElse {
-            Log.w(TAG, "currentLocation failed: ${it.message}")
+            }
+        } catch (e: CancellationException) {
+            // 호출 코루틴 취소(화면 이탈 등)는 삼키지 않고 전파한다
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "currentLocation failed: ${e.message}")
             null
+        } finally {
+            // 타임아웃·외부 취소·실패 어느 경로든 GPS 요청을 정리한다(완료 후 cancel 은 no-op)
+            cts.cancel()
         }
+    }
 
     companion object {
         private const val TAG = "LocationProvider"
