@@ -10,14 +10,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -61,6 +59,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import com.kimdev.petmap.ui.theme.LocalIsDarkTheme
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -140,6 +140,8 @@ fun MapScreen(
     var clusterList by remember { mutableStateOf<List<Place>?>(null) }
     // 검색창 포커스 여부 (최근 검색어 표시용)
     var searchFocused by remember { mutableStateOf(false) }
+    // 검색바 하단(윈도우 px). 지도 contentPadding 을 하드코딩 대신 실측으로 잡는다.
+    var searchBarBottomPx by remember { mutableStateOf(0f) }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition(
@@ -189,12 +191,16 @@ fun MapScreen(
     }
 
     LaunchedEffect(granted) {
-        if (granted && !followInitialized) {
-            followInitialized = true
-            trackingMode = LocationTrackingMode.Follow
-            // 첫 진입 또는 방금 허용 시에만 현재 위치로 카메라를 1회 이동한다.
+        if (granted) {
+            // Follow 전환은 최초 1회만 (탭 전환·회전마다 보던 지역에서 내 위치로 튀지 않게)
+            if (!followInitialized) {
+                followInitialized = true
+                trackingMode = LocationTrackingMode.Follow
+            }
+            // 카메라 1회 이동은 ViewModel 이 관리한다 — 성공 전엔 재호출이 재시도가 되고
+            // (위치 못 잡은 콜드스타트), 성공 후엔 no-op 이라 카메라가 다시 튀지 않는다.
             viewModel.moveToCurrentLocationOnce()
-        } else if (!granted) {
+        } else {
             trackingMode = LocationTrackingMode.NoFollow
         }
     }
@@ -219,6 +225,9 @@ fun MapScreen(
                     val result = snackbarHostState.showSnackbar(
                         message = resources.getString(R.string.map_load_failed),
                         actionLabel = resources.getString(R.string.action_retry),
+                        // actionLabel 이 있으면 기본이 Indefinite — 이 수집기는 순차 처리라
+                        // 해제 불가 스낵바가 남은 이벤트(초기 카메라 이동 등)를 전부 막는다.
+                        duration = SnackbarDuration.Long,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
                         val pos = cameraPositionState.position
@@ -284,9 +293,10 @@ fun MapScreen(
             ),
             uiSettings = MapUiSettings(isLocationButtonEnabled = false),
             // 지도가 상태바까지 풀블리드라 SDK 컨트롤(나침반 등)이 검색바 뒤에 깔린다.
-            // 검색바 높이만큼 내려 접근 가능하게 하고, 카메라 이동도 가시 영역 기준으로 센터링한다.
+            // 검색바 하단을 실측해 내린다 — 높이를 하드코딩하면 글자 크기 배율(시스템·앱 설정)에
+            // 따라 검색바가 커질 때 다시 가려진다. 지도는 풀블리드라 윈도우 좌표 = 지도 좌표.
             contentPadding = PaddingValues(
-                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 76.dp,
+                top = with(LocalDensity.current) { searchBarBottomPx.toDp() },
             ),
         ) {
             // 사용자가 지도를 팬하면 SDK 가 Follow → NoFollow 로 스스로 전환하지만 Compose 상태는
@@ -335,6 +345,9 @@ fun MapScreen(
                     focusManager.clearFocus()
                 }),
                 onFocusChanged = { searchFocused = it },
+                modifier = Modifier.onGloballyPositioned {
+                    searchBarBottomPx = it.boundsInWindow().bottom
+                },
             )
 
             when {
