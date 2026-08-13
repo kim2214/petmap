@@ -160,4 +160,55 @@ class OpeningHoursTest {
         assertEquals(true, table[4].isClosed)        // 금 = 정기휴무
         assertEquals(true, OpeningHours.isOpenNow(ot, null, at(30, 20))) // 일 20시 → 영업중
     }
+
+    @Test fun `공휴일이 요일과 병기되면 요일 쪽으로 판정`() {
+        val ot = "주말·공휴일 10:00~18:00"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(29, 12)))  // 토 정오 → 영업중
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 12))) // 월 정오 → 종료
+    }
+
+    @Test fun `공휴일 전용 시간표만 있으면 표 대신 원문 폴백`() {
+        // 어느 요일에도 배정 불가 → weeklySchedule null (호출부가 원문 표시)
+        assertNull(OpeningHours.weeklySchedule("법정공휴일 10:00~19:00", null))
+    }
+
+    @Test fun `쉼표 없는 라스트오더 표기도 영업 구간을 잃지 않음`() {
+        val ot = "매일 10:00~22:00 라스트오더 21:00"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 12)))
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 23)))
+        assertEquals("10:00~22:00", OpeningHours.weeklySchedule(ot, null)!![0].hours)
+    }
+
+    @Test fun `쉼표 없는 브레이크타임 표기 - 영업 구간과 휴게 구간 분리`() {
+        val ot = "매일 11:00~21:00 브레이크타임 15:00~17:00"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 13)))
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 16)))  // 브레이크
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 18)))
+        val day = OpeningHours.weeklySchedule(ot, null)!![0]
+        assertEquals("11:00~21:00", day.hours)
+        assertEquals(listOf("15:00~17:00"), day.breaks)
+    }
+
+    @Test fun `시간 없는 요일 세그먼트는 다음 세그먼트의 시간을 상속`() {
+        // 실 데이터 표기: "월~수, 금 09:00~20:00" = 월~수와 금 모두 09:00~20:00
+        val ot = "월~수, 금 09:00~20:00, 목 09:00~20:30"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(24, 10)))   // 월 → 상속된 09~20
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(24, 21)))  // 월 21시 → 종료
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(27, 20, 15))) // 목 20:15 → 영업중
+        val table = OpeningHours.weeklySchedule(ot, null)!!
+        assertEquals("09:00~20:00", table[1].hours)   // 화
+        assertEquals("09:00~20:30", table[3].hours)   // 목
+        assertNull(table[5].hours)                     // 토 — 정보 없음
+    }
+
+    @Test fun `요일과 공휴일 나열이 섞인 상속 - 토~일, 법정공휴일`() {
+        // "토~일, 법정공휴일 08:30~13:30": 토·일이 뒤 세그먼트의 시간을 상속하고
+        // 공휴일 세그먼트 자체는 어느 요일에도 배정되지 않는다
+        val ot = "월~금 08:40~18:00, 토~일, 법정공휴일 08:30~13:30"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(29, 10)))   // 토 10시 → 영업중
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(29, 15)))  // 토 15시 → 종료
+        val table = OpeningHours.weeklySchedule(ot, null)!!
+        assertEquals("08:30~13:30", table[6].hours)   // 일
+        assertEquals("08:40~18:00", table[0].hours)   // 월
+    }
 }
