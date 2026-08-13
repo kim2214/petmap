@@ -94,10 +94,16 @@ fun PetMapNavHost(
             DetailScreen(
                 onBack = { navController.popBackStack() },
                 onShowOnMap = {
-                    // 지도 화면을 상세 "위에" 쌓는다 (포커스는 MapFocusBus 가 전달).
-                    // popUpTo(start)로 백스택을 비우면 위치만 확인하고 돌아올 목록/상세가
-                    // 사라져 뒤로가기가 곧장 앱 종료가 된다.
-                    navController.navigate(Routes.MAP) { launchSingleTop = true }
+                    // 기존 지도 탭 엔트리로 복귀한다 (포커스는 MapFocusBus 가 전달).
+                    // 지도를 새 엔트리로 push 하면 안 된다: MapFocusBus 는 단일 소비 Channel 이라
+                    // 살아있는 기존 지도 ViewModel 이 요청을 가로채 새 지도는 포커스되지 않고,
+                    // 상세→지도 반복 시 백스택도 무한정 쌓인다.
+                    // (popUpTo 로 상세가 빠져 뒤로가기로 상세에 못 돌아가는 한계는 알려진 트레이드오프)
+                    navController.navigate(Routes.MAP) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 },
             )
         }
