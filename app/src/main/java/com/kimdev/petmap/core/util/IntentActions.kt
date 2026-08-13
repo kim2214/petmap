@@ -63,7 +63,10 @@ fun Context.sendEmail(address: String, subject: String = "", body: String = "") 
 
 /** 외부 브라우저로 URL 열기 */
 fun Context.openUrl(url: String) {
-    val normalized = if (url.startsWith("http", ignoreCase = true)) url else "https://$url"
+    // 기본 스킴은 http 를 유지한다. DB 의 스킴 없는 홈페이지 728건 중엔 HTTPS 를 아예
+    // 받지 않는 관공서 사이트가 실존하고(https 는 http 로 폴백되지 않음),
+    // http 는 서버가 지원하면 https 로 리다이렉트되므로 열리는 쪽이 항상 http 다.
+    val normalized = if (url.startsWith("http", ignoreCase = true)) url else "http://$url"
     safeStart(Intent(Intent.ACTION_VIEW, normalized.toUri()))
 }
 
