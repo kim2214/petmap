@@ -3,7 +3,7 @@
 agp = "9.2.1"
 kotlin = "2.3.0"
 ksp = "2.3.10"
-desugarJdkLibs = "2.1.2"
+desugarJdkLibs = "2.1.5"
 
 coreKtx = "1.19.0"
 coreSplashscreen = "1.2.0"
