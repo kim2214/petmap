@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Museum
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.SportsTennis
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -33,6 +34,7 @@ val PlaceCategory.labelRes: Int
         PlaceCategory.CULTURE -> R.string.category_culture
         PlaceCategory.TRAVEL -> R.string.category_travel
         PlaceCategory.CARE -> R.string.category_care
+        PlaceCategory.SPORTS -> R.string.category_sports
         PlaceCategory.ETC -> R.string.category_etc
     }
 
@@ -53,6 +55,7 @@ val PlaceCategory.markerColor: Color
         PlaceCategory.CULTURE -> Color(0xFFD9A23B)       // 골드
         PlaceCategory.TRAVEL -> Color(0xFF1FAE8A)        // 그린틸
         PlaceCategory.CARE -> Color(0xFF9B6BD6)          // 바이올렛
+        PlaceCategory.SPORTS -> Color(0xFFE04F5F)        // 체리레드
         PlaceCategory.ETC -> Color(0xFF6E8E78)           // 그린그레이
     }
 
@@ -81,5 +84,6 @@ val PlaceCategory.icon: ImageVector
         PlaceCategory.CULTURE -> Icons.Filled.Museum
         PlaceCategory.TRAVEL -> Icons.Filled.Luggage
         PlaceCategory.CARE -> Icons.Filled.Pets
+        PlaceCategory.SPORTS -> Icons.Filled.SportsTennis
         PlaceCategory.ETC -> Icons.Filled.Pets
     }
