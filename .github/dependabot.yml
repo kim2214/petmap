@@ -20,6 +20,10 @@ updates:
       # 손으로 고정한 값인데, Dependabot 은 constraints 안의 버전 리터럴도
       # 일반 직접 의존성으로 보고 올린다 → 자동 범프 제외하고 수동 관리한다.
       - dependency-name: "androidx.concurrent:concurrent-futures"
+      # AGP 는 Android Studio 가 지원하는 버전까지만 쓸 수 있다 (IDE 가 프로젝트를
+      # 열지 못함 — 2026-08 9.3.1 범프로 실제 발생). Studio 업데이트와 함께 수동으로 올린다.
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       # AndroidX/Compose 계열은 상호 호환 버전을 묶어서 올린다
       androidx:

@@ -1,5 +1,6 @@
 [versions]
-agp = "9.3.1"
+# 9.3.1 은 현재 설치된 Android Studio(최대 AGP 9.2.1 지원)와 비호환 — Studio 업데이트 후 올릴 것
+agp = "9.2.1"
 kotlin = "2.3.0"
 ksp = "2.3.10"
 desugarJdkLibs = "2.1.2"
