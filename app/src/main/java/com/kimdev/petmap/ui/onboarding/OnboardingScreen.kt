@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -226,7 +227,12 @@ private fun PageContent(page: OnboardingPage) {
             modifier = Modifier
                 .size(160.dp)
                 .clip(CircleShape)
-                .background(accent.copy(alpha = 0.15f)),
+                // 상세 화면 히어로 헤더와 같은 위→아래 옅어지는 그라데이션 톤
+                .background(
+                    Brush.verticalGradient(
+                        listOf(accent.copy(alpha = 0.24f), accent.copy(alpha = 0.08f))
+                    )
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

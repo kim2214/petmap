@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Directions
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -114,10 +112,10 @@ fun PlacePreviewSheet(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedIconButton(onClick = onToggleFavorite) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    // 스크린리더에 담김/해제 상태 전달
-                    contentDescription = stringResource(if (isFavorite) R.string.favorite_remove else R.string.favorite_add),
+                // 카드/상세와 동일한 팝 애니메이션 하트 (스크린리더 상태 전달 포함)
+                AnimatedFavoriteIcon(
+                    isFavorite = isFavorite,
+                    uncheckedTint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             FilledTonalButton(onClick = onDirections, modifier = Modifier.weight(1f)) {

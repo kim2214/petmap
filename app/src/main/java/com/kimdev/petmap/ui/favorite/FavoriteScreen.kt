@@ -1,5 +1,11 @@
 package com.kimdev.petmap.ui.favorite
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,7 +20,6 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -22,9 +27,11 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,6 +53,7 @@ import kotlinx.coroutines.launch
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.PlaceCard
+import com.kimdev.petmap.ui.components.PlaceListSkeleton
 import com.kimdev.petmap.ui.components.SearchTextField
 
 @Composable
@@ -80,47 +88,69 @@ fun FavoriteScreen(
         }
     }
 
+    // 목록 화면과 동일한 규칙: 스크롤이 시작되면 큰 제목을 접고 헤더에 구분 그림자를 띄운다
+    val contentScrolled by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
+    }
+    val headerShadow by animateDpAsState(
+        targetValue = if (contentScrolled) 4.dp else 0.dp,
+        label = "headerShadow",
+    )
+
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            color = MaterialTheme.colorScheme.background,
+            shadowElevation = headerShadow,
         ) {
-            Text(
-                stringResource(R.string.nav_favorite),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { heading() },
-            )
-            if (state.favorites.isNotEmpty()) {
-                Text(
-                    stringResource(R.string.favorite_count_format, state.favorites.size),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AnimatedVisibility(
+                    visible = !contentScrolled,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(R.string.nav_favorite),
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier
+                                .weight(1f)
+                                .semantics { heading() },
+                        )
+                        if (state.favorites.isNotEmpty()) {
+                            Text(
+                                stringResource(R.string.favorite_count_format, state.favorites.size),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                // 즐겨찾기가 쌓이면 검색·카테고리로 좁혀 볼 수 있게 한다 (하나도 없을 땐 숨김)
+                if (state.totalCount > 0) {
+                    SearchTextField(
+                        value = state.query,
+                        onValueChange = viewModel::onQueryChange,
+                        onClear = { viewModel.onQueryChange("") },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                    CategoryFilterRow(
+                        selected = state.selectedCategories,
+                        onToggle = viewModel::toggleCategory,
+                        onClearAll = viewModel::clearCategories,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
             }
-        }
-        // 즐겨찾기가 쌓이면 검색·카테고리로 좁혀 볼 수 있게 한다 (하나도 없을 땐 숨김)
-        if (state.totalCount > 0) {
-            SearchTextField(
-                value = state.query,
-                onValueChange = viewModel::onQueryChange,
-                onClear = { viewModel.onQueryChange("") },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-            CategoryFilterRow(
-                selected = state.selectedCategories,
-                onToggle = viewModel::toggleCategory,
-                onClearAll = viewModel::clearCategories,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                // 첫 로드 중엔 스피너 (빈 상태 문구가 잘못 깜빡이는 것 방지)
-                state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                // 첫 로드 중엔 스켈레톤 (빈 상태 문구가 잘못 깜빡이는 것 방지)
+                state.isLoading -> PlaceListSkeleton(modifier = Modifier.fillMaxSize(), count = 4)
 
                 state.totalCount == 0 -> EmptyState(
                     icon = Icons.Filled.FavoriteBorder,

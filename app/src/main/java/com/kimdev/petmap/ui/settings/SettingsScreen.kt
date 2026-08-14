@@ -5,13 +5,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
@@ -25,7 +29,6 @@ import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -110,56 +113,68 @@ fun SettingsScreen(
         )
 
         SectionTitle(stringResource(R.string.settings_section_screen))
-        SettingRow(
-            Icons.Filled.DarkMode,
-            stringResource(R.string.settings_theme),
-            subtitle = stringResource(themeMode.labelRes),
-        ) { showThemeDialog = true }
-        SettingRow(
-            Icons.Filled.FormatSize,
-            stringResource(R.string.settings_font_scale),
-            subtitle = stringResource(fontScale.labelRes),
-        ) { showFontScaleDialog = true }
-        SettingRow(
-            Icons.Filled.Replay,
-            stringResource(R.string.settings_replay_onboarding),
-            subtitle = stringResource(R.string.settings_replay_onboarding_desc),
-            onClick = onReplayOnboarding,
-        )
+        SettingsCard {
+            SettingRow(
+                Icons.Filled.DarkMode,
+                stringResource(R.string.settings_theme),
+                subtitle = stringResource(themeMode.labelRes),
+            ) { showThemeDialog = true }
+            SettingRow(
+                Icons.Filled.FormatSize,
+                stringResource(R.string.settings_font_scale),
+                subtitle = stringResource(fontScale.labelRes),
+            ) { showFontScaleDialog = true }
+            SettingRow(
+                Icons.Filled.Replay,
+                stringResource(R.string.settings_replay_onboarding),
+                subtitle = stringResource(R.string.settings_replay_onboarding_desc),
+                onClick = onReplayOnboarding,
+            )
+        }
 
         SectionTitle(stringResource(R.string.settings_section_terms))
-        SettingRow(Icons.Filled.Policy, stringResource(R.string.settings_privacy)) { context.openUrl(PRIVACY_POLICY_URL) }
-        if (adPrivacyRequired) {
-            SettingRow(
-                Icons.Filled.AdUnits,
-                stringResource(R.string.settings_ad_privacy),
-                subtitle = stringResource(R.string.settings_ad_privacy_desc),
-            ) {
-                // UMP 폼은 Activity 위에 표시된다
-                (context as? Activity)?.let { AdsConsent.showPrivacyOptions(it) }
+        SettingsCard {
+            SettingRow(Icons.Filled.Policy, stringResource(R.string.settings_privacy)) { context.openUrl(PRIVACY_POLICY_URL) }
+            if (adPrivacyRequired) {
+                SettingRow(
+                    Icons.Filled.AdUnits,
+                    stringResource(R.string.settings_ad_privacy),
+                    subtitle = stringResource(R.string.settings_ad_privacy_desc),
+                ) {
+                    // UMP 폼은 Activity 위에 표시된다
+                    (context as? Activity)?.let { AdsConsent.showPrivacyOptions(it) }
+                }
             }
+            SettingRow(Icons.AutoMirrored.Filled.Article, stringResource(R.string.settings_licenses), onClick = onOpenLicenses)
         }
-        SettingRow(Icons.AutoMirrored.Filled.Article, stringResource(R.string.settings_licenses), onClick = onOpenLicenses)
 
         SectionTitle(stringResource(R.string.settings_section_contact))
         val emailSubject = stringResource(R.string.settings_email_subject)
-        SettingRow(Icons.Filled.Email, stringResource(R.string.settings_email), subtitle = CONTACT_EMAIL) {
-            context.sendEmail(CONTACT_EMAIL, subject = emailSubject)
+        SettingsCard {
+            SettingRow(Icons.Filled.Email, stringResource(R.string.settings_email), subtitle = CONTACT_EMAIL) {
+                context.sendEmail(CONTACT_EMAIL, subject = emailSubject)
+            }
         }
 
         SectionTitle(stringResource(R.string.settings_section_data_source))
-        SettingRow(
-            Icons.Filled.Storage,
-            stringResource(R.string.settings_data_source),
-            subtitle = stringResource(R.string.settings_data_source_desc),
-        )
+        SettingsCard {
+            SettingRow(
+                Icons.Filled.Storage,
+                stringResource(R.string.settings_data_source),
+                subtitle = stringResource(R.string.settings_data_source_desc),
+            )
+        }
 
         SectionTitle(stringResource(R.string.settings_section_app_info))
-        SettingRow(
-            Icons.Filled.Info,
-            stringResource(R.string.settings_version),
-            subtitle = stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
-        )
+        SettingsCard {
+            SettingRow(
+                Icons.Filled.Info,
+                stringResource(R.string.settings_version),
+                subtitle = stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
     }
 
     if (showThemeDialog) {
@@ -242,6 +257,21 @@ private fun SectionTitle(text: String) {
     )
 }
 
+/** 섹션별 설정 묶음 카드. 목록의 PlaceCard 와 같은 흰 카드 + 20dp 라운드 시각 언어. */
+@Composable
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
+        Column(modifier = Modifier.padding(vertical = 4.dp), content = content)
+    }
+}
+
 @Composable
 private fun SettingRow(
     icon: ImageVector,
@@ -249,39 +279,36 @@ private fun SettingRow(
     subtitle: String? = null,
     onClick: (() -> Unit)? = null,
 ) {
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Row(
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .weight(1f)
+                .padding(start = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(title, style = MaterialTheme.typography.bodyLarge)
-                if (subtitle != null) {
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (onClick != null) {
-                Icon(
-                    Icons.Filled.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(20.dp),
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
+        if (onClick != null) {
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
 }
