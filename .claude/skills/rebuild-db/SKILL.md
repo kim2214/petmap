@@ -12,14 +12,17 @@ description: 공공데이터 CSV로 프리빌트 Room DB(app/src/main/assets/pet
 ## 재생성 절차
 
 1. 새 CSV 확보 — [공공데이터포털](https://www.data.go.kr) "전국 반려동물 동반 가능 문화시설" (UTF-8).
+   추가 데이터셋: "전국 문화 여가 활동 시설(액티비티)" (CP949, 인코딩 자동 판별됨).
 
-2. 스크립트 실행:
+2. 스크립트 실행 (여러 CSV 가능 — **기본 데이터셋을 먼저** 줘야 중복 시 기본 메타가 우선):
    ```bash
-   python3 tools/build_db.py "<새 CSV 경로>"
-   # 출력 기본값: app/src/main/assets/petmap.db
+   python3 tools/build_db.py "<반려동물 CSV>" ["<액티비티 CSV>" ...]
+   # 출력 기본값: app/src/main/assets/petmap.db (마지막 인자가 .db 면 출력경로)
    # 성공 시: "✓ app/src/main/assets/petmap.db 생성: 고유 장소 N건"
    ```
    - 원본에 동일 레코드가 대량 중복 → `이름+좌표` 기준으로 정제한다.
+   - **동반 가능 컬럼("반려동물 동반 가능정보"/"애완동물 출입 여부")이 Y 인 행만 수록**된다.
+     이 컬럼이 없는 데이터셋(예: 캠핑)은 에러로 거부된다.
    - 카테고리 원문 → enum 매핑은 `category_name()`이 단일 소스다. CSV의 카테고리 컬럼 값이
      새로 등장하면 이 매핑을 갱신할 것.
    - FTS 색인(`places_fts`)은 스크립트가 함께 생성해 동봉한다. `fts_index()`는 앱의

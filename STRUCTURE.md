@@ -31,7 +31,7 @@ com.kimdev.petmap
 │   │   ├── RecentSearchStore     # 최근 검색어 (SharedPreferences)
 │   │   ├── ThemeStore            # 라이트/다크/시스템 테마 (SharedPreferences)
 │   │   ├── dao/    PlaceDao(뷰포트·그리드 집계·FTS 검색), FavoriteDao
-│   │   └── entity/ PlaceEntity(23,925행), FavoriteEntity
+│   │   └── entity/ PlaceEntity(22,127행), FavoriteEntity
 │   ├── mapper/     Entity ↔ Domain 변환
 │   └── repository/ PlaceRepositoryImpl
 │
