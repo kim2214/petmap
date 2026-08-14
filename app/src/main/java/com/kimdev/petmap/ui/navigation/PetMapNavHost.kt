@@ -14,6 +14,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.kimdev.petmap.ui.detail.DetailScreen
 import com.kimdev.petmap.ui.favorite.FavoriteScreen
 import com.kimdev.petmap.ui.list.ListScreen
@@ -85,6 +86,9 @@ fun PetMapNavHost(
         composable(
             route = Routes.DETAIL_PATTERN,
             arguments = listOf(navArgument(Routes.DETAIL_ARG_ID) { type = NavType.StringType }),
+            // 공유 링크(petmap://place/{id})로 진입. 콜드 스타트는 NavHost 가 Activity 인텐트를
+            // 자동 처리하고, 실행 중 수신은 MainActivity 의 onNewIntent 리스너가 handleDeepLink 로 넘긴다.
+            deepLinks = listOf(navDeepLink { uriPattern = Routes.DETAIL_DEEP_LINK_PATTERN }),
             // 상세는 오른쪽에서 밀려 들어오는 push 전환
             enterTransition = { slideInHorizontally(tween(300)) { it } + fadeIn(tween(300)) },
             exitTransition = { fadeOut(tween(200)) },

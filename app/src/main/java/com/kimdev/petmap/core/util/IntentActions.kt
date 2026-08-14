@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.core.net.toUri
 import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.ui.navigation.Routes
 
 /** 이 앱의 설정 화면 열기 (권한 영구 거부 시 안내용) */
 fun Context.openAppSettings() {
@@ -43,6 +44,8 @@ fun Context.sharePlace(place: Place) {
                 "https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}",
             )
         )
+        // 펫맵이 설치된 기기에서는 이 링크로 앱의 상세 화면이 바로 열린다
+        appendLine(getString(R.string.share_app_link_format, Routes.detailDeepLink(place.id)))
     }.trim()
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"

@@ -1,8 +1,10 @@
 package com.kimdev.petmap
 
+import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.core.util.Consumer
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -114,7 +116,7 @@ class MainActivity : ComponentActivity() {
                             showOnboarding = false
                         })
                     } else {
-                        PetMapApp(tabReselectBus)
+                        PetMapApp(tabReselectBus, this@MainActivity)
                     }
                 }
             }
@@ -123,10 +125,18 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun PetMapApp(tabReselectBus: TabReselectBus) {
+private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivity) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+
+    // 앱 실행 중 딥링크(petmap://place/{id}) 수신 → 상세로 이동.
+    // 콜드 스타트 딥링크는 NavHost 가 Activity 인텐트에서 자동 처리한다.
+    DisposableEffect(navController) {
+        val listener = Consumer<Intent> { intent -> navController.handleDeepLink(intent) }
+        activity.addOnNewIntentListener(listener)
+        onDispose { activity.removeOnNewIntentListener(listener) }
+    }
 
     // 상세 화면 등에서는 하단탭을 숨긴다.
     val showBottomBar = TopLevelDestination.entries.any { dest ->

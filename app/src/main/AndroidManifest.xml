@@ -43,13 +43,22 @@
             android:name="com.naver.maps.map.NCP_KEY_ID"
             android:value="${naverMapClientId}" />
 
+        <!-- singleTask: 딥링크로 열릴 때 새 인스턴스가 쌓이지 않고 onNewIntent 로 전달된다 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.PetMap.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- 공유 링크로 장소 상세 진입: petmap://place/{placeId} -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="petmap" android:host="place" />
             </intent-filter>
         </activity>
     </application>

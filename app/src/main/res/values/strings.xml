@@ -189,6 +189,7 @@
     <string name="share_closed_format">휴무: %1$s</string>
     <string name="share_pet_format">반려동물: %1$s</string>
     <string name="share_map_format">지도: %1$s</string>
+    <string name="share_app_link_format">펫맵 앱에서 보기: %1$s</string>
     <string name="toast_copied">복사했어요</string>
     <string name="toast_no_app">실행할 수 있는 앱이 없습니다</string>
 </resources>
