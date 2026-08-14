@@ -2,6 +2,12 @@ package com.kimdev.petmap.ui.list
 
 import android.Manifest
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,12 +28,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +65,8 @@ import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
+import com.kimdev.petmap.ui.components.PlaceCardSkeleton
+import com.kimdev.petmap.ui.components.PlaceListSkeleton
 import com.kimdev.petmap.ui.components.RecentSearchList
 import com.kimdev.petmap.ui.components.SearchTextField
 import kotlinx.coroutines.flow.Flow
@@ -137,76 +145,99 @@ fun ListScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-        Text(
-            stringResource(R.string.nav_list),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier
-                .padding(start = 20.dp, top = 24.dp, bottom = 4.dp)
-                .semantics { heading() },
-        )
-        SearchTextField(
-            value = state.query,
-            onValueChange = viewModel::onQueryChange,
-            onClear = { viewModel.onQueryChange("") },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = {
-                viewModel.recordRecentSearch(state.query)
-                focusManager.clearFocus()
-            }),
-            onFocusChanged = { searchFocused = it },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        )
-        CategoryFilterRow(
-            selected = state.selectedCategories,
-            onToggle = viewModel::toggleCategory,
-            onClearAll = viewModel::clearCategories,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
+    // 스크롤이 시작되면 큰 제목을 접어 결과 영역을 넓히고, 헤더에 구분 그림자를 띄운다.
+    // 검색 중(최근 검색 오버레이)에도 제목을 접어 입력에 집중시킨다.
+    val contentScrolled by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
+    }
+    val headerShadow by animateDpAsState(
+        targetValue = if (contentScrolled) 4.dp else 0.dp,
+        label = "headerShadow",
+    )
 
-        // 정렬/필터 토글 + 결과 개수
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        Surface(
+            color = MaterialTheme.colorScheme.background,
+            shadowElevation = headerShadow,
         ) {
-            FilterChip(
-                selected = state.sortByDistance,
-                onClick = {
-                    when {
-                        state.hasLocation -> viewModel.setSortByDistance(!state.sortByDistance)
-                        // 권한은 있는데 위치만 없음 → 위치 재확보 시도
-                        granted -> viewModel.enableDistanceSortWithLocation()
-                        locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
-                            requestedLocationOnce = true
-                            pendingDistanceSort = true
-                            locationPermissions.launchMultiplePermissionRequest()
-                        }
-                        else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
-                    }
-                },
-                label = { Text(stringResource(R.string.filter_distance)) },
-                leadingIcon = leadingCheck(state.sortByDistance),
-            )
-            FilterChip(
-                selected = state.openNowOnly,
-                onClick = { viewModel.setOpenNowOnly(!state.openNowOnly) },
-                label = { Text(stringResource(R.string.label_open_now)) },
-                leadingIcon = leadingCheck(state.openNowOnly),
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            // 검색어·필터를 좁힌 효과를 가늠할 수 있게 결과 개수를 보여준다
-            if (!state.isLoading && state.places.isNotEmpty()) {
-                val countRes =
-                    if (state.canLoadMore || state.reachedLimit) R.string.list_count_more_format
-                    else R.string.list_count_format
-                Text(
-                    stringResource(countRes, state.places.size),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AnimatedVisibility(
+                    visible = !contentScrolled && !searchFocused,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    Text(
+                        stringResource(R.string.nav_list),
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier
+                            .padding(start = 20.dp, top = 24.dp, bottom = 4.dp)
+                            .semantics { heading() },
+                    )
+                }
+                SearchTextField(
+                    value = state.query,
+                    onValueChange = viewModel::onQueryChange,
+                    onClear = { viewModel.onQueryChange("") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        viewModel.recordRecentSearch(state.query)
+                        focusManager.clearFocus()
+                    }),
+                    onFocusChanged = { searchFocused = it },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 )
+                CategoryFilterRow(
+                    selected = state.selectedCategories,
+                    onToggle = viewModel::toggleCategory,
+                    onClearAll = viewModel::clearCategories,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                // 정렬/필터 토글 + 결과 개수
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(
+                        selected = state.sortByDistance,
+                        onClick = {
+                            when {
+                                state.hasLocation -> viewModel.setSortByDistance(!state.sortByDistance)
+                                // 권한은 있는데 위치만 없음 → 위치 재확보 시도
+                                granted -> viewModel.enableDistanceSortWithLocation()
+                                locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
+                                    requestedLocationOnce = true
+                                    pendingDistanceSort = true
+                                    locationPermissions.launchMultiplePermissionRequest()
+                                }
+                                else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
+                            }
+                        },
+                        label = { Text(stringResource(R.string.filter_distance)) },
+                        leadingIcon = leadingCheck(state.sortByDistance),
+                    )
+                    FilterChip(
+                        selected = state.openNowOnly,
+                        onClick = { viewModel.setOpenNowOnly(!state.openNowOnly) },
+                        label = { Text(stringResource(R.string.label_open_now)) },
+                        leadingIcon = leadingCheck(state.openNowOnly),
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    // 검색어·필터를 좁힌 효과를 가늠할 수 있게 결과 개수를 보여준다
+                    if (!state.isLoading && state.places.isNotEmpty()) {
+                        val countRes =
+                            if (state.canLoadMore || state.reachedLimit) R.string.list_count_more_format
+                            else R.string.list_count_format
+                        Text(
+                            stringResource(countRes, state.places.size),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
 
@@ -228,9 +259,7 @@ fun ListScreen(
                     )
 
                 state.isLoading && state.places.isEmpty() ->
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                    PlaceListSkeleton(modifier = Modifier.fillMaxSize())
 
                 // 조회 실패 → "결과 없음"과 구분해 에러 상태 + 재시도 동선 제공
                 state.isError && state.places.isEmpty() -> EmptyState(
@@ -293,12 +322,7 @@ fun ListScreen(
                             )
                         }
                         if (state.isLoadingMore) {
-                            item(key = "loading_more") {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) { CircularProgressIndicator() }
-                            }
+                            item(key = "loading_more") { PlaceCardSkeleton() }
                         } else if (state.reachedLimit) {
                             // 상한까지 불러왔음을 숨기지 않고 좁히는 방법을 안내한다
                             item(key = "reached_limit") {

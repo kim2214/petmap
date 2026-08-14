@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,22 +26,17 @@ import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,9 +52,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
 import com.kimdev.petmap.ui.theme.LocalIsDarkTheme
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -67,6 +67,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -89,9 +90,11 @@ import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sharePlace
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.util.OpeningHours
 import com.kimdev.petmap.ui.common.rememberIsOpenNow
+import com.kimdev.petmap.ui.components.FavoriteIconButton
 import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
 import com.kimdev.petmap.ui.components.labelRes
@@ -108,7 +111,13 @@ fun DetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val place = state.place
 
+    // 히어로 헤더와 같은 색에서 시작해 스크롤하면 표면색으로 전환되는 고정 앱바.
+    // 장소 이름은 헤더가 앱바 아래로 밀려 들어간 만큼(overlappedFraction)만 나타난다.
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val appBarColor = place?.category?.headerGradient()?.first ?: MaterialTheme.colorScheme.background
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = {
@@ -116,6 +125,9 @@ fun DetailScreen(
                         place?.name ?: stringResource(R.string.detail_title_fallback),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = if (place == null) 1f else scrollBehavior.state.overlappedFraction
+                        },
                     )
                 },
                 navigationIcon = {
@@ -125,18 +137,18 @@ fun DetailScreen(
                 },
                 actions = {
                     if (place != null) {
-                        IconButton(onClick = viewModel::toggleFavorite) {
-                            Icon(
-                                imageVector = if (place.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                                contentDescription = stringResource(if (place.isFavorite) R.string.favorite_remove else R.string.favorite_add),
-                                tint = if (place.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
+                        FavoriteIconButton(
+                            isFavorite = place.isFavorite,
+                            onClick = viewModel::toggleFavorite,
+                            uncheckedTint = MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    containerColor = appBarColor,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -171,40 +183,7 @@ private fun DetailContent(
         Header(place)
 
         Column(modifier = Modifier.padding(16.dp)) {
-            // 액션: 길찾기(주) + 전화/공유(보조)
-            Button(
-                onClick = { context.openNaverDirections(place) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.Directions, contentDescription = null)
-                Text(stringResource(R.string.action_directions), modifier = Modifier.padding(start = 6.dp))
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                place.phone?.let { phone ->
-                    FilledTonalButton(onClick = { context.dialPhone(phone) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Filled.Phone, contentDescription = null)
-                        Text(stringResource(R.string.action_phone), modifier = Modifier.padding(start = 6.dp))
-                    }
-                }
-                FilledTonalButton(onClick = { context.sharePlace(place) }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.Share, contentDescription = null)
-                    Text(stringResource(R.string.action_share), modifier = Modifier.padding(start = 6.dp))
-                }
-            }
-            OutlinedButton(
-                onClick = onShowOnMap,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-            ) {
-                Icon(Icons.Filled.Map, contentDescription = null)
-                Text(stringResource(R.string.detail_show_on_map), modifier = Modifier.padding(start = 6.dp))
-            }
+            QuickActions(place, onShowOnMap)
 
             SectionTitle(stringResource(R.string.section_location))
             LocationMiniMap(place, onClick = onShowOnMap)
@@ -297,46 +276,82 @@ private fun DetailContent(
     }
 }
 
+/**
+ * 히어로 헤더 그라데이션 (상단색, 하단색). 카테고리 색을 배경 위에 합성한 불투명 색이라
+ * 같은 상단색을 쓰는 고정 앱바와 이어져 한 면처럼 보인다.
+ */
+@Composable
+private fun PlaceCategory.headerGradient(): Pair<Color, Color> {
+    val background = MaterialTheme.colorScheme.background
+    val dark = LocalIsDarkTheme.current
+    val top = color.copy(alpha = if (dark) 0.26f else 0.20f).compositeOver(background)
+    val bottom = color.copy(alpha = if (dark) 0.10f else 0.06f).compositeOver(background)
+    return top to bottom
+}
+
 @Composable
 private fun Header(place: Place) {
     val open = rememberIsOpenNow(place.operatingTime, place.closedDays)
-    Surface(
-        color = place.category.softColor,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-        modifier = Modifier.fillMaxWidth(),
+    val (top, bottom) = place.category.headerGradient()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+            .background(Brush.verticalGradient(listOf(top, bottom)))
+            .padding(horizontal = 24.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(76.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center,
+            Icon(
+                place.category.icon,
+                contentDescription = null,
+                tint = place.category.color,
+                modifier = Modifier.size(40.dp),
+            )
+        }
+        // 앱바 제목은 1줄 말줄임이라, 전체 이름은 여기서 보여준다
+        Text(
+            place.name,
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .padding(top = 14.dp)
+                .semantics { heading() },
+        )
+        Text(
+            place.roadAddress,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 12.dp),
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = place.category.color,
+                shape = RoundedCornerShape(50),
             ) {
-                Icon(
-                    place.category.icon,
-                    contentDescription = stringResource(place.category.labelRes),
-                    tint = place.category.color,
-                    modifier = Modifier.size(40.dp),
+                Text(
+                    stringResource(place.category.labelRes),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
-            Text(
-                stringResource(place.category.labelRes),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 12.dp),
-            )
             if (open != null) {
                 Surface(
                     color = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = if (open) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     shape = RoundedCornerShape(50),
-                    modifier = Modifier.padding(top = 8.dp),
                 ) {
                     Text(
                         stringResource(if (open) R.string.label_open_now else R.string.label_closed),
@@ -346,6 +361,59 @@ private fun Header(place: Place) {
                 }
             }
         }
+    }
+}
+
+/** 길찾기/전화/공유/지도 컴팩트 액션 행. 세로 버튼 4개를 대체한다. */
+@Composable
+private fun QuickActions(place: Place, onShowOnMap: () -> Unit) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        QuickAction(Icons.Filled.Directions, stringResource(R.string.action_directions), primary = true) {
+            context.openNaverDirections(place)
+        }
+        place.phone?.let { phone ->
+            QuickAction(Icons.Filled.Phone, stringResource(R.string.action_phone)) { context.dialPhone(phone) }
+        }
+        QuickAction(Icons.Filled.Share, stringResource(R.string.action_share)) { context.sharePlace(place) }
+        QuickAction(Icons.Filled.Map, stringResource(R.string.nav_map)) { onShowOnMap() }
+    }
+}
+
+@Composable
+private fun RowScope.QuickAction(
+    icon: ImageVector,
+    label: String,
+    primary: Boolean = false,
+    onClick: () -> Unit,
+) {
+    // 원+라벨 전체를 하나의 터치 타깃으로 묶는다 (라벨만 탭해도 동작)
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button) { onClick() }
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = if (primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
+        ) {
+            Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
+            }
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 6.dp),
+        )
     }
 }
 
