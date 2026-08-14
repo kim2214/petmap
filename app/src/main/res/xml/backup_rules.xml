@@ -4,9 +4,9 @@
    장소 DB(petmap.db)는 앱 에셋에서 재생성되는 내장 데이터라 백업에서 제외한다.
    - 포함 시 FTS 색인까지 20MB+ 가 되어 앱당 백업 한도(25MB)를 넘고 백업 전체가 조용히 실패한다.
    - 복원된 구버전 DB 파일이 createFromAsset 의 새 에셋 복사를 영구히 막는 사고도 차단한다.
-   - 트레이드오프: favorites 테이블이 같은 DB 안에 있어 즐겨찾기도 백업되지 않는다.
-     (즐겨찾기 백업이 필요해지면 별도 파일/DB 로 분리할 것)
-   SharedPreferences(테마·최근 검색어·온보딩 등)는 기본 동작대로 백업된다.
+   - 즐겨찾기는 같은 DB 안에 있어 함께 제외되지만, files/favorites_backup.json 미러가
+     기본 규칙으로 백업되고 복원 시 DB 에 다시 심어진다 (data/local/FavoriteBackup.kt).
+   SharedPreferences(테마·최근 검색어·온보딩 등)와 files/ 는 기본 동작대로 백업된다.
 -->
 <full-backup-content>
     <exclude domain="database" path="petmap.db" />

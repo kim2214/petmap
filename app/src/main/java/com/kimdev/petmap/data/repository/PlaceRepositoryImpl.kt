@@ -2,6 +2,8 @@ package com.kimdev.petmap.data.repository
 
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.kimdev.petmap.core.common.IoDispatcher
+import com.kimdev.petmap.data.local.FavoriteBackup
 import com.kimdev.petmap.data.local.PlaceFts
 import com.kimdev.petmap.data.local.dao.FavoriteDao
 import com.kimdev.petmap.data.local.dao.PlaceDao
@@ -12,8 +14,12 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.distanceMeters
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.math.cos
 import kotlin.math.max
 import javax.inject.Inject
@@ -23,14 +29,40 @@ import javax.inject.Singleton
 class PlaceRepositoryImpl @Inject constructor(
     private val placeDao: PlaceDao,
     private val favoriteDao: FavoriteDao,
+    private val favoriteBackup: FavoriteBackup,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : PlaceRepository {
+
+    @Volatile
+    private var favoritesRestored = false
+    private val restoreMutex = Mutex()
 
     /**
      * DB 는 에셋(미리 시딩됨)에서 로드되므로 별도 시딩이 필요 없다.
-     * 첫 접근 시 에셋 복사가 일어나도록 가벼운 쿼리로 워밍업만 한다.
+     * 첫 접근 시 에셋 복사가 일어나도록 가벼운 쿼리로 워밍업만 하고,
+     * 백업에서 복원된 설치라면 즐겨찾기 미러를 DB 에 다시 심는다.
      */
     override suspend fun ensureSeeded() {
         runCatching { placeDao.count() }
+        runCatching { restoreFavoritesIfNeeded() }
+    }
+
+    /**
+     * DB 의 favorites 가 비어 있고 미러 파일에 내용이 있으면 복원한다.
+     * (petmap.db 는 Auto Backup 제외라 기기 이전 시 즐겨찾기는 미러로만 전달된다)
+     */
+    private suspend fun restoreFavoritesIfNeeded() {
+        if (favoritesRestored) return
+        restoreMutex.withLock {
+            if (favoritesRestored) return
+            withContext(ioDispatcher) {
+                if (favoriteDao.count() == 0) {
+                    val mirrored = favoriteBackup.read()
+                    if (mirrored.isNotEmpty()) favoriteDao.insertAll(mirrored)
+                }
+            }
+            favoritesRestored = true
+        }
     }
 
     // 빈 카테고리 셋이면 IN () 오류 방지를 위해 더미 1개 + catCount=0 으로 전달
@@ -189,6 +221,10 @@ class PlaceRepositoryImpl @Inject constructor(
     override suspend fun toggleFavorite(place: Place) {
         if (favoriteDao.exists(place.id)) favoriteDao.deleteById(place.id)
         else favoriteDao.insert(place.toFavoriteEntity())
+        // 변경 즉시 미러 갱신 — 실패해도 토글 자체는 성공으로 둔다 (다음 토글에서 재기록)
+        runCatching {
+            withContext(ioDispatcher) { favoriteBackup.write(favoriteDao.getAll()) }
+        }
     }
 
 }

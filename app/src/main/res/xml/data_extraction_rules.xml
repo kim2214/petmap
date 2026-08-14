@@ -2,6 +2,7 @@
    백업/기기 이전 규칙 (API 31+. API 30 이하는 backup_rules.xml 적용).
    장소 DB 를 제외하는 이유는 backup_rules.xml 주석 참고
    (백업 한도 초과 + 구버전 DB 복원이 createFromAsset 을 막는 사고 차단).
+   즐겨찾기는 files/favorites_backup.json 미러로 백업된다 (FavoriteBackup.kt).
 -->
 <data-extraction-rules>
     <cloud-backup>
