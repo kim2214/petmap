@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.core.net.toUri
 import com.kimdev.petmap.R
+import com.kimdev.petmap.core.review.InAppReview
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.ui.navigation.Routes
 
@@ -30,6 +31,8 @@ fun Context.dialPhone(phone: String) {
 
 /** 장소 정보 공유 */
 fun Context.sharePlace(place: Place) {
+    // 장소 공유도 긍정 시그널 → 인앱 리뷰 요청 조건으로 쌓는다
+    InAppReview.recordPositiveSignal(this)
     val text = buildString {
         appendLine(place.name)
         appendLine(place.roadAddress)
@@ -80,6 +83,8 @@ fun Context.openUrl(url: String) {
  * 네이버 딥링크는 appname 파라미터(호출 앱 패키지)를 요구한다.
  */
 fun Context.openNaverDirections(place: Place) {
+    // 길찾기 실행은 앱이 실제 도움이 된 순간 → 인앱 리뷰 요청 조건으로 쌓는다
+    InAppReview.recordPositiveSignal(this)
     val name = Uri.encode(place.name)
     val deepLink = "nmap://route/car?dlat=${place.lat}&dlng=${place.lng}" +
         "&dname=$name&appname=$packageName"

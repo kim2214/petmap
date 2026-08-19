@@ -72,8 +72,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 광고 동의(UMP) 수집 → 동의되면 광고 SDK 초기화
         AdsConsent.gather(this)
-        // 일정 실행 횟수 이상이면 인앱 리뷰 요청 (Play 설치 빌드에서만 실제 노출).
-        // 회전·테마 전환 등 구성 변경에 의한 Activity 재생성은 실행 횟수로 세지 않는다.
+        // 긍정 시그널(길찾기·공유)이 쌓인 뒤의 앱 실행에서만 인앱 리뷰 요청 (Play 설치 빌드에서만 실제 노출).
+        // 구성 변경에 의한 Activity 재생성에서는 다시 묻지 않는다.
         if (savedInstanceState == null) InAppReview.maybeAsk(this)
         setContent {
             val themeMode by themeStore.mode.collectAsStateWithLifecycle()
