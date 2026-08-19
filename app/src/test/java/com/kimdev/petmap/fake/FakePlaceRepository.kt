@@ -64,7 +64,24 @@ class FakePlaceRepository : PlaceRepository {
         // 소수 1자리 그리드로 묶어 셀별 개수 집계(테스트용 근사)
         return dataset.filterBy("", categories)
             .groupBy { Math.round(it.lat * 10) / 10.0 to Math.round(it.lng * 10) / 10.0 }
-            .map { (key, members) -> GeoClusterCell(key.first, key.second, members.size) }
+            .map { (key, members) ->
+                GeoClusterCell(
+                    lat = key.first, lng = key.second, count = members.size,
+                    minLat = key.first - 0.05, maxLat = key.first + 0.05,
+                    minLng = key.second - 0.05, maxLng = key.second + 0.05,
+                )
+            }
+            .take(limit)
+    }
+
+    override suspend fun getPlacesInCell(
+        cell: GeoClusterCell,
+        categories: Set<PlaceCategory>,
+        limit: Int,
+    ): List<Place> {
+        lastCategories = categories
+        return dataset.filterBy("", categories)
+            .filter { it.lat in cell.minLat..cell.maxLat && it.lng in cell.minLng..cell.maxLng }
             .take(limit)
     }
 

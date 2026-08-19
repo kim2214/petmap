@@ -80,6 +80,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.R
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openAppSettings
+import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.distanceMeters
 import com.kimdev.petmap.core.util.openNaverDirections
@@ -219,6 +220,7 @@ fun MapScreen(
                     previewPlace = event.place
                     viewModel.researchHere(event.place.lat, event.place.lng, FOCUS_ZOOM)
                 }
+                is MapEvent.ExpandCluster -> clusterList = event.places
                 MapEvent.NoResults ->
                     snackbarHostState.showSnackbar(resources.getString(R.string.map_no_results))
                 MapEvent.LoadFailed -> {
@@ -319,6 +321,7 @@ fun MapScreen(
                 cameraPositionState = cameraPositionState,
                 onSingleClick = { previewPlace = it },
                 onExpandCluster = { clusterList = it },
+                onExpandAggregated = viewModel::expandAggregatedCell,
                 onZoomTo = { lat, lng, zoom -> moveCameraTo(lat, lng, zoom, CameraAnimation.Easing) },
             )
         }
@@ -662,6 +665,7 @@ private fun MapMarkers(
     cameraPositionState: CameraPositionState,
     onSingleClick: (Place) -> Unit,
     onExpandCluster: (List<Place>) -> Unit,
+    onExpandAggregated: (GeoClusterCell) -> Unit,
     onZoomTo: (lat: Double, lng: Double, zoom: Double) -> Unit,
 ) {
     clusters.forEach { cluster ->
@@ -688,13 +692,17 @@ private fun MapMarkers(
                     onClick = {
                         val z = cameraPositionState.position.zoom
                         // 더 줌인해도 안 쪼개지면(같은 좌표/최대 줌) 목록으로 펼친다.
-                        // 저줌 집계 클러스터(members 비어 있음)는 펼칠 수 없으므로 항상 줌인한다.
                         val canExpand = cluster.members.size >= 2 &&
                             (z >= MAX_CLUSTER_ZOOM || cluster.spanMeters() < CO_LOCATED_M)
-                        if (canExpand) {
-                            onExpandCluster(cluster.members)
-                        } else {
-                            onZoomTo(cluster.lat, cluster.lng, (z + 2.0).coerceAtMost(MAX_CLUSTER_ZOOM))
+                        val cell = cluster.cell
+                        when {
+                            canExpand -> onExpandCluster(cluster.members)
+                            // 저줌 집계 클러스터: 개수가 적으면 줌인 연타 대신 셀 범위를
+                            // 재조회해 바로 목록으로 펼친다 (결과는 ExpandCluster 이벤트로 도착)
+                            cell != null && cluster.count <= MapViewModel.AGGREGATE_EXPAND_MAX ->
+                                onExpandAggregated(cell)
+                            else ->
+                                onZoomTo(cluster.lat, cluster.lng, (z + 2.0).coerceAtMost(MAX_CLUSTER_ZOOM))
                         }
                         true
                     },

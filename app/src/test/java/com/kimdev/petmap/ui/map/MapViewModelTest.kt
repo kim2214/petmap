@@ -236,6 +236,29 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `집계 클러스터 탭이 셀 범위 재조회로 목록 이벤트를 보낸다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(
+            testPlace("in1", lat = 37.50, lng = 127.00),
+            testPlace("in2", lat = 37.52, lng = 127.02),
+            testPlace("out", lat = 38.50, lng = 128.00), // 셀 밖
+        )
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.researchHere(37.5, 127.0, 8.0) // 저줌 집계 경로
+        advanceUntilIdle()
+        val cell = vm.uiState.value.clusters.first { it.count == 2 }.cell!!
+
+        val events = mutableListOf<MapEvent>()
+        val job = launch { vm.events.toList(events) }
+        vm.expandAggregatedCell(cell)
+        advanceUntilIdle()
+        job.cancel()
+
+        val expand = events.filterIsInstance<MapEvent.ExpandCluster>().single()
+        assertEquals(setOf("in1", "in2"), expand.places.map { it.id }.toSet())
+    }
+
+    @Test
     fun `멀리 이동하면 canResearch true, 다시 검색하면 false`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = listOf(testPlace("a"))
         val vm = viewModel()

@@ -10,6 +10,7 @@ import com.kimdev.petmap.core.common.MapFocusBus
 import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.data.local.RecentSearchStore
+import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -63,6 +64,8 @@ sealed interface MapEvent {
     data object NoResults : MapEvent
     /** 조회 실패 안내 (재시도 액션 동반) — 실패를 숨기면 빈 지도가 "데이터 없음"으로 오해된다 */
     data object LoadFailed : MapEvent
+    /** 저줌 집계 클러스터를 셀 범위 재조회로 펼친 결과 → 장소 목록 시트 표시 */
+    data class ExpandCluster(val places: List<Place>) : MapEvent
 }
 
 @OptIn(FlowPreview::class)
@@ -315,6 +318,29 @@ class MapViewModel @Inject constructor(
      * 개별 로우 마샬링·클라이언트 클러스터링을 생략하고, 중심 근처 500개가 아니라
      * 화면 전역을 실제 개수 기반 클러스터로 고르게 덮는다.
      */
+    /**
+     * 저줌 집계 클러스터 탭: 셀 범위를 재조회해 실제 장소 목록으로 펼친다.
+     * (집계 클러스터는 개별 좌표가 없어 지금까지는 줌인만 가능했다)
+     */
+    fun expandAggregatedCell(cell: GeoClusterCell) {
+        viewModelScope.launch {
+            runCatching {
+                repository.getPlacesInCell(
+                    cell = cell,
+                    categories = _uiState.value.selectedCategories,
+                    // 호출부에서 개수가 적을 때만 펼치지만, 집계 이후 데이터가 달라졌을 때를 대비한 상한
+                    limit = AGGREGATE_EXPAND_MAX + 1,
+                )
+            }.onSuccess { found ->
+                if (found.isNotEmpty()) _events.send(MapEvent.ExpandCluster(found))
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                Log.w(TAG, "getPlacesInCell failed: ${e.message}")
+                _events.send(MapEvent.LoadFailed)
+            }
+        }
+    }
+
     private suspend fun fetchAggregated() {
         runCatching {
             repository.getClusterCells(
@@ -336,6 +362,7 @@ class MapViewModel @Inject constructor(
                     lng = cell.lng,
                     members = emptyList(),
                     aggregatedCount = cell.count,
+                    cell = cell,
                 )
             }
             _uiState.update {
@@ -376,5 +403,11 @@ class MapViewModel @Inject constructor(
          * 개별 경로의 클러스터 밀도가 시각적으로 비슷해진다. 더 키우면 버블끼리 겹친다.
          */
         private const val GRID_DIVISIONS = 15
+
+        /**
+         * 집계 클러스터를 탭했을 때 줌인 대신 목록으로 펼치는 개수 상한.
+         * 이보다 많으면 목록이 과해 기존처럼 줌인한다. 시트 목록 높이(480dp)에 무리 없는 수준.
+         */
+        const val AGGREGATE_EXPAND_MAX = 30
     }
 }

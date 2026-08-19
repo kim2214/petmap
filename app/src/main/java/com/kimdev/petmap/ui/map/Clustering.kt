@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.core.graphics.createBitmap
+import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.distanceMeters
 import kotlin.math.cos
@@ -24,6 +25,8 @@ data class MapCluster(
      * null 이면 [members] 크기를 개수로 사용한다.
      */
     val aggregatedCount: Int? = null,
+    /** 집계 클러스터의 원본 셀 — 탭 시 셀 범위 재조회(목록 펼치기)에 쓴다 */
+    val cell: GeoClusterCell? = null,
 ) {
     val count: Int get() = aggregatedCount ?: members.size
     val single: Place? get() = if (members.size == 1) members[0] else null

@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.max
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -128,7 +129,40 @@ class PlaceRepositoryImpl @Inject constructor(
             cats = cats,
             catCount = catCount,
             limit = limit,
-        ).map { GeoClusterCell(it.lat, it.lng, it.cnt) }
+        ).map {
+            // 대표 좌표(셀 내 평균)로 격자 인덱스를 역산해 셀 경계를 복원한다
+            // (SQL 의 CAST 는 0 이상 값에서 floor 와 동일)
+            val gLat = floor((it.lat - minLat) / latStep)
+            val gLng = floor((it.lng - minLng) / lngStep)
+            GeoClusterCell(
+                lat = it.lat, lng = it.lng, count = it.cnt,
+                minLat = minLat + gLat * latStep,
+                maxLat = minLat + (gLat + 1) * latStep,
+                minLng = minLng + gLng * lngStep,
+                maxLng = minLng + (gLng + 1) * lngStep,
+            )
+        }
+    }
+
+    /** 집계 셀 범위 재조회 — 저줌 클러스터 탭 시 목록으로 펼치기 위해 셀 안의 실제 장소를 가져온다. */
+    override suspend fun getPlacesInCell(
+        cell: GeoClusterCell,
+        categories: Set<PlaceCategory>,
+        limit: Int,
+    ): List<Place> {
+        val (cats, catCount) = catsOf(categories)
+        return placeDao.getInBounds(
+            minLat = cell.minLat,
+            maxLat = cell.maxLat,
+            minLng = cell.minLng,
+            maxLng = cell.maxLng,
+            centerLat = cell.lat,
+            centerLng = cell.lng,
+            lngScaleSq = lngScaleSq(cell.lat),
+            cats = cats,
+            catCount = catCount,
+            limit = limit,
+        ).map { it.toDomain() }
     }
 
     override suspend fun search(query: String, categories: Set<PlaceCategory>, limit: Int): List<Place> {

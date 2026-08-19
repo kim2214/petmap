@@ -37,6 +37,13 @@ interface PlaceRepository {
         limit: Int,
     ): List<GeoClusterCell>
 
+    /** 집계 셀 범위 재조회: 저줌 클러스터 탭 시 셀 안의 실제 장소를 목록으로 펼친다 (셀 중심 가까운 순) */
+    suspend fun getPlacesInCell(
+        cell: GeoClusterCell,
+        categories: Set<PlaceCategory> = emptySet(),
+        limit: Int = 50,
+    ): List<Place>
+
     /** 목록: 이름/주소 검색 + 카테고리 다중 필터 (이름순) */
     suspend fun search(
         query: String,

@@ -8,4 +8,9 @@ data class GeoClusterCell(
     val lat: Double,
     val lng: Double,
     val count: Int,
+    /** 셀의 격자 경계 — 탭 시 이 범위를 재조회해 목록으로 펼치는 데 쓴다 */
+    val minLat: Double,
+    val maxLat: Double,
+    val minLng: Double,
+    val maxLng: Double,
 )
