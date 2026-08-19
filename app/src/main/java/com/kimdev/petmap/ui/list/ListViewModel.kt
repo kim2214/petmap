@@ -9,6 +9,7 @@ import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.data.repository.withFavorites
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -43,6 +44,8 @@ data class ListUiState(
     val selectedCategories: Set<PlaceCategory> = emptySet(),
     val sortByDistance: Boolean = false,
     val openNowOnly: Boolean = false,
+    /** 반려동물 동반 조건 (모든 크기/실내/실외). 여러 개면 AND */
+    val petFilters: Set<PetFilter> = emptySet(),
     val hasLocation: Boolean = false,
     val recentSearches: List<String> = emptyList(),
     /** 조회 실패 여부. true 면 "결과 없음"이 아니라 에러 상태로 표시한다. */
@@ -69,6 +72,7 @@ private data class SearchKey(
     val categories: Set<PlaceCategory>,
     val sortByDistance: Boolean,
     val openNowOnly: Boolean,
+    val petFilters: Set<PetFilter>,
 )
 
 @OptIn(FlowPreview::class)
@@ -88,6 +92,7 @@ class ListViewModel @Inject constructor(
             selectedCategories = SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]),
             sortByDistance = savedStateHandle[KEY_SORT_BY_DISTANCE] ?: false,
             openNowOnly = savedStateHandle[KEY_OPEN_NOW_ONLY] ?: false,
+            petFilters = restorePetFilters(savedStateHandle[KEY_PET_FILTERS]),
         )
     )
     val uiState: StateFlow<ListUiState> = _uiState.asStateFlow()
@@ -115,7 +120,7 @@ class ListViewModel @Inject constructor(
         // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
         viewModelScope.launch {
             _uiState
-                .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly) }
+                .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly, it.petFilters) }
                 .distinctUntilChanged()
                 .onEach { persist(it) }
                 .debounce(250)
@@ -145,8 +150,8 @@ class ListViewModel @Inject constructor(
             else it.copy(isLoading = true, isError = false)
         }
         val loc = userLocation
-        // 영업중 필터가 켜지면 걸러진 뒤에도 페이지가 채워지도록 더 넉넉히 가져온다
-        val fetchLimit = if (key.openNowOnly) pageLimit * 2 else pageLimit
+        // 조회 후 필터(영업중·동반 조건)가 켜지면 걸러진 뒤에도 페이지가 채워지도록 더 넉넉히 가져온다
+        val fetchLimit = if (key.openNowOnly || key.petFilters.isNotEmpty()) pageLimit * 2 else pageLimit
 
         runCatching {
             val fetched = if (key.sortByDistance && loc != null) {
@@ -157,14 +162,18 @@ class ListViewModel @Inject constructor(
                 if (loc == null) results
                 else results.map { it.copy(distanceMeters = distanceMeters(loc.lat, loc.lng, it.lat, it.lng)) }
             }
+            // 동반 조건 필터: 단순 필드 비교라 메인에서 걸러도 충분히 싸다
+            val petFiltered =
+                if (key.petFilters.isEmpty()) fetched
+                else fetched.filter { place -> key.petFilters.all { it.matches(place) } }
             val visible = if (key.openNowOnly) {
                 val now = LocalDateTime.now()
                 // 운영시간 파싱(정규식)은 CPU 작업이라 백그라운드에서 처리
                 withContext(defaultDispatcher) {
-                    fetched.filter { OpeningHours.isOpenNow(it.operatingTime, it.closedDays, now) == true }
+                    petFiltered.filter { OpeningHours.isOpenNow(it.operatingTime, it.closedDays, now) == true }
                 }
             } else {
-                fetched
+                petFiltered
             }
             // 한도를 꽉 채워 돌아왔다면 DB 에 더 남아 있을 수 있다(필터 후 개수가 아니라 조회 개수로 판단)
             FetchResult(visible.take(pageLimit), hasMore = fetched.size >= fetchLimit)
@@ -199,7 +208,7 @@ class ListViewModel @Inject constructor(
         loadMoreJob?.cancel()
         loadMoreJob = viewModelScope.launch {
             runSearch(
-                SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly),
+                SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters),
                 loadingMore = true,
             )
         }
@@ -211,7 +220,7 @@ class ListViewModel @Inject constructor(
     private fun refreshSearch() {
         val s = _uiState.value
         viewModelScope.launch {
-            runSearch(SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly))
+            runSearch(SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters))
         }
     }
 
@@ -261,6 +270,16 @@ class ListViewModel @Inject constructor(
     fun setOpenNowOnly(enabled: Boolean) =
         _uiState.update { it.copy(openNowOnly = enabled) }
 
+    fun togglePetFilter(filter: PetFilter) = _uiState.update {
+        val next = if (filter in it.petFilters) it.petFilters - filter else it.petFilters + filter
+        it.copy(petFilters = next)
+    }
+
+    /** 빈 결과 복구 동선: 카테고리·동반 조건을 한 번에 되돌린다. */
+    fun clearFilters() = _uiState.update {
+        it.copy(selectedCategories = emptySet(), petFilters = emptySet())
+    }
+
     fun toggleFavorite(place: Place) {
         viewModelScope.launch { repository.toggleFavorite(place) }
     }
@@ -271,7 +290,12 @@ class ListViewModel @Inject constructor(
         savedStateHandle[KEY_CATEGORIES] = SavedFilters.categoriesToNames(key.categories)
         savedStateHandle[KEY_SORT_BY_DISTANCE] = key.sortByDistance
         savedStateHandle[KEY_OPEN_NOW_ONLY] = key.openNowOnly
+        savedStateHandle[KEY_PET_FILTERS] = ArrayList(key.petFilters.map { it.name })
     }
+
+    /** 이름 리스트 → PetFilter (알 수 없는 이름은 무시 — enum 변경에도 크래시 없이 폴백) */
+    private fun restorePetFilters(names: List<String>?): Set<PetFilter> =
+        names?.mapNotNull { runCatching { PetFilter.valueOf(it) }.getOrNull() }?.toSet() ?: emptySet()
 
     companion object {
         private const val TAG = "ListViewModel"
@@ -284,5 +308,6 @@ class ListViewModel @Inject constructor(
         private const val KEY_CATEGORIES = "list_categories"
         private const val KEY_SORT_BY_DISTANCE = "list_sort_by_distance"
         private const val KEY_OPEN_NOW_ONLY = "list_open_now_only"
+        private const val KEY_PET_FILTERS = "list_pet_filters"
     }
 }

@@ -2,6 +2,9 @@ package com.kimdev.petmap.ui.list
 
 import android.Manifest
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
@@ -12,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -61,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.kimdev.petmap.core.util.openAppSettings
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.LocationSettingsDialog
@@ -201,31 +204,49 @@ fun ListScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilterChip(
-                        selected = state.sortByDistance,
-                        onClick = {
-                            when {
-                                state.hasLocation -> viewModel.setSortByDistance(!state.sortByDistance)
-                                // 권한은 있는데 위치만 없음 → 위치 재확보 시도
-                                granted -> viewModel.enableDistanceSortWithLocation()
-                                locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
-                                    requestedLocationOnce = true
-                                    pendingDistanceSort = true
-                                    locationPermissions.launchMultiplePermissionRequest()
+                    // 칩이 늘어나 가로 스크롤로 흐르게 한다. 결과 개수는 스크롤 밖 우측 고정.
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f)
+                            .horizontalScroll(rememberScrollState()),
+                    ) {
+                        FilterChip(
+                            selected = state.sortByDistance,
+                            onClick = {
+                                when {
+                                    state.hasLocation -> viewModel.setSortByDistance(!state.sortByDistance)
+                                    // 권한은 있는데 위치만 없음 → 위치 재확보 시도
+                                    granted -> viewModel.enableDistanceSortWithLocation()
+                                    locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
+                                        requestedLocationOnce = true
+                                        pendingDistanceSort = true
+                                        locationPermissions.launchMultiplePermissionRequest()
+                                    }
+                                    else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
                                 }
-                                else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
-                            }
-                        },
-                        label = { Text(stringResource(R.string.filter_distance)) },
-                        leadingIcon = leadingCheck(state.sortByDistance),
-                    )
-                    FilterChip(
-                        selected = state.openNowOnly,
-                        onClick = { viewModel.setOpenNowOnly(!state.openNowOnly) },
-                        label = { Text(stringResource(R.string.label_open_now)) },
-                        leadingIcon = leadingCheck(state.openNowOnly),
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
+                            },
+                            label = { Text(stringResource(R.string.filter_distance)) },
+                            leadingIcon = leadingCheck(state.sortByDistance),
+                        )
+                        FilterChip(
+                            selected = state.openNowOnly,
+                            onClick = { viewModel.setOpenNowOnly(!state.openNowOnly) },
+                            label = { Text(stringResource(R.string.label_open_now)) },
+                            leadingIcon = leadingCheck(state.openNowOnly),
+                        )
+                        // 반려동물 동반 조건 (모든 크기/실내/실외)
+                        PetFilter.entries.forEach { filter ->
+                            val selected = filter in state.petFilters
+                            FilterChip(
+                                selected = selected,
+                                onClick = { viewModel.togglePetFilter(filter) },
+                                label = { Text(stringResource(filter.labelRes)) },
+                                leadingIcon = leadingCheck(selected),
+                            )
+                        }
+                    }
                     // 검색어·필터를 좁힌 효과를 가늠할 수 있게 결과 개수를 보여준다
                     if (!state.isLoading && state.places.isNotEmpty()) {
                         val countRes =
@@ -270,10 +291,11 @@ fun ListScreen(
                 )
 
                 state.places.isEmpty() -> {
+                    val hasFilters = state.selectedCategories.isNotEmpty() || state.petFilters.isNotEmpty()
                     val (title, desc) = when {
                         state.openNowOnly -> stringResource(R.string.empty_open_now_title) to stringResource(R.string.empty_open_now_desc)
                         state.query.isNotBlank() -> stringResource(R.string.empty_search_title_format, state.query) to stringResource(R.string.empty_search_desc)
-                        state.selectedCategories.isNotEmpty() -> stringResource(R.string.empty_filter_title) to stringResource(R.string.empty_filter_desc)
+                        hasFilters -> stringResource(R.string.empty_filter_title) to stringResource(R.string.empty_filter_desc)
                         else -> stringResource(R.string.empty_none_title) to null
                     }
                     // 0건일 때 곧바로 빠져나갈 수 있는 복구 동선
@@ -284,8 +306,8 @@ fun ListScreen(
                         state.query.isNotBlank() -> {
                             { Button(onClick = { viewModel.onQueryChange("") }) { Text(stringResource(R.string.action_clear_search)) } }
                         }
-                        state.selectedCategories.isNotEmpty() -> {
-                            { Button(onClick = { viewModel.clearCategories() }) { Text(stringResource(R.string.action_reset_filter)) } }
+                        hasFilters -> {
+                            { Button(onClick = { viewModel.clearFilters() }) { Text(stringResource(R.string.action_reset_filter)) } }
                         }
                         else -> null
                     }
@@ -361,6 +383,14 @@ private fun leadingCheck(selected: Boolean): (@Composable () -> Unit)? =
         { Icon(Icons.Filled.Check, contentDescription = null) }
     } else {
         null
+    }
+
+/** 동반 조건 필터 칩 라벨 */
+private val PetFilter.labelRes: Int
+    @StringRes get() = when (this) {
+        PetFilter.ANY_SIZE -> R.string.filter_any_size
+        PetFilter.INDOOR -> R.string.pet_indoor_allowed
+        PetFilter.OUTDOOR -> R.string.pet_outdoor_allowed
     }
 
 /** 목록 끝에서 이만큼 앞에 도달하면 다음 페이지를 미리 불러온다. */

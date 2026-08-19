@@ -42,6 +42,7 @@
     <!-- 필터/뱃지 -->
     <string name="filter_all">전체</string>
     <string name="filter_distance">거리순</string>
+    <string name="filter_any_size">모든 크기</string>
     <string name="label_open_now">영업중</string>
     <string name="label_closed">영업종료</string>
 

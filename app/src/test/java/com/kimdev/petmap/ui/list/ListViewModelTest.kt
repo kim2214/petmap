@@ -2,6 +2,7 @@ package com.kimdev.petmap.ui.list
 
 import androidx.lifecycle.SavedStateHandle
 import com.kimdev.petmap.core.location.UserLocation
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.fake.FakeLocationProvider
 import com.kimdev.petmap.fake.FakePlaceRepository
@@ -130,6 +131,53 @@ class ListViewModelTest {
 
         assertEquals(400, repo.lastSearchLimit)
         assertEquals(listOf("open"), vm.uiState.value.places.map { it.id })
+    }
+
+    @Test
+    fun `동반 조건 필터는 AND 로 거르고 정보 없는 장소는 제외한다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(
+            testPlace("both", allowedPetSize = "모두 가능", indoorAllowed = true),
+            testPlace("indoorOnly", allowedPetSize = "소형", indoorAllowed = true),
+            testPlace("noInfo"), // 크기·실내 정보 없음
+        )
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.togglePetFilter(PetFilter.INDOOR)
+        advanceUntilIdle()
+        assertEquals(400, repo.lastSearchLimit) // 조회 후 필터라 넉넉히 가져온다
+        assertEquals(listOf("both", "indoorOnly"), vm.uiState.value.places.map { it.id })
+
+        vm.togglePetFilter(PetFilter.ANY_SIZE) // 실내 AND 모든 크기
+        advanceUntilIdle()
+        assertEquals(listOf("both"), vm.uiState.value.places.map { it.id })
+    }
+
+    @Test
+    fun `동반 조건 필터가 저장되어 새 인스턴스에서 복원된다`() = runTest(mainDispatcherRule.testDispatcher) {
+        val saved = SavedStateHandle()
+        val vm = viewModel(savedState = saved)
+        advanceUntilIdle()
+        vm.togglePetFilter(PetFilter.OUTDOOR)
+        advanceUntilIdle()
+
+        val restored = viewModel(savedState = saved)
+        advanceUntilIdle()
+        assertEquals(setOf(PetFilter.OUTDOOR), restored.uiState.value.petFilters)
+    }
+
+    @Test
+    fun `clearFilters 는 카테고리와 동반 조건을 함께 되돌린다`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.toggleCategory(PlaceCategory.CAFE)
+        vm.togglePetFilter(PetFilter.INDOOR)
+        advanceUntilIdle()
+
+        vm.clearFilters()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.selectedCategories.isEmpty())
+        assertTrue(vm.uiState.value.petFilters.isEmpty())
     }
 
     @Test
