@@ -13,8 +13,13 @@ fun PetMapDatabase.insertPlace(
     lng: Double = 127.0,
 ) {
     openHelper.writableDatabase.execSQL(
-        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        arrayOf<Any?>(id, name, category, roadAddress, "", lat, lng, null, null, null, null, null, null, 0, 1),
+        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        arrayOf<Any?>(
+            id, name, category, roadAddress, "", lat, lng,
+            null, null, null, null, null, null, 0, 1,
+            // v4: parkingAvailable, fee, petFee, description
+            null, null, null, null,
+        ),
     )
 }
 

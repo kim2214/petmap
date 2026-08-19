@@ -32,8 +32,8 @@
 
 ## 데이터: 프리빌트 Room DB
 
-- 단일 소스는 `app/src/main/assets/petmap.db`(약 22,127개 고유 장소, v3 — 동반가능 Y 만 수록). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 경로 없음(원격 동기화 코드는 제거됨).
-- 검색은 FTS4 유니그램 색인(`data/local/PlaceFts.kt`). 색인은 에셋에 동봉되며(`build_db.py`의 `fts_index`가 `PlaceFts.index`와 동일 로직이어야 함), `Migration(2→3)`은 구버전 설치(v2 DB) 업그레이드용.
+- 단일 소스는 `app/src/main/assets/petmap.db`(약 22,127개 고유 장소, v4 — 동반가능 Y 만 수록, 주차·요금·설명 포함). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 경로 없음(원격 동기화 코드는 제거됨).
+- 검색은 FTS4 유니그램 색인(`data/local/PlaceFts.kt`). 색인은 에셋에 동봉되며(`build_db.py`의 `fts_index`가 `PlaceFts.index`와 동일 로직이어야 함), `Migration(2→3)`은 구버전 설치(v2 DB) 업그레이드용, `Migration(3→4)`는 v3 설치에 주차·요금·설명(places)/메모·추가시각(favorites) 컬럼을 추가한다(기존 설치의 places 새 컬럼은 null — 새 데이터는 신규 설치만).
 - **DB를 새 CSV로 재생성할 때는 `/rebuild-db` 스킬을 사용한다** (`tools/build_db.py`의 identity_hash/버전 주의사항이 얽혀 있음).
 - 엔티티(`PlaceEntity`/`FavoriteEntity`) 스키마를 바꾸면 identity_hash가 달라진다. 기준값은 `app/schemas/**/<version>.json`의 `identityHash`이며 `tools/build_db.py`의 `ROOM_IDENTITY_HASH`를 함께 갱신해야 한다. 동기화가 어긋나면 androidTest `PetMapDatabaseAssetTest`가 실패한다.
 

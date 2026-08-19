@@ -21,18 +21,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -162,6 +168,7 @@ fun DetailScreen(
                     viewModel.showOnMap()
                     onShowOnMap()
                 },
+                onSaveMemo = viewModel::saveMemo,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -173,6 +180,7 @@ fun DetailScreen(
 private fun DetailContent(
     place: Place,
     onShowOnMap: () -> Unit,
+    onSaveMemo: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -233,6 +241,15 @@ private fun DetailContent(
                     onClickLabel = stringResource(R.string.row_action_open_homepage),
                 )
             }
+            place.parkingAvailable?.let { canPark ->
+                InfoRow(
+                    Icons.Filled.LocalParking,
+                    stringResource(if (canPark) R.string.detail_parking_yes else R.string.detail_parking_no),
+                    tint = accent,
+                )
+            }
+            place.fee?.let { InfoRow(Icons.Filled.Payments, it, tint = accent) }
+            place.description?.let { InfoRow(Icons.AutoMirrored.Filled.Notes, it, tint = accent) }
 
             SectionTitle(stringResource(R.string.section_pet_info))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -246,6 +263,32 @@ private fun DetailContent(
                     highlight = place.petInfo.outdoorAllowed,
                 )
                 place.petInfo.restriction?.let { Pill(it, highlight = false) }
+                place.petFee?.let { Pill(stringResource(R.string.pet_fee_format, it), highlight = false) }
+            }
+
+            // 즐겨찾기한 장소에만 메모를 남길 수 있다 (즐겨찾기 해제 시 행도 사라짐 — 메모는 보존)
+            if (place.isFavorite) {
+                SectionTitle(stringResource(R.string.section_memo))
+                var showMemoDialog by rememberSaveable { mutableStateOf(false) }
+                InfoRow(
+                    Icons.Filled.Edit,
+                    place.memo ?: stringResource(R.string.memo_add),
+                    valueColor = if (place.memo == null) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+                    tint = accent,
+                    onClick = { showMemoDialog = true },
+                    onClickLabel = stringResource(R.string.row_action_edit_memo),
+                )
+                if (showMemoDialog) {
+                    MemoDialog(
+                        initial = place.memo ?: "",
+                        onSave = {
+                            onSaveMemo(it)
+                            showMemoDialog = false
+                        },
+                        onDismiss = { showMemoDialog = false },
+                    )
+                }
             }
 
             // 공공데이터 특성상 오류가 불가피 → 사용자 제보로 보완하는 진입점.
@@ -594,6 +637,35 @@ private fun DayHoursLine(day: OpeningHours.DayHours, label: String, emphasized: 
             modifier = Modifier.padding(start = 12.dp),
         )
     }
+}
+
+/** 즐겨찾기 메모 입력 다이얼로그. 비우고 저장하면 메모가 삭제된다. */
+@Composable
+private fun MemoDialog(
+    initial: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by rememberSaveable { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.memo_edit_title)) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text(stringResource(R.string.memo_placeholder)) },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(text) }) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
 }
 
 @Composable

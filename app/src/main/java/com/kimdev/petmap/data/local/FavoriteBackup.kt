@@ -36,6 +36,8 @@ class FavoriteBackup @Inject constructor(@ApplicationContext context: Context) {
                     put("lat", f.lat)
                     put("lng", f.lng)
                     if (f.phone != null) put("phone", f.phone)
+                    if (f.memo != null) put("memo", f.memo)
+                    put("addedAt", f.addedAt)
                 }
             )
         }
@@ -64,6 +66,9 @@ class FavoriteBackup @Inject constructor(@ApplicationContext context: Context) {
                         lat = o.getDouble("lat"),
                         lng = o.getDouble("lng"),
                         phone = if (o.has("phone")) o.getString("phone") else null,
+                        // v4 이전 미러에는 없는 필드 — 기본값으로 폴백
+                        memo = if (o.has("memo")) o.getString("memo") else null,
+                        addedAt = o.optLong("addedAt", 0L),
                     )
                 )
             }

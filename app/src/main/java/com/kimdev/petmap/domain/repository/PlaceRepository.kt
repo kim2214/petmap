@@ -15,6 +15,9 @@ interface PlaceRepository {
     /** 첫 접근 시 에셋 DB 복사가 일어나도록 워밍업 (별도 시딩 없음) */
     suspend fun ensureSeeded()
 
+    /** 즐겨찾기 메모 저장/수정. null 또는 빈 문자열이면 메모 삭제 */
+    suspend fun updateFavoriteMemo(placeId: String, memo: String?)
+
     /** 지도 뷰포트: 중심 좌표 기준 반경 박스 내 장소 (가까운 순, 개수 제한). categories 비면 전체 */
     suspend fun getPlacesInBounds(
         centerLat: Double,

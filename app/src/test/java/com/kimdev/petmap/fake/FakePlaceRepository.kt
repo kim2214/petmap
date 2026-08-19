@@ -18,6 +18,7 @@ class FakePlaceRepository : PlaceRepository {
 
     var dataset: List<Place> = emptyList()
     private val favorites = MutableStateFlow<Set<String>>(emptySet())
+    val memos = mutableMapOf<String, String?>()
 
     // 호출 기록
     var ensureSeededCount = 0
@@ -38,6 +39,10 @@ class FakePlaceRepository : PlaceRepository {
         }
 
     override suspend fun ensureSeeded() { ensureSeededCount++ }
+
+    override suspend fun updateFavoriteMemo(placeId: String, memo: String?) {
+        memos[placeId] = memo?.trim()?.takeIf { it.isNotEmpty() }
+    }
 
     override suspend fun getPlacesInBounds(
         centerLat: Double,

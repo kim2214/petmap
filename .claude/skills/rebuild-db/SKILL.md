@@ -64,5 +64,5 @@ sqlite3 test.db "PRAGMA user_version; SELECT COUNT(*) FROM places; SELECT COUNT(
 sqlite3 test.db "SELECT DISTINCT category FROM places LIMIT 12;"
 ```
 
-에셋 DB는 v3 로 FTS 테이블(`places_fts`)을 동봉한다 — `places` 와 행 수가 같아야 한다.
+에셋 DB는 v4 로 FTS 테이블(`places_fts`)을 동봉한다 — `places` 와 행 수가 같아야 한다.
 `Migration(2→3)`은 구버전 앱(v2 DB) 설치가 업그레이드할 때만 색인을 만든다.

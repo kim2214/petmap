@@ -34,18 +34,20 @@ import os
 import sqlite3
 import sys
 
-ROOM_IDENTITY_HASH = "fc2696544a8c13596c2946b867cb4d61"  # app/schemas/**/3.json 의 identityHash
-DB_VERSION = 3  # FTS 동봉(v3). 앱 @Database version 과 동일
+ROOM_IDENTITY_HASH = "651c634a7a602787137c8035ff244058"  # app/schemas/**/4.json 의 identityHash
+DB_VERSION = 4  # 주차·요금·설명 + 즐겨찾기 메모·추가시각(v4). 앱 @Database version 과 동일
 
 DDL = [
     "CREATE TABLE android_metadata (locale TEXT)",
     "CREATE TABLE room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
     "CREATE TABLE `favorites` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, "
-    "`roadAddress` TEXT NOT NULL, `lat` REAL NOT NULL, `lng` REAL NOT NULL, `phone` TEXT, PRIMARY KEY(`id`))",
+    "`roadAddress` TEXT NOT NULL, `lat` REAL NOT NULL, `lng` REAL NOT NULL, `phone` TEXT, "
+    "`memo` TEXT, `addedAt` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
     "CREATE TABLE `places` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, "
     "`roadAddress` TEXT NOT NULL, `lotAddress` TEXT NOT NULL, `lat` REAL NOT NULL, `lng` REAL NOT NULL, "
     "`phone` TEXT, `operatingTime` TEXT, `closedDays` TEXT, `homepage` TEXT, `allowedPetSize` TEXT, "
-    "`restriction` TEXT, `indoorAllowed` INTEGER NOT NULL, `outdoorAllowed` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+    "`restriction` TEXT, `indoorAllowed` INTEGER NOT NULL, `outdoorAllowed` INTEGER NOT NULL, "
+    "`parkingAvailable` INTEGER, `fee` TEXT, `petFee` TEXT, `description` TEXT, PRIMARY KEY(`id`))",
     "CREATE INDEX `index_places_lat_lng` ON `places` (`lat`, `lng`)",
     "CREATE INDEX `index_places_category` ON `places` (`category`)",
     "CREATE INDEX `index_places_name` ON `places` (`name`)",
@@ -177,6 +179,17 @@ def main():
             if pid in rows:
                 continue
             road = meaningful(r.get("도로명주소")) or (r.get("지번주소") or "").strip()
+            # 주차: Y/N → 1/0, 그 외(컬럼 없음 포함) → NULL
+            parking_raw = (first_col(r, "주차 가능여부", "주차장 여부") or "").strip()
+            parking = {"Y": 1, "N": 0}.get(parking_raw)
+            # 요금: "변동"이 실측 63k/64k 로 정보가 없다시피 하다 → 노이즈로 보고 제외
+            fee = meaningful(r.get("입장(이용료)가격 정보"))
+            if fee == "변동":
+                fee = None
+            # 설명: 카테고리명을 반복한 값("동물약국" 등)이 대부분 → 실질 설명만 남긴다
+            desc = meaningful(r.get("기본 정보_장소설명"))
+            if desc == (r.get("카테고리3") or "").strip():
+                desc = None
             rows[pid] = (
                 pid, name, category_name(r.get("카테고리3"), r.get("카테고리1")), road,
                 (r.get("지번주소") or "").strip(), lat, lng,
@@ -185,6 +198,7 @@ def main():
                 meaningful(r.get("입장 가능 동물 크기")), meaningful(r.get("반려동물 제한사항")),
                 1 if (r.get("장소(실내) 여부") or "").strip() == "Y" else 0,
                 1 if (r.get("장소(실외)여부") or "").strip() == "Y" else 0,
+                parking, fee, meaningful(r.get("애견 동반 추가 요금")), desc,
             )
             added += 1
         print(f"  {os.path.basename(csv_path)}: 동반가능 Y 이외 제외 {filtered}건, 신규 반영 {added}건")
@@ -198,7 +212,7 @@ def main():
     db.execute("INSERT INTO android_metadata VALUES ('ko_KR')")
     db.execute("INSERT INTO room_master_table (id, identity_hash) VALUES (42, ?)", (ROOM_IDENTITY_HASH,))
     db.executemany(
-        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows.values()
+        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows.values()
     )
     build_fts(db)
     db.execute(f"PRAGMA user_version={DB_VERSION}")

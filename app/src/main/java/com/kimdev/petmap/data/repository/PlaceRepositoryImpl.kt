@@ -255,7 +255,16 @@ class PlaceRepositoryImpl @Inject constructor(
     override suspend fun toggleFavorite(place: Place) {
         if (favoriteDao.exists(place.id)) favoriteDao.deleteById(place.id)
         else favoriteDao.insert(place.toFavoriteEntity())
-        // 변경 즉시 미러 갱신 — 실패해도 토글 자체는 성공으로 둔다 (다음 토글에서 재기록)
+        writeFavoriteMirror()
+    }
+
+    override suspend fun updateFavoriteMemo(placeId: String, memo: String?) {
+        favoriteDao.updateMemo(placeId, memo?.trim()?.takeIf { it.isNotEmpty() })
+        writeFavoriteMirror()
+    }
+
+    /** 변경 즉시 미러 갱신 — 실패해도 원 작업은 성공으로 둔다 (다음 변경에서 재기록) */
+    private suspend fun writeFavoriteMirror() {
         runCatching {
             withContext(ioDispatcher) { favoriteBackup.write(favoriteDao.getAll()) }
         }

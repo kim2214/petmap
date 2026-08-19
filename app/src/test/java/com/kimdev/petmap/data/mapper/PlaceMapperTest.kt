@@ -28,6 +28,10 @@ class PlaceMapperTest {
         restriction = null,
         indoorAllowed = true,
         outdoorAllowed = false,
+        parkingAvailable = null,
+        fee = null,
+        petFee = null,
+        description = null,
     )
 
     @Test

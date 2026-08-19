@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.kimdev.petmap.data.local.FavoriteBackup
 import com.kimdev.petmap.data.local.PetMapDatabase
 import com.kimdev.petmap.data.local.buildFtsIndex
+import kotlinx.coroutines.Dispatchers
 import com.kimdev.petmap.data.local.insertPlace
 import com.kimdev.petmap.domain.model.PlaceCategory
 import kotlinx.coroutines.flow.first
@@ -35,7 +37,12 @@ class PlaceRepositoryImplTest {
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(context, PetMapDatabase::class.java).build()
-        repo = PlaceRepositoryImpl(db.placeDao(), db.favoriteDao())
+        repo = PlaceRepositoryImpl(
+            db.placeDao(),
+            db.favoriteDao(),
+            FavoriteBackup(context),
+            Dispatchers.IO,
+        )
     }
 
     @After

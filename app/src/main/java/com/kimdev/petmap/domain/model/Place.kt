@@ -17,7 +17,17 @@ data class Place(
     val closedDays: String?,
     val homepage: String?,
     val petInfo: PetInfo,
+    /** 주차 가능 여부. null = 정보 없음 */
+    val parkingAvailable: Boolean? = null,
+    /** 입장/이용료 정보 (실질 값이 있을 때만, "변동" 등 노이즈는 null) */
+    val fee: String? = null,
+    /** 반려동물 동반 추가 요금 */
+    val petFee: String? = null,
+    /** 장소 설명 (카테고리명 반복 등 노이즈는 null) */
+    val description: String? = null,
     val isFavorite: Boolean = false,
+    /** 즐겨찾기에 남긴 메모 (즐겨찾기가 아닐 땐 null) */
+    val memo: String? = null,
     /** 사용자 위치 기준 거리(m). 위치를 모르면 null */
     val distanceMeters: Double? = null,
 )

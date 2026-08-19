@@ -40,9 +40,16 @@ class DetailViewModel @Inject constructor(
             if (place == null) return@launch
             // 즐겨찾기 구독은 장소 로드 뒤에 시작해야 한다. 별도 코루틴으로 돌리면 첫 emit 이
             // place==null 시점에 도착해 유실되고, 이미 즐겨찾기한 장소가 빈 하트로 표시된다.
-            repository.observeFavoriteIds().collect { ids ->
+            // observeFavorites: 하트 상태에 더해 이 장소에 남긴 메모까지 함께 반영한다.
+            repository.observeFavorites().collect { favorites ->
+                val favorite = favorites.find { it.id == placeId }
                 _uiState.update { state ->
-                    state.copy(place = state.place?.copy(isFavorite = state.place.id in ids))
+                    state.copy(
+                        place = state.place?.copy(
+                            isFavorite = favorite != null,
+                            memo = favorite?.memo,
+                        )
+                    )
                 }
             }
         }
@@ -51,6 +58,11 @@ class DetailViewModel @Inject constructor(
     fun toggleFavorite() {
         val place = _uiState.value.place ?: return
         viewModelScope.launch { repository.toggleFavorite(place) }
+    }
+
+    /** 즐겨찾기 메모 저장 (빈 문자열이면 삭제) */
+    fun saveMemo(memo: String) {
+        viewModelScope.launch { repository.updateFavoriteMemo(placeId, memo) }
     }
 
     /** 이 장소를 지도에서 보도록 요청 (지도 화면이 소비) */

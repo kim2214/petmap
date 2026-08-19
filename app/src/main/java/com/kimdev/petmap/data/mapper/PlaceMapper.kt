@@ -21,9 +21,13 @@ fun PlaceEntity.toDomain(): Place = Place(
     closedDays = closedDays,
     homepage = homepage,
     petInfo = PetInfo(allowedPetSize, restriction, indoorAllowed, outdoorAllowed),
+    parkingAvailable = parkingAvailable,
+    fee = fee,
+    petFee = petFee,
+    description = description,
 )
 
-/** 도메인 → 로컬 즐겨찾기 Entity */
+/** 도메인 → 로컬 즐겨찾기 Entity (새 즐겨찾기 — 추가 시각을 지금으로 기록) */
 fun Place.toFavoriteEntity(): FavoriteEntity = FavoriteEntity(
     id = id,
     name = name,
@@ -32,6 +36,8 @@ fun Place.toFavoriteEntity(): FavoriteEntity = FavoriteEntity(
     lat = lat,
     lng = lng,
     phone = phone,
+    memo = null,
+    addedAt = System.currentTimeMillis(),
 )
 
 /**
@@ -40,7 +46,7 @@ fun Place.toFavoriteEntity(): FavoriteEntity = FavoriteEntity(
  * 데이터 갱신으로 원본이 사라졌으면 저장 시점 스냅샷(최소 정보)을 돌려준다.
  */
 fun FavoriteWithPlace.toDomain(): Place =
-    place?.toDomain()?.copy(isFavorite = true) ?: favorite.toDomain()
+    place?.toDomain()?.copy(isFavorite = true, memo = favorite.memo) ?: favorite.toDomain()
 
 /** 즐겨찾기 Entity → 도메인 (목록 표시용 최소 정보) */
 fun FavoriteEntity.toDomain(): Place = Place(
@@ -57,4 +63,5 @@ fun FavoriteEntity.toDomain(): Place = Place(
     homepage = null,
     petInfo = PetInfo(null, null, indoorAllowed = false, outdoorAllowed = false),
     isFavorite = true,
+    memo = memo,
 )

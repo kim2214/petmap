@@ -11,7 +11,7 @@ import com.kimdev.petmap.data.local.entity.PlaceEntity
 // 추적하고, tools/build_db.py 의 ROOM_IDENTITY_HASH 와 대조하는 단일 기준이 된다.
 @Database(
     entities = [FavoriteEntity::class, PlaceEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class PetMapDatabase : RoomDatabase() {

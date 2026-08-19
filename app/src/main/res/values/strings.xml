@@ -10,6 +10,16 @@
     <!-- 공통 액션/단어 -->
     <string name="action_back">뒤로</string>
     <string name="action_close">닫기</string>
+    <string name="action_save">저장</string>
+    <string name="action_cancel">취소</string>
+    <string name="detail_parking_yes">주차 가능</string>
+    <string name="detail_parking_no">주차 불가</string>
+    <string name="pet_fee_format">추가 요금 %1$s</string>
+    <string name="section_memo">메모</string>
+    <string name="memo_add">메모 남기기</string>
+    <string name="memo_edit_title">메모</string>
+    <string name="memo_placeholder">예: 주차 협소, 사전 예약 필수</string>
+    <string name="row_action_edit_memo">메모 편집</string>
     <string name="action_clear">지우기</string>
     <string name="action_delete">삭제</string>
     <string name="action_retry">다시 시도</string>

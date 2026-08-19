@@ -65,7 +65,7 @@ com.kimdev.petmap
 ## 데이터 흐름 (단방향)
 
 ```
-assets/petmap.db (프리빌트, v3·FTS 동봉) ─ createFromAsset ─→ Room
+assets/petmap.db (프리빌트, v4·FTS 동봉) ─ createFromAsset ─→ Room
                                                               │
 Room(places + favorites) ─→ PlaceRepositoryImpl ─→ ViewModel(StateFlow) ─→ Compose UI
 ```
