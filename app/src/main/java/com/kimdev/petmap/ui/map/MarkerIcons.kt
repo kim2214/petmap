@@ -54,6 +54,19 @@ fun rememberCategoryMarkers(): Map<PlaceCategory, OverlayImage> {
     }
 }
 
+/** 단일 카테고리 마커 (상세 미니맵용 — 지도 화면과 같은 커스텀 핀을 쓴다). */
+@Composable
+fun rememberCategoryMarker(category: PlaceCategory): OverlayImage {
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val painter = rememberVectorPainter(category.icon)
+    return remember(density, layoutDirection, painter) {
+        OverlayImage.fromBitmap(
+            renderMarkerBitmap(category.markerColor, painter, density, layoutDirection),
+        )
+    }
+}
+
 private fun renderMarkerBitmap(
     color: Color,
     painter: VectorPainter,

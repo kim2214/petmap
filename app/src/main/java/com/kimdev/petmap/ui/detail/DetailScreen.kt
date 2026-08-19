@@ -98,7 +98,8 @@ import com.kimdev.petmap.ui.components.FavoriteIconButton
 import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
 import com.kimdev.petmap.ui.components.labelRes
-import com.kimdev.petmap.ui.components.softColor
+import com.kimdev.petmap.ui.map.MarkerAnchor
+import com.kimdev.petmap.ui.map.rememberCategoryMarker
 import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -305,7 +306,11 @@ private fun Header(place: Place) {
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface),
+                // 다크에선 surface 가 틴트 배경과 비슷해 원이 묻힌다 → 한 단계 밝은 면으로
+                .background(
+                    if (LocalIsDarkTheme.current) MaterialTheme.colorScheme.surfaceContainerHighest
+                    else MaterialTheme.colorScheme.surface
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -453,7 +458,10 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
                 // rememberUpdatedMarkerState: 즐겨찾기 토글로 place 인스턴스가 바뀔 때마다
                 // MarkerState 를 새로 만들면 마커 오버레이가 재생성되며 깜빡인다.
                 state = rememberUpdatedMarkerState(LatLng(place.lat, place.lng)),
-                iconTintColor = place.category.color,
+                // 기본 마커에 tint 를 입히면 초록 원본과 섞여 카테고리 색이 왜곡된다
+                // → 지도 화면과 동일한 커스텀 핀 사용
+                icon = rememberCategoryMarker(place.category),
+                anchor = MarkerAnchor,
             )
         }
         // 제스처가 모두 꺼진 미리보기 지도 → 탭하면 본 지도에서 열리게 전체를 클릭 영역으로 덮는다
