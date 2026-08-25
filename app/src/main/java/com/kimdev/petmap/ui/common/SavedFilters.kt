@@ -1,5 +1,6 @@
 package com.kimdev.petmap.ui.common
 
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.PlaceCategory
 
 /**
@@ -13,5 +14,12 @@ object SavedFilters {
 
     fun namesToCategories(names: List<String>?): Set<PlaceCategory> =
         names?.mapNotNull { runCatching { PlaceCategory.valueOf(it) }.getOrNull() }?.toSet()
+            ?: emptySet()
+
+    fun petFiltersToNames(filters: Set<PetFilter>): ArrayList<String> =
+        ArrayList(filters.map { it.name })
+
+    fun namesToPetFilters(names: List<String>?): Set<PetFilter> =
+        names?.mapNotNull { runCatching { PetFilter.valueOf(it) }.getOrNull() }?.toSet()
             ?: emptySet()
 }

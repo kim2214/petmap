@@ -3,6 +3,7 @@ package com.kimdev.petmap.ui.map
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.common.MapFocusBus
 import androidx.lifecycle.SavedStateHandle
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.fake.FakeLocationProvider
 import com.kimdev.petmap.fake.FakePlaceRepository
@@ -233,6 +234,24 @@ class MapViewModelTest {
 
             assertEquals(2, received.size)
             job.cancel()
+        }
+
+    @Test
+    fun `동반 조건 필터는 조회에 전달되고 SavedStateHandle 에 저장·복원된다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
+            val savedState = SavedStateHandle()
+            val vm = viewModel(savedState)
+            advanceUntilIdle()
+
+            vm.togglePetFilter(PetFilter.INDOOR)
+            advanceUntilIdle()
+            assertEquals(setOf(PetFilter.INDOOR), repo.lastPetFilters)
+
+            val restored = viewModel(savedState)
+            advanceUntilIdle()
+            assertEquals(setOf(PetFilter.INDOOR), restored.uiState.value.petFilters)
+            assertEquals(setOf(PetFilter.INDOOR), repo.lastPetFilters)
         }
 
     @Test

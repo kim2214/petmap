@@ -11,12 +11,17 @@ fun PetMapDatabase.insertPlace(
     roadAddress: String = "서울시 어딘가 1",
     lat: Double = 37.5,
     lng: Double = 127.0,
+    allowedPetSize: String? = null,
+    indoorAllowed: Boolean = false,
+    outdoorAllowed: Boolean = true,
 ) {
     openHelper.writableDatabase.execSQL(
         "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         arrayOf<Any?>(
             id, name, category, roadAddress, "", lat, lng,
-            null, null, null, null, null, null, 0, 1,
+            // phone, operatingTime, closedDays, homepage, allowedPetSize, restriction, indoor, outdoor
+            null, null, null, null, allowedPetSize, null,
+            if (indoorAllowed) 1 else 0, if (outdoorAllowed) 1 else 0,
             // v4: parkingAvailable, fee, petFee, description
             null, null, null, null,
         ),

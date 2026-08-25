@@ -11,6 +11,7 @@ import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.domain.model.GeoClusterCell
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -42,6 +43,8 @@ data class MapUiState(
     val isLoading: Boolean = false,
     val clusters: List<MapCluster> = emptyList(),
     val selectedCategories: Set<PlaceCategory> = emptySet(),
+    /** 반려동물 동반 조건 (모든 크기/실내/실외). 여러 개면 AND, SQL 단계에서 걸린다 */
+    val petFilters: Set<PetFilter> = emptySet(),
     val favoriteIds: Set<String> = emptySet(),
     val searchQuery: String = "",
     val searchResults: List<Place> = emptyList(),
@@ -81,9 +84,12 @@ class MapViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    // 프로세스 사망 후에도 카테고리 필터를 복원한다.
+    // 프로세스 사망 후에도 카테고리·동반 조건 필터를 복원한다.
     private val _uiState = MutableStateFlow(
-        MapUiState(selectedCategories = SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]))
+        MapUiState(
+            selectedCategories = SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]),
+            petFilters = SavedFilters.namesToPetFilters(savedStateHandle[KEY_PET_FILTERS]),
+        )
     )
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
@@ -145,11 +151,17 @@ class MapViewModel @Inject constructor(
                 _uiState.update { it.copy(recentSearches = list) }
             }
         }
-        // 카테고리 필터 변경 시 저장(프로세스 사망 대비)
+        // 필터 변경 시 저장(프로세스 사망 대비)
         viewModelScope.launch {
             _uiState.map { it.selectedCategories }
                 .distinctUntilChanged()
                 .onEach { savedStateHandle[KEY_CATEGORIES] = SavedFilters.categoriesToNames(it) }
+                .collect {}
+        }
+        viewModelScope.launch {
+            _uiState.map { it.petFilters }
+                .distinctUntilChanged()
+                .onEach { savedStateHandle[KEY_PET_FILTERS] = SavedFilters.petFiltersToNames(it) }
                 .collect {}
         }
         // "지도에서 보기" 요청 → 해당 장소를 포커스 이벤트로
@@ -281,6 +293,14 @@ class MapViewModel @Inject constructor(
         fetch()
     }
 
+    fun togglePetFilter(filter: PetFilter) {
+        _uiState.update {
+            val next = if (filter in it.petFilters) it.petFilters - filter else it.petFilters + filter
+            it.copy(petFilters = next)
+        }
+        fetch()
+    }
+
     /** 현재 카메라 위치 기준으로 DB 조회 후 클러스터링. canResearch 해제. */
     private fun fetch() {
         if (_uiState.value.isSeeding || _uiState.value.seedFailed) return
@@ -309,6 +329,7 @@ class MapViewModel @Inject constructor(
                 centerLng = loadedCenterLng,
                 radiusKm = radiusForZoom(loadedZoom),
                 categories = _uiState.value.selectedCategories,
+                petFilters = _uiState.value.petFilters,
                 limit = EXACT_LIMIT,
             )
         }.onSuccess { loaded ->
@@ -352,6 +373,7 @@ class MapViewModel @Inject constructor(
                 repository.getPlacesInCell(
                     cell = cell,
                     categories = _uiState.value.selectedCategories,
+                    petFilters = _uiState.value.petFilters,
                     // 호출부에서 개수가 적을 때만 펼치지만, 집계 이후 데이터가 달라졌을 때를 대비한 상한
                     limit = AGGREGATE_EXPAND_MAX + 1,
                 )
@@ -372,6 +394,7 @@ class MapViewModel @Inject constructor(
                 centerLng = loadedCenterLng,
                 radiusKm = radiusForZoom(loadedZoom),
                 categories = _uiState.value.selectedCategories,
+                petFilters = _uiState.value.petFilters,
                 gridDivisions = GRID_DIVISIONS,
                 // 격자 수보다 작으면 어떤 셀이 버려지는지 정의되지 않아 지역이 통째로 비어 보인다.
                 limit = GRID_DIVISIONS * GRID_DIVISIONS,
@@ -404,6 +427,7 @@ class MapViewModel @Inject constructor(
     companion object {
         private const val TAG = "MapViewModel"
         private const val KEY_CATEGORIES = "map_categories"
+        private const val KEY_PET_FILTERS = "map_pet_filters"
 
         /**
          * 이 줌 미만에선 개별 로우 대신 SQL 그리드 집계로 개요를 그린다.

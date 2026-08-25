@@ -82,6 +82,8 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.distanceMeters
 import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.ui.components.CategoryFilterRow
+import com.kimdev.petmap.ui.components.PetFilterChips
+import androidx.compose.foundation.horizontalScroll
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.RecentSearchList
 import com.kimdev.petmap.ui.components.PlacePreviewSheet
@@ -409,19 +411,26 @@ fun MapScreen(
                         )
                     }
 
-                // 카테고리 다중 선택 칩
+                // 카테고리 다중 선택 칩 + 반려동물 동반 조건 칩 (목록과 동일한 필터)
                 else -> Surface(
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                     shape = RoundedCornerShape(24.dp),
                     shadowElevation = 2.dp,
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
-                    CategoryFilterRow(
-                        selected = state.selectedCategories,
-                        onToggle = viewModel::toggleCategory,
-                        onClearAll = viewModel::clearCategories,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        CategoryFilterRow(
+                            selected = state.selectedCategories,
+                            onToggle = viewModel::toggleCategory,
+                            onClearAll = viewModel::clearCategories,
+                        )
+                        androidx.compose.foundation.layout.Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            PetFilterChips(selected = state.petFilters, onToggle = viewModel::togglePetFilter)
+                        }
+                    }
                 }
             }
 

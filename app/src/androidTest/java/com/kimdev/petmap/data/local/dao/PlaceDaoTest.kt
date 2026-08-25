@@ -9,6 +9,7 @@ import com.kimdev.petmap.data.local.PetMapDatabase
 import com.kimdev.petmap.data.local.PlaceFts
 import com.kimdev.petmap.data.local.buildFtsIndex
 import com.kimdev.petmap.data.local.insertPlace
+import com.kimdev.petmap.domain.model.PetFilter
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -50,7 +51,7 @@ class PlaceDaoTest {
         val result = dao.getInBounds(
             minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
             centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
-            cats = allCats.first, catCount = allCats.second, limit = 10,
+            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, limit = 10,
         )
         assertEquals(listOf("center", "far"), result.map { it.id })
     }
@@ -65,7 +66,7 @@ class PlaceDaoTest {
         val result = dao.getInBounds(
             minLat = 36.0, maxLat = 39.0, minLng = 126.0, maxLng = 129.0,
             centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
-            cats = allCats.first, catCount = allCats.second, limit = 10,
+            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, limit = 10,
         )
         assertEquals(listOf("lngOff", "latOff"), result.map { it.id })
     }
@@ -79,16 +80,37 @@ class PlaceDaoTest {
         val cafes = dao.getInBounds(
             minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
             centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
-            cats = listOf("CAFE"), catCount = 1, limit = 10,
+            cats = listOf("CAFE"), catCount = 1, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, limit = 10,
         )
         assertEquals(listOf("cafeNear", "cafeFar"), cafes.map { it.id })
 
         val limited = dao.getInBounds(
             minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
             centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
-            cats = listOf("CAFE"), catCount = 1, limit = 1,
+            cats = listOf("CAFE"), catCount = 1, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, limit = 1,
         )
         assertEquals(listOf("cafeNear"), limited.map { it.id })
+    }
+
+    @Test
+    fun getInBounds_petFiltersAndExcludeUnknown() = runBlocking {
+        db.insertPlace("allIndoor", allowedPetSize = PetFilter.SIZE_ALL, indoorAllowed = true, outdoorAllowed = false)
+        db.insertPlace("smallIndoor", allowedPetSize = "소형", indoorAllowed = true, outdoorAllowed = true)
+        db.insertPlace("unknownSize", allowedPetSize = null, indoorAllowed = true, outdoorAllowed = true)
+
+        fun query(anySize: Boolean, indoor: Boolean, outdoor: Boolean) = runBlocking {
+            dao.getInBounds(
+                minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
+                centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
+                cats = allCats.first, catCount = allCats.second,
+                anySize = anySize, indoor = indoor, outdoor = outdoor, sizeAll = PetFilter.SIZE_ALL, limit = 10,
+            ).map { it.id }.toSet()
+        }
+        assertEquals(setOf("allIndoor", "smallIndoor", "unknownSize"), query(false, false, false))
+        // 모든 크기: 크기 정보가 없는 장소는 제외된다
+        assertEquals(setOf("allIndoor"), query(anySize = true, indoor = false, outdoor = false))
+        // AND: 실내 + 실외
+        assertEquals(setOf("smallIndoor", "unknownSize"), query(false, indoor = true, outdoor = true))
     }
 
     @Test
@@ -101,7 +123,7 @@ class PlaceDaoTest {
         val cells = dao.getClusterCells(
             minLat = 37.0, maxLat = 38.0, minLng = 127.0, maxLng = 128.0,
             latStep = 0.5, lngStep = 0.5,
-            cats = allCats.first, catCount = allCats.second, limit = 10,
+            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, limit = 10,
         ).sortedBy { it.cnt }
 
         assertEquals(2, cells.size)

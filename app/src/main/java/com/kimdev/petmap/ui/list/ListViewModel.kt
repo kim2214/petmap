@@ -94,7 +94,7 @@ class ListViewModel @Inject constructor(
             selectedCategories = SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]),
             sortByDistance = savedStateHandle[KEY_SORT_BY_DISTANCE] ?: false,
             openNowOnly = savedStateHandle[KEY_OPEN_NOW_ONLY] ?: false,
-            petFilters = restorePetFilters(savedStateHandle[KEY_PET_FILTERS]),
+            petFilters = SavedFilters.namesToPetFilters(savedStateHandle[KEY_PET_FILTERS]),
         )
     )
     val uiState: StateFlow<ListUiState> = _uiState.asStateFlow()
@@ -316,12 +316,8 @@ class ListViewModel @Inject constructor(
         savedStateHandle[KEY_CATEGORIES] = SavedFilters.categoriesToNames(key.categories)
         savedStateHandle[KEY_SORT_BY_DISTANCE] = key.sortByDistance
         savedStateHandle[KEY_OPEN_NOW_ONLY] = key.openNowOnly
-        savedStateHandle[KEY_PET_FILTERS] = ArrayList(key.petFilters.map { it.name })
+        savedStateHandle[KEY_PET_FILTERS] = SavedFilters.petFiltersToNames(key.petFilters)
     }
-
-    /** 이름 리스트 → PetFilter (알 수 없는 이름은 무시 — enum 변경에도 크래시 없이 폴백) */
-    private fun restorePetFilters(names: List<String>?): Set<PetFilter> =
-        names?.mapNotNull { runCatching { PetFilter.valueOf(it) }.getOrNull() }?.toSet() ?: emptySet()
 
     companion object {
         private const val TAG = "ListViewModel"

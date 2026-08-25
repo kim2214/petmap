@@ -1,7 +1,6 @@
 package com.kimdev.petmap.ui.list
 
 import androidx.activity.compose.BackHandler
-import androidx.annotation.StringRes
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.animation.AnimatedVisibility
@@ -59,10 +58,10 @@ import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.R
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.common.rememberLocationPermission
 import com.kimdev.petmap.ui.components.EmptyState
+import com.kimdev.petmap.ui.components.PetFilterChips
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlaceCardSkeleton
 import com.kimdev.petmap.ui.components.PlaceListSkeleton
@@ -227,16 +226,8 @@ fun ListScreen(
                             label = { Text(stringResource(R.string.label_open_now)) },
                             leadingIcon = leadingCheck(state.openNowOnly),
                         )
-                        // 반려동물 동반 조건 (모든 크기/실내/실외)
-                        PetFilter.entries.forEach { filter ->
-                            val selected = filter in state.petFilters
-                            FilterChip(
-                                selected = selected,
-                                onClick = { viewModel.togglePetFilter(filter) },
-                                label = { Text(stringResource(filter.labelRes)) },
-                                leadingIcon = leadingCheck(selected),
-                            )
-                        }
+                        // 반려동물 동반 조건 (모든 크기/실내/실외) — 지도와 같은 칩
+                        PetFilterChips(selected = state.petFilters, onToggle = viewModel::togglePetFilter)
                     }
                     // 검색어·필터를 좁힌 효과를 가늠할 수 있게 결과 개수를 보여준다
                     if (!state.isLoading && state.places.isNotEmpty()) {
@@ -378,12 +369,5 @@ private fun leadingCheck(selected: Boolean): (@Composable () -> Unit)? =
     }
 
 /** 동반 조건 필터 칩 라벨 */
-private val PetFilter.labelRes: Int
-    @StringRes get() = when (this) {
-        PetFilter.ANY_SIZE -> R.string.filter_any_size
-        PetFilter.INDOOR -> R.string.pet_indoor_allowed
-        PetFilter.OUTDOOR -> R.string.pet_outdoor_allowed
-    }
-
 /** 목록 끝에서 이만큼 앞에 도달하면 다음 페이지를 미리 불러온다. */
 private const val LOAD_MORE_THRESHOLD = 5

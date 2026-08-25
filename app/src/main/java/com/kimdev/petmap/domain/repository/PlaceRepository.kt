@@ -2,6 +2,7 @@ package com.kimdev.petmap.domain.repository
 
 import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.GeoClusterCell
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import kotlinx.coroutines.flow.Flow
@@ -22,12 +23,16 @@ interface PlaceRepository {
     /** 즐겨찾기 메모 저장/수정. null 또는 빈 문자열이면 메모 삭제 */
     suspend fun updateFavoriteMemo(placeId: String, memo: String?)
 
-    /** 지도 뷰포트: 중심 좌표 기준 반경 박스 내 장소 (가까운 순, 개수 제한). categories 비면 전체 */
+    /**
+     * 지도 뷰포트: 중심 좌표 기준 반경 박스 내 장소 (가까운 순, 개수 제한).
+     * categories 비면 전체. petFilters 는 SQL 에서 AND 로 걸린다(정보 없는 장소 제외).
+     */
     suspend fun getPlacesInBounds(
         centerLat: Double,
         centerLng: Double,
         radiusKm: Double,
         categories: Set<PlaceCategory> = emptySet(),
+        petFilters: Set<PetFilter> = emptySet(),
         limit: Int = 300,
     ): List<Place>
 
@@ -40,6 +45,7 @@ interface PlaceRepository {
         centerLng: Double,
         radiusKm: Double,
         categories: Set<PlaceCategory> = emptySet(),
+        petFilters: Set<PetFilter> = emptySet(),
         gridDivisions: Int,
         limit: Int,
     ): List<GeoClusterCell>
@@ -48,6 +54,7 @@ interface PlaceRepository {
     suspend fun getPlacesInCell(
         cell: GeoClusterCell,
         categories: Set<PlaceCategory> = emptySet(),
+        petFilters: Set<PetFilter> = emptySet(),
         limit: Int = 50,
     ): List<Place>
 

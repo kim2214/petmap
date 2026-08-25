@@ -2,6 +2,7 @@ package com.kimdev.petmap.fake
 
 import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.GeoClusterCell
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -28,15 +29,21 @@ class FakePlaceRepository : PlaceRepository {
     var lastSearchLimit: Int? = null
     var lastSearchNearbyLimit: Int? = null
     var lastCategories: Set<PlaceCategory>? = null
+    var lastPetFilters: Set<PetFilter>? = null
     var lastBoundsLimit: Int? = null
     var lastClusterCellsLimit: Int? = null
 
     fun setFavorites(ids: Set<String>) { favorites.value = ids }
 
-    private fun List<Place>.filterBy(query: String, categories: Set<PlaceCategory>): List<Place> =
+    private fun List<Place>.filterBy(
+        query: String,
+        categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter> = emptySet(),
+    ): List<Place> =
         filter { p ->
             (query.isBlank() || p.name.contains(query, ignoreCase = true)) &&
-                (categories.isEmpty() || p.category in categories)
+                (categories.isEmpty() || p.category in categories) &&
+                petFilters.all { it.matches(p) }
         }
 
     /** 설정하면 ensureSeeded 가 이 예외를 던진다 (에셋 DB 준비 실패 시뮬레이션) */
@@ -58,11 +65,13 @@ class FakePlaceRepository : PlaceRepository {
         centerLng: Double,
         radiusKm: Double,
         categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter>,
         limit: Int,
     ): List<Place> {
         lastCategories = categories
+        lastPetFilters = petFilters
         lastBoundsLimit = limit
-        return dataset.filterBy("", categories).take(limit)
+        return dataset.filterBy("", categories, petFilters).take(limit)
     }
 
     override suspend fun getClusterCells(
@@ -70,13 +79,15 @@ class FakePlaceRepository : PlaceRepository {
         centerLng: Double,
         radiusKm: Double,
         categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter>,
         gridDivisions: Int,
         limit: Int,
     ): List<GeoClusterCell> {
         lastCategories = categories
+        lastPetFilters = petFilters
         lastClusterCellsLimit = limit
         // 소수 1자리 그리드로 묶어 셀별 개수 집계(테스트용 근사)
-        return dataset.filterBy("", categories)
+        return dataset.filterBy("", categories, petFilters)
             .groupBy { Math.round(it.lat * 10) / 10.0 to Math.round(it.lng * 10) / 10.0 }
             .map { (key, members) ->
                 GeoClusterCell(
@@ -91,10 +102,12 @@ class FakePlaceRepository : PlaceRepository {
     override suspend fun getPlacesInCell(
         cell: GeoClusterCell,
         categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter>,
         limit: Int,
     ): List<Place> {
         lastCategories = categories
-        return dataset.filterBy("", categories)
+        lastPetFilters = petFilters
+        return dataset.filterBy("", categories, petFilters)
             .filter { it.lat in cell.minLat..cell.maxLat && it.lng in cell.minLng..cell.maxLng }
             .take(limit)
     }

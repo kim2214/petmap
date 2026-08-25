@@ -14,6 +14,7 @@ import com.kimdev.petmap.data.mapper.toDomain
 import com.kimdev.petmap.data.mapper.toFavoriteEntity
 import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.GeoClusterCell
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
@@ -100,6 +101,7 @@ class PlaceRepositoryImpl @Inject constructor(
         centerLng: Double,
         radiusKm: Double,
         categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter>,
         limit: Int,
     ): List<Place> {
         val latDelta = radiusKm / 111.0
@@ -115,6 +117,10 @@ class PlaceRepositoryImpl @Inject constructor(
             lngScaleSq = lngScaleSq(centerLat),
             cats = cats,
             catCount = catCount,
+            anySize = PetFilter.ANY_SIZE in petFilters,
+            indoor = PetFilter.INDOOR in petFilters,
+            outdoor = PetFilter.OUTDOOR in petFilters,
+            sizeAll = PetFilter.SIZE_ALL,
             limit = limit,
         ).map { it.toDomain() }
     }
@@ -124,6 +130,7 @@ class PlaceRepositoryImpl @Inject constructor(
         centerLng: Double,
         radiusKm: Double,
         categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter>,
         gridDivisions: Int,
         limit: Int,
     ): List<GeoClusterCell> {
@@ -146,6 +153,10 @@ class PlaceRepositoryImpl @Inject constructor(
             lngStep = lngStep,
             cats = cats,
             catCount = catCount,
+            anySize = PetFilter.ANY_SIZE in petFilters,
+            indoor = PetFilter.INDOOR in petFilters,
+            outdoor = PetFilter.OUTDOOR in petFilters,
+            sizeAll = PetFilter.SIZE_ALL,
             limit = limit,
         ).map {
             // 대표 좌표(셀 내 평균)로 격자 인덱스를 역산해 셀 경계를 복원한다
@@ -166,6 +177,7 @@ class PlaceRepositoryImpl @Inject constructor(
     override suspend fun getPlacesInCell(
         cell: GeoClusterCell,
         categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter>,
         limit: Int,
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
@@ -179,6 +191,10 @@ class PlaceRepositoryImpl @Inject constructor(
             lngScaleSq = lngScaleSq(cell.lat),
             cats = cats,
             catCount = catCount,
+            anySize = PetFilter.ANY_SIZE in petFilters,
+            indoor = PetFilter.INDOOR in petFilters,
+            outdoor = PetFilter.OUTDOOR in petFilters,
+            sizeAll = PetFilter.SIZE_ALL,
             limit = limit,
         ).map { it.toDomain() }
     }
