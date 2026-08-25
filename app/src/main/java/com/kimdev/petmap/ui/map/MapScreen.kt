@@ -1,6 +1,5 @@
 package com.kimdev.petmap.ui.map
 
-import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -79,13 +78,11 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.R
 import com.kimdev.petmap.core.common.Constants
-import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.distanceMeters
 import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.ui.components.CategoryFilterRow
-import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.RecentSearchList
 import com.kimdev.petmap.ui.components.PlacePreviewSheet
@@ -93,8 +90,6 @@ import com.kimdev.petmap.ui.components.SearchTextField
 import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
 import com.kimdev.petmap.ui.components.softColor
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.naver.maps.geometry.LatLng
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.naver.maps.map.CameraAnimation
@@ -123,10 +118,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.foundation.layout.ColumnScope
 import com.kimdev.petmap.ui.components.EmptyState
+import com.kimdev.petmap.ui.common.rememberLocationPermission
 
 @OptIn(
     ExperimentalNaverMapApi::class,
-    ExperimentalPermissionsApi::class,
     ExperimentalMaterial3Api::class,
     FlowPreview::class,
 )
@@ -155,9 +150,9 @@ fun MapScreen(
         )
     }
 
-    // 위치 권한 + 네이버 위치 소스(파란 점)
-    val locationPermissions = rememberMultiplePermissionsState(
-        listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+    // 위치 권한 상태머신(요청/설정 안내 공용) + 네이버 위치 소스(파란 점)
+    val locationPermission = rememberLocationPermission(
+        settingsMessage = stringResource(R.string.location_message_map),
     )
     val locationSource = rememberFusedLocationSource()
     // rememberSaveable: 탭 전환·회전 시 NoFollow 로 초기화되면 아래 효과가 Follow 를 재지정해
@@ -168,10 +163,7 @@ fun MapScreen(
     var showMapTypeMenu by remember { mutableStateOf(false) }
     // 권한이 "이미 있음"이 아니라 "처음 확인/방금 허용"일 때만 Follow 를 켜기 위한 플래그
     var followInitialized by rememberSaveable { mutableStateOf(false) }
-    val granted = locationPermissions.allPermissionsGranted
-    // rememberSaveable: 탭 전환·회전으로 화면이 재구성될 때마다 거부한 권한을 다시 묻지 않는다.
-    var requestedLocationOnce by rememberSaveable { mutableStateOf(false) }
-    var showLocationSettingsDialog by remember { mutableStateOf(false) }
+    val granted = locationPermission.granted
     val context = LocalContext.current
     val resources = LocalResources.current
     val focusManager = LocalFocusManager.current
@@ -188,12 +180,7 @@ fun MapScreen(
     }
 
     // 지도 첫 진입 시 위치 권한이 없으면 1회 자동 요청 (첫 접근에 현재 위치를 보여주기 위함)
-    LaunchedEffect(Unit) {
-        if (!granted && !requestedLocationOnce) {
-            requestedLocationOnce = true
-            locationPermissions.launchMultiplePermissionRequest()
-        }
-    }
+    LaunchedEffect(Unit) { locationPermission.requestOnFirstEntry() }
 
     LaunchedEffect(granted) {
         if (granted) {
@@ -533,14 +520,8 @@ fun MapScreen(
             }
             FloatingActionButton(
                 onClick = {
-                    when {
-                        granted -> trackingMode = LocationTrackingMode.Follow
-                        locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
-                            requestedLocationOnce = true
-                            locationPermissions.launchMultiplePermissionRequest()
-                        }
-                        else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
-                    }
+                    if (granted) trackingMode = LocationTrackingMode.Follow
+                    else locationPermission.request() // 시스템 요청 또는(영구 거부) 설정 안내
                 },
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary,
@@ -632,15 +613,6 @@ fun MapScreen(
                 }
             }
         }
-    }
-
-    // 위치 권한 영구 거부 시 설정 안내
-    if (showLocationSettingsDialog) {
-        LocationSettingsDialog(
-            message = stringResource(R.string.location_message_map),
-            onOpenSettings = { context.openAppSettings() },
-            onDismiss = { showLocationSettingsDialog = false },
-        )
     }
 }
 

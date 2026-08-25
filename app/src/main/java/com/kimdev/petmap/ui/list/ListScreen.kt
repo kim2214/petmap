@@ -1,6 +1,5 @@
 package com.kimdev.petmap.ui.list
 
-import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.horizontalScroll
@@ -60,13 +59,10 @@ import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.R
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.rememberMultiplePermissionsState
-import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.ui.components.CategoryFilterRow
+import com.kimdev.petmap.ui.common.rememberLocationPermission
 import com.kimdev.petmap.ui.components.EmptyState
-import com.kimdev.petmap.ui.components.LocationSettingsDialog
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlaceCardSkeleton
 import com.kimdev.petmap.ui.components.PlaceListSkeleton
@@ -77,7 +73,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
 
-@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ListScreen(
     onPlaceClick: (String) -> Unit,
@@ -115,20 +110,17 @@ fun ListScreen(
         focusManager.clearFocus()
     }
 
-    // rememberSaveable: 화면 재구성(탭 전환·회전) 후 거부한 권한을 다시 묻지 않는다.
-    var requestedLocationOnce by rememberSaveable { mutableStateOf(false) }
     var pendingDistanceSort by rememberSaveable { mutableStateOf(false) }
-    var showLocationSettingsDialog by remember { mutableStateOf(false) }
 
     // "거리순" 칩에서 위치 권한을 바로 요청할 수 있게 한다 (지도 탭을 안 거쳐도 됨)
-    val locationPermissions = rememberMultiplePermissionsState(
-        listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-    ) { results ->
+    val locationPermission = rememberLocationPermission(
+        settingsMessage = stringResource(R.string.location_message_list),
+    ) { granted ->
         // 거부됐다면 대기 중인 거리순 요청을 지운다. 남겨두면 사용자가 나중에 시스템 설정에서
         // 권한을 켜고 돌아왔을 때 의도하지 않은 시점에 거리순이 켜진다.
-        if (results.values.none { it }) pendingDistanceSort = false
+        if (!granted) pendingDistanceSort = false
     }
-    val granted = locationPermissions.allPermissionsGranted
+    val granted = locationPermission.granted
 
     // 칩 탭으로 권한을 요청했고 사용자가 허용함 → 위치 확보 후 거리순 켜기
     LaunchedEffect(granted) {
@@ -219,12 +211,11 @@ fun ListScreen(
                                     state.hasLocation -> viewModel.setSortByDistance(!state.sortByDistance)
                                     // 권한은 있는데 위치만 없음 → 위치 재확보 시도
                                     granted -> viewModel.enableDistanceSortWithLocation()
-                                    locationPermissions.shouldShowRationale || !requestedLocationOnce -> {
-                                        requestedLocationOnce = true
+                                    else -> {
+                                        // 허용되면 LaunchedEffect(granted) 가 거리순을 켠다
                                         pendingDistanceSort = true
-                                        locationPermissions.launchMultiplePermissionRequest()
+                                        locationPermission.request() // 시스템 요청 또는(영구 거부) 설정 안내
                                     }
-                                    else -> showLocationSettingsDialog = true // 영구 거부 → 설정 안내
                                 }
                             },
                             label = { Text(stringResource(R.string.filter_distance)) },
@@ -377,13 +368,6 @@ fun ListScreen(
 
     }
 
-    if (showLocationSettingsDialog) {
-        LocationSettingsDialog(
-            message = stringResource(R.string.location_message_list),
-            onOpenSettings = { context.openAppSettings() },
-            onDismiss = { showLocationSettingsDialog = false },
-        )
-    }
 }
 
 private fun leadingCheck(selected: Boolean): (@Composable () -> Unit)? =
