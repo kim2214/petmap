@@ -6,9 +6,12 @@ import com.kimdev.petmap.core.common.IoDispatcher
 import com.kimdev.petmap.data.local.FavoriteBackup
 import com.kimdev.petmap.data.local.PlaceFts
 import com.kimdev.petmap.data.local.dao.FavoriteDao
+import com.kimdev.petmap.data.local.dao.MetaDao
 import com.kimdev.petmap.data.local.dao.PlaceDao
+import com.kimdev.petmap.data.local.entity.MetaEntity
 import com.kimdev.petmap.data.mapper.toDomain
 import com.kimdev.petmap.data.mapper.toFavoriteEntity
+import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.max
@@ -30,6 +34,7 @@ import javax.inject.Singleton
 class PlaceRepositoryImpl @Inject constructor(
     private val placeDao: PlaceDao,
     private val favoriteDao: FavoriteDao,
+    private val metaDao: MetaDao,
     private val favoriteBackup: FavoriteBackup,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : PlaceRepository {
@@ -40,17 +45,24 @@ class PlaceRepositoryImpl @Inject constructor(
 
     /**
      * DB 는 에셋(미리 시딩됨)에서 로드되므로 별도 시딩이 필요 없다.
-     * 첫 접근 시 에셋 복사가 일어나도록 가벼운 쿼리로 워밍업만 하고,
-     * 백업에서 복원된 설치라면 즐겨찾기 미러를 DB 에 다시 심는다.
+     * 첫 접근 시 에셋 복사(구버전 파일이면 삭제 후 재복사)가 일어나도록 가벼운 쿼리로 워밍업만 하고,
+     * favorites 가 비어 있으면(백업 복원 설치·버전 업 재생성) 즐겨찾기 미러를 DB 에 다시 심는다.
      */
     override suspend fun ensureSeeded() {
         runCatching { placeDao.count() }
         runCatching { restoreFavoritesIfNeeded() }
     }
 
+    override suspend fun getDataInfo(): DataInfo = withContext(ioDispatcher) {
+        val date = metaDao.get(MetaEntity.KEY_DATA_DATE)
+            ?.let { raw -> runCatching { LocalDate.parse(raw) }.getOrNull() }
+        DataInfo(dataDate = date, placeCount = placeDao.count())
+    }
+
     /**
      * DB 의 favorites 가 비어 있고 미러 파일에 내용이 있으면 복원한다.
-     * (petmap.db 는 Auto Backup 제외라 기기 이전 시 즐겨찾기는 미러로만 전달된다)
+     * (petmap.db 는 Auto Backup 제외라 기기 이전 시 즐겨찾기는 미러로만 전달되고,
+     *  DB 버전 업 시에는 파일이 통째로 재복사되어 favorites 가 빈다)
      */
     private suspend fun restoreFavoritesIfNeeded() {
         if (favoritesRestored) return

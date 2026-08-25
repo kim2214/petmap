@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.kimdev.petmap.data.local.entity.MetaEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertNotNull
@@ -12,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.LocalDate
 
 /**
  * 에셋 DB(assets/petmap.db) 로드 계약 테스트.
@@ -19,9 +21,11 @@ import org.junit.runner.RunWith
  * 프리빌트 DB 는 tools/build_db.py 가 identity_hash/user_version/FTS 색인을 손으로 맞추는 구조라,
  * 엔티티 변경·에셋 재생성 시 동기화가 어긋나면 컴파일/유닛 테스트는 통과하고 런타임에만 터진다.
  * 이 테스트가 그 계약을 고정한다:
- *  1) createFromAsset(v3) → Room open (identity_hash 검증 포함) 이 성공한다.
+ *  1) createFromAsset → Room open (identity_hash 검증 포함) 이 성공한다.
  *  2) places 에 실데이터가 들어 있다.
  *  3) 에셋에 동봉된 FTS 색인(build_db.py 의 fts_index == 앱 PlaceFts.index)으로 검색이 결과를 반환한다.
+ *  4) meta 에 데이터 기준일이 들어 있다 (설정 화면 표시).
+ * 구버전 파일 재생성·즐겨찾기 보존은 [LegacyDatabaseRecreateTest] 가 고정한다.
  */
 @RunWith(AndroidJUnit4::class)
 class PetMapDatabaseAssetTest {
@@ -36,7 +40,7 @@ class PetMapDatabaseAssetTest {
         // DatabaseModule.provideDatabase 와 동일한 빌더 구성이어야 한다(계약 대상).
         db = Room.databaseBuilder(context, PetMapDatabase::class.java, TEST_DB)
             .createFromAsset("petmap.db")
-            .addMigrations(MIGRATION_2_3)
+            .fallbackToDestructiveMigrationFrom(dropAllTables = true, *PetMapDatabase.RECREATED_FROM)
             .build()
     }
 
@@ -68,6 +72,14 @@ class PetMapDatabaseAssetTest {
             )
         )
         assertTrue("FTS 검색 결과 0건 — places_fts 색인이 만들어지지 않았거나 비어 있음", results.isNotEmpty())
+    }
+
+    @Test
+    fun assetDb_hasDataDateMeta() = runBlocking {
+        val raw = db.metaDao().get(MetaEntity.KEY_DATA_DATE)
+        assertNotNull("meta.data_date 없음 — build_db.py 가 meta 를 기록하지 않았음", raw)
+        // ISO-8601 날짜여야 설정 화면이 파싱한다
+        LocalDate.parse(raw)
     }
 
     private companion object {

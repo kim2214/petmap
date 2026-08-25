@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +61,8 @@ import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sendEmail
 import com.kimdev.petmap.data.local.FontScale
 import com.kimdev.petmap.data.local.ThemeMode
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /** 테마 모드 표시 라벨 (data enum → UI 문자열). */
 @get:StringRes
@@ -95,6 +98,7 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     var showFontScaleDialog by remember { mutableStateOf(false) }
+    val dataInfo by viewModel.dataInfo.collectAsStateWithLifecycle()
     // EEA 등에서만 true. 이 경우 동의를 다시 변경할 진입점 제공이 Google 정책상 필수다.
     val adPrivacyRequired by AdsConsent.privacyOptionsRequired.collectAsStateWithLifecycle()
 
@@ -162,6 +166,16 @@ fun SettingsScreen(
                 Icons.Filled.Storage,
                 stringResource(R.string.settings_data_source),
                 subtitle = stringResource(R.string.settings_data_source_desc),
+            )
+            SettingRow(
+                Icons.Filled.Update,
+                stringResource(R.string.settings_data_updated),
+                subtitle = dataInfo?.let { info ->
+                    val count = "%,d".format(info.placeCount)
+                    val date = info.dataDate?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+                    if (date != null) stringResource(R.string.settings_data_updated_format, date, count)
+                    else stringResource(R.string.settings_data_count_format, count)
+                } ?: stringResource(R.string.settings_data_updated_loading),
             )
         }
 

@@ -40,6 +40,7 @@ class PlaceRepositoryImplTest {
         repo = PlaceRepositoryImpl(
             db.placeDao(),
             db.favoriteDao(),
+            db.metaDao(),
             FavoriteBackup(context),
             Dispatchers.IO,
         )

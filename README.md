@@ -114,13 +114,15 @@ Crashlytics·Analytics 가 연동돼 있으나, **본인 Firebase 프로젝트�
 
 API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 소스로** 사용한다.
 
-- `app/src/main/assets/petmap.db` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" + "문화 여가 활동 시설(액티비티)" 데이터셋을 정제해 넣은 SQLite DB(v4 — 주차·이용료·애견 추가요금·장소설명 포함). `이름+좌표` 기준 중복 제거 후 **동반 가능(Y) 장소만 약 22,127개**를 수록한다(동반 불가 N 은 제외).
+- `app/src/main/assets/petmap.db` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" + "문화 여가 활동 시설(액티비티)" 데이터셋을 정제해 넣은 SQLite DB(v5 — 주차·이용료·애견 추가요금·장소설명, `meta` 데이터 기준일 포함). `이름+좌표` 기준 중복 제거 후 **동반 가능(Y) 장소만 약 22,127개**를 수록한다(동반 불가 N 은 제외).
 - 첫 실행 시 Room `createFromAsset` 로 에셋 DB를 즉시 로드(파싱/시딩/색인 구축 없음).
 - 지도/목록/검색은 모두 **로컬 Room 쿼리** — 네트워크 경로 자체가 없다. 데이터 갱신은 아래 재생성 절차로만 이뤄진다.
-- **검색은 FTS4 색인** 사용. 색인(`places_fts`)은 `build_db.py` 가 에셋에 **동봉**하며, 구버전 설치(v2 DB)만
-  `Migration(2→3)` 이 업그레이드 시 구축한다. 한국어 부분검색을 보존하기 위해 글자 단위 유니그램으로
+- **기존 설치의 데이터 갱신은 DB 버전 업으로 전달**된다: 마이그레이션 대신 Room 이 구버전 파일을 지우고 에셋을
+  재복사한다(`PetMapDatabase.VERSION`/`RECREATED_FROM`). 즐겨찾기는 `files/favorites_backup.json` 미러가
+  재생성 직전에 보존하고 첫 접근 시 복원한다. 설정 화면의 "데이터 갱신일"은 에셋 `meta.data_date` 다.
+- **검색은 FTS4 색인** 사용. 색인(`places_fts`)은 `build_db.py` 가 에셋에 **동봉**한다. 한국어 부분검색을 보존하기 위해 글자 단위 유니그램으로
   색인하고 검색어를 구문(phrase)으로 변환한다 — 자세한 건 `data/local/PlaceFts.kt` 참고.
-- 에셋 DB 로드·FTS 검색 계약은 androidTest `PetMapDatabaseAssetTest` 가 실기기에서 검증한다.
+- 에셋 DB 로드·FTS 검색·meta 계약은 androidTest `PetMapDatabaseAssetTest`, 버전 업 재생성·즐겨찾기 보존은 `LegacyDatabaseRecreateTest` 가 실기기에서 검증한다.
 
 ### 📦 데이터 갱신 절차
 데이터셋이 갱신되면 아래로 프리빌트 DB를 다시 만든다.

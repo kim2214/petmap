@@ -1,5 +1,6 @@
 package com.kimdev.petmap.fake
 
+import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
@@ -39,6 +40,8 @@ class FakePlaceRepository : PlaceRepository {
         }
 
     override suspend fun ensureSeeded() { ensureSeededCount++ }
+
+    override suspend fun getDataInfo(): DataInfo = DataInfo(dataDate = null, placeCount = dataset.size)
 
     override suspend fun updateFavoriteMemo(placeId: String, memo: String?) {
         memos[placeId] = memo?.trim()?.takeIf { it.isNotEmpty() }

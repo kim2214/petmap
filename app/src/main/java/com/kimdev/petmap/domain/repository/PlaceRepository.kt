@@ -1,5 +1,6 @@
 package com.kimdev.petmap.domain.repository
 
+import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
@@ -8,12 +9,15 @@ import kotlinx.coroutines.flow.Flow
 /**
  * 장소 데이터 접근 추상화.
  * 프리빌트 에셋 Room DB(assets/petmap.db)가 단일 소스다. 네트워크 갱신 없음.
- * 데이터 갱신은 CSV → tools/build_db.py 재생성 → 앱 업데이트로만 이뤄진다.
+ * 데이터 갱신은 CSV → tools/build_db.py 재생성 → 앱 업데이트(DB 버전 업 → 에셋 재복사)로만 이뤄진다.
  */
 interface PlaceRepository {
 
-    /** 첫 접근 시 에셋 DB 복사가 일어나도록 워밍업 (별도 시딩 없음) */
+    /** 첫 접근 시 에셋 DB 복사(또는 버전 업 재복사)가 일어나도록 워밍업하고, 비어 있는 즐겨찾기를 미러에서 복원 */
     suspend fun ensureSeeded()
+
+    /** 내장 데이터 기준일·수록 장소 수 (설정 화면) */
+    suspend fun getDataInfo(): DataInfo
 
     /** 즐겨찾기 메모 저장/수정. null 또는 빈 문자열이면 메모 삭제 */
     suspend fun updateFavoriteMemo(placeId: String, memo: String?)

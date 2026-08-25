@@ -26,17 +26,17 @@ com.kimdev.petmap
 ├── data/                         # 데이터 구현 (프리빌트 Room DB 단일 소스, 네트워크 없음)
 │   ├── local/
 │   │   ├── PetMapDatabase        # Room. exportSchema=true → app/schemas/ 에 JSON 커밋
-│   │   ├── Migrations            # MIGRATION_2_3 (구버전 설치의 FTS 색인 구축용)
+│   │   ├── FavoriteBackup        # 즐겨찾기 미러(JSON, Auto Backup 대상) + 구버전 DB 즐겨찾기 보존
 │   │   ├── PlaceFts              # FTS4 유니그램 색인 생성/질의 변환
 │   │   ├── RecentSearchStore     # 최근 검색어 (SharedPreferences)
 │   │   ├── ThemeStore            # 라이트/다크/시스템 테마 (SharedPreferences)
-│   │   ├── dao/    PlaceDao(뷰포트·그리드 집계·FTS 검색), FavoriteDao
-│   │   └── entity/ PlaceEntity(22,127행), FavoriteEntity
+│   │   ├── dao/    PlaceDao(뷰포트·그리드 집계·FTS 검색), FavoriteDao, MetaDao
+│   │   └── entity/ PlaceEntity(22,127행), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
 │   ├── mapper/     Entity ↔ Domain 변환
 │   └── repository/ PlaceRepositoryImpl
 │
 ├── di/                           # Hilt 모듈
-│   DatabaseModule(createFromAsset + 마이그레이션), DispatcherModule, RepositoryModule
+│   DatabaseModule(createFromAsset + 버전 업 시 파괴적 재생성), DispatcherModule, RepositoryModule
 │
 └── ui/
     ├── navigation/ Destinations(Routes·TopLevelDestination), PetMapNavHost
@@ -65,15 +65,16 @@ com.kimdev.petmap
 ## 데이터 흐름 (단방향)
 
 ```
-assets/petmap.db (프리빌트, v4·FTS 동봉) ─ createFromAsset ─→ Room
+assets/petmap.db (프리빌트, v5·FTS·meta 동봉) ─ createFromAsset ─→ Room
                                                               │
 Room(places + favorites) ─→ PlaceRepositoryImpl ─→ ViewModel(StateFlow) ─→ Compose UI
 ```
 
 - **네트워크 경로 없음.** 데이터 갱신은 CSV → `tools/build_db.py` 재생성 → 앱 업데이트로만 이뤄진다
   (`/rebuild-db` 스킬 및 `CLAUDE.md` 참고).
-- 검색: FTS4 글자 단위 유니그램(한국어 부분검색 보존). 색인은 에셋에 동봉되며
-  구버전 설치(v2)만 `MIGRATION_2_3`이 구축한다.
+- **버전 업 = 파괴적 재생성**: 마이그레이션 없이 `PetMapDatabase.VERSION`을 올리면 Room이 기존 파일을
+  지우고 에셋을 재복사한다. 즐겨찾기는 `FavoriteBackup` 미러로 보존(`DatabaseModule`, open 전)·복원(`ensureSeeded`).
+- 검색: FTS4 글자 단위 유니그램(한국어 부분검색 보존). 색인은 에셋에 동봉된다.
 - 지도 조회 경로 2종: 고줌은 뷰포트 개별 로우 + 클라이언트 클러스터링(`ui/map/Clustering.kt`),
   저줌(zoom < 11)은 SQL 그리드 집계(`PlaceDao.getClusterCells`)로 셀별 개수만 가져온다.
 
@@ -90,7 +91,8 @@ naver.map.clientId=네이버클라우드_Maps_ClientID
 - 단위 테스트(`app/src/test/`): ViewModel(Map·List), 매퍼, FTS 문자열 변환, 클러스터링,
   거리/운영시간 유틸. `fake/`에 FakePlaceRepository 등 페이크 인프라.
 - 계약 테스트(`app/src/androidTest/`): `PetMapDatabaseAssetTest` — 에셋 DB 로드(identity_hash 검증)
-  + FTS 검색 동작을 실기기에서 고정. `build_db.py` 동기화 실수를 잡는 안전망.
+  + FTS 검색 + meta 기준일을 실기기에서 고정. `LegacyDatabaseRecreateTest` — 구버전 파일 재생성 시
+  즐겨찾기 보존·복원. `build_db.py` 동기화 실수를 잡는 안전망.
 - CI(`.github/workflows/ci.yml`): PR/main 푸시마다 단위 테스트 + Lint + R8 릴리스 빌드.
 
 ## 다음 확장 포인트

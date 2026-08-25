@@ -6,9 +6,10 @@
 (identity_hash)/user_version 을 앱의 Room 스키마와 동일하게 맞춘다.
 
 사용법:
-    python3 tools/build_db.py "<CSV 경로>" ["<CSV 경로 2>" ...] [출력경로.db]
+    python3 tools/build_db.py [--data-date=YYYY-MM-DD] "<CSV 경로>" ["<CSV 경로 2>" ...] [출력경로.db]
     # 마지막 인자가 .db 로 끝나면 출력경로, 아니면 전부 입력 CSV
     # 출력경로 기본값: app/src/main/assets/petmap.db
+    # --data-date: 수록 데이터 기준일(설정 화면 "데이터 갱신일"에 표시). 생략 시 오늘 날짜
 
 입력 CSV 규칙:
 - 여러 파일을 주면 순서대로 합친다. 같은 장소(이름+좌표)는 먼저 온 파일이 우선.
@@ -18,11 +19,17 @@
   동반 가능 여부를 판별할 수 없으므로 에러로 거부한다.
 - 전화번호/홈페이지는 데이터셋별 컬럼명 차이를 흡수한다(시설 전화번호, 웹사이트).
 
-버전/FTS 주의: 에셋은 v3 로 생성하며 FTS 색인(places_fts)을 **동봉**한다.
-색인을 여기서 만들어 두면 신규 설치가 첫 실행에 2.4만 행을 재색인하는 비용이 사라진다.
-- fts_index() 는 앱의 PlaceFts.index()(글자 단위 유니그램)와 반드시 동일해야 한다.
-  어긋나면 검색이 조용히 빈 결과를 반환한다 (androidTest 의 PetMapDatabaseAssetTest 가 검증).
-- MIGRATION_2_3 은 구버전 앱(v2 DB, FTS 없음)에서 업그레이드하는 기존 설치용으로 남아 있다.
+버전 주의 (데이터 갱신 = 버전 업): 앱은 마이그레이션 없이 **DB 버전이 오르면 기존 파일을 지우고
+에셋을 재복사**한다(PetMapDatabase.VERSION / RECREATED_FROM, 즐겨찾기는 미러로 보존·복원).
+따라서 장소 데이터만 바뀌어도 기존 설치에 전달하려면 DB_VERSION 과 앱의 PetMapDatabase.VERSION 을
+함께 올리고, 직전 버전을 RECREATED_FROM 에 추가해야 한다. 버전을 그대로 두면 신규 설치만 새 데이터를 받는다.
+
+FTS 주의: FTS 색인(places_fts)을 **동봉**한다. 색인을 여기서 만들어 두면 신규 설치가 첫 실행에
+2.2만 행을 재색인하는 비용이 사라진다. fts_index() 는 앱의 PlaceFts.index()(글자 단위 유니그램)와
+반드시 동일해야 한다. 어긋나면 검색이 조용히 빈 결과를 반환한다 (androidTest 의 PetMapDatabaseAssetTest 가 검증).
+
+meta 테이블: data_date(기준일)·built_at(생성일)을 기록한다. 앱은 data_date 를 설정 화면에 표시한다
+(MetaEntity.KEY_DATA_DATE 와 키 이름이 같아야 함).
 
 identity_hash 주의: 엔티티(PlaceEntity/FavoriteEntity) 스키마가 바뀌면 ROOM_IDENTITY_HASH 도
 바뀐다. 기준값은 app/schemas/com.kimdev.petmap.data.local.PetMapDatabase/<version>.json 의
@@ -30,12 +37,16 @@ identity_hash 주의: 엔티티(PlaceEntity/FavoriteEntity) 스키마가 바뀌�
 androidTest 의 PetMapDatabaseAssetTest 가 실패한다.
 """
 import csv
+import datetime
 import os
 import sqlite3
 import sys
 
-ROOM_IDENTITY_HASH = "651c634a7a602787137c8035ff244058"  # app/schemas/**/4.json 의 identityHash
-DB_VERSION = 4  # 주차·요금·설명 + 즐겨찾기 메모·추가시각(v4). 앱 @Database version 과 동일
+ROOM_IDENTITY_HASH = "beb222eb3e74c5dd04067ecdc0d552f6"  # app/schemas/**/5.json 의 identityHash
+DB_VERSION = 5  # v5: meta 테이블(데이터 기준일). 앱 PetMapDatabase.VERSION 과 동일
+
+# 앱이 읽는 meta 키 (MetaEntity.KEY_DATA_DATE)
+META_KEY_DATA_DATE = "data_date"
 
 DDL = [
     "CREATE TABLE android_metadata (locale TEXT)",
@@ -51,6 +62,7 @@ DDL = [
     "CREATE INDEX `index_places_lat_lng` ON `places` (`lat`, `lng`)",
     "CREATE INDEX `index_places_category` ON `places` (`category`)",
     "CREATE INDEX `index_places_name` ON `places` (`name`)",
+    "CREATE TABLE `meta` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))",
 ]
 
 BLANK = {"", "정보없음", "해당없음", "없음", "-"}
@@ -142,6 +154,19 @@ def main():
         print(__doc__)
         sys.exit(1)
     args = sys.argv[1:]
+    data_date = datetime.date.today().isoformat()
+    for a in [a for a in args if a.startswith("--data-date")]:
+        args.remove(a)
+        if "=" not in a:
+            raise SystemExit("오류: --data-date=YYYY-MM-DD 형식으로 지정")
+        value = a.split("=", 1)[1]
+        try:
+            data_date = datetime.date.fromisoformat(value).isoformat()
+        except ValueError:
+            raise SystemExit(f"오류: 잘못된 --data-date 값 {value!r} (YYYY-MM-DD)")
+    if not args:
+        print(__doc__)
+        sys.exit(1)
     if args[-1].endswith(".db"):
         csv_paths, out_path = args[:-1], args[-1]
     else:
@@ -215,11 +240,15 @@ def main():
         "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows.values()
     )
     build_fts(db)
+    db.executemany(
+        "INSERT INTO meta (`key`, `value`) VALUES (?, ?)",
+        [(META_KEY_DATA_DATE, data_date), ("built_at", datetime.date.today().isoformat())],
+    )
     db.execute(f"PRAGMA user_version={DB_VERSION}")
     db.commit()
     db.execute("VACUUM")
     db.close()
-    print(f"✓ {out_path} 생성: 고유 장소 {len(rows)}건")
+    print(f"✓ {out_path} 생성: 고유 장소 {len(rows)}건, 기준일 {data_date}, v{DB_VERSION}")
 
 
 if __name__ == "__main__":
