@@ -3,7 +3,6 @@ package com.kimdev.petmap.ui.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kimdev.petmap.core.common.MapFocusBus
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.ui.navigation.Routes
@@ -23,7 +22,6 @@ data class DetailUiState(
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val repository: PlaceRepository,
-    private val mapFocusBus: MapFocusBus,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -63,10 +61,5 @@ class DetailViewModel @Inject constructor(
     /** 즐겨찾기 메모 저장 (빈 문자열이면 삭제) */
     fun saveMemo(memo: String) {
         viewModelScope.launch { repository.updateFavoriteMemo(placeId, memo) }
-    }
-
-    /** 이 장소를 지도에서 보도록 요청 (지도 화면이 소비) */
-    fun showOnMap() {
-        mapFocusBus.request(placeId)
     }
 }

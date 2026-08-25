@@ -112,7 +112,8 @@ import java.time.LocalDateTime
 @Composable
 fun DetailScreen(
     onBack: () -> Unit,
-    onShowOnMap: () -> Unit,
+    /** "지도에서 보기" — 장소 id 를 받아 지도를 push 한다 (NavHost) */
+    onShowOnMap: (placeId: String) -> Unit,
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -164,10 +165,7 @@ fun DetailScreen(
             place == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text(stringResource(R.string.detail_not_found)) }
             else -> DetailContent(
                 place = place,
-                onShowOnMap = {
-                    viewModel.showOnMap()
-                    onShowOnMap()
-                },
+                onShowOnMap = { onShowOnMap(place.id) },
                 onSaveMemo = viewModel::saveMemo,
                 modifier = Modifier.padding(padding),
             )

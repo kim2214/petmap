@@ -13,7 +13,6 @@ com.kimdev.petmap
 ├── core/                         # 공통/인프라
 │   ├── ads/       AdsConsent (UMP 동의 → AdMob 초기화)
 │   ├── common/    Constants(지도 기본 카메라), Dispatchers(@IoDispatcher/@DefaultDispatcher),
-│   │              MapFocusBus("지도에서 보기" 화면 간 이벤트)
 │   ├── location/  LocationProvider (FusedLocation 래퍼)
 │   ├── review/    InAppReview (실행 횟수 기반 Play 인앱 리뷰)
 │   └── util/      IntentActions (전화·공유·네이버 길찾기·홈페이지 열기)
@@ -57,7 +56,7 @@ com.kimdev.petmap
 ```
 (최초 실행) 온보딩 ─→ 하단탭
                       [지도] ─┬─ (마커 탭) → 미리보기 바텀시트 ─→ [상세]
-                      [목록] ─┼─ (카드 탭) ──────────────────────→ [상세] ─ (지도에서 보기) → [지도]
+                      [목록] ─┼─ (카드 탭) ──────────────────────→ [상세] ─ (지도에서 보기) → [지도 map?focus=id] (push, 뒤로가기로 상세 복귀)
                       [즐겨찾기] ┘                                          ← 하단탭 숨김, 뒤로가기 복귀
                       [설정] ─→ 온보딩 다시 보기 · 라이선스 · 테마 전환
 ```

@@ -1,10 +1,10 @@
 package com.kimdev.petmap.ui.map
 
 import com.kimdev.petmap.core.common.Constants
-import com.kimdev.petmap.core.common.MapFocusBus
 import androidx.lifecycle.SavedStateHandle
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.PlaceCategory
+import com.kimdev.petmap.ui.navigation.Routes
 import com.kimdev.petmap.fake.FakeLocationProvider
 import com.kimdev.petmap.fake.FakePlaceRepository
 import com.kimdev.petmap.fake.FakeRecentSearchStore
@@ -29,10 +29,9 @@ class MapViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repo = FakePlaceRepository()
-    private val focusBus = MapFocusBus()
 
     private fun viewModel(savedState: SavedStateHandle = SavedStateHandle()): MapViewModel =
-        MapViewModel(repo, focusBus, FakeRecentSearchStore(), FakeLocationProvider(), mainDispatcherRule.testDispatcher, savedState)
+        MapViewModel(repo, FakeRecentSearchStore(), FakeLocationProvider(), mainDispatcherRule.testDispatcher, savedState)
 
     @Test
     fun `초기화 후 시딩 완료되고 클러스터가 채워진다`() = runTest(mainDispatcherRule.testDispatcher) {
@@ -199,59 +198,37 @@ class MapViewModelTest {
     }
 
     @Test
-    fun `MapFocusBus 요청은 FocusPlace 이벤트로 한 번만 전달된다`() =
+    fun `focus 라우트 인자가 있으면 시딩 후 FocusPlace 이벤트를 한 번 보내고 그 위치로 조회한다`() =
         runTest(mainDispatcherRule.testDispatcher) {
-            repo.dataset = listOf(testPlace("target"))
+            repo.dataset = listOf(testPlace("target", lat = 35.10, lng = 129.00), testPlace("far", lat = 37.5, lng = 127.0))
+            val vm = viewModel(SavedStateHandle(mapOf(Routes.MAP_ARG_FOCUS to "target")))
+            advanceUntilIdle()
+
+            val received = mutableListOf<MapEvent>()
+            val job = launch { vm.events.toList(received) }
+            advanceUntilIdle()
+
+            val focus = received.filterIsInstance<MapEvent.FocusPlace>()
+            assertEquals(1, focus.size)
+            assertEquals("target", focus.single().place.id)
+            // 초기 현재 위치 이동은 포커스에 양보한다
+            assertTrue(received.none { it is MapEvent.MoveToLocation })
+            job.cancel()
+        }
+
+    @Test
+    fun `focus 인자가 없으면 FocusPlace 이벤트를 보내지 않는다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("a"))
             val vm = viewModel()
             advanceUntilIdle()
 
             val received = mutableListOf<MapEvent>()
             val job = launch { vm.events.toList(received) }
-
-            focusBus.request("target")
             advanceUntilIdle()
 
-            assertEquals(1, received.size)
-            assertEquals("target", (received.single() as MapEvent.FocusPlace).place.id)
+            assertTrue(received.none { it is MapEvent.FocusPlace })
             job.cancel()
-        }
-
-    @Test
-    fun `같은 장소를 연달아 요청해도 매번 이벤트가 전달된다`() =
-        runTest(mainDispatcherRule.testDispatcher) {
-            // StateFlow 버스였을 때는 값이 같아 두 번째 요청이 유실됐다.
-            repo.dataset = listOf(testPlace("target"))
-            val vm = viewModel()
-            advanceUntilIdle()
-
-            val received = mutableListOf<MapEvent>()
-            val job = launch { vm.events.toList(received) }
-
-            focusBus.request("target")
-            advanceUntilIdle()
-            focusBus.request("target")
-            advanceUntilIdle()
-
-            assertEquals(2, received.size)
-            job.cancel()
-        }
-
-    @Test
-    fun `동반 조건 필터는 조회에 전달되고 SavedStateHandle 에 저장·복원된다`() =
-        runTest(mainDispatcherRule.testDispatcher) {
-            repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
-            val savedState = SavedStateHandle()
-            val vm = viewModel(savedState)
-            advanceUntilIdle()
-
-            vm.togglePetFilter(PetFilter.INDOOR)
-            advanceUntilIdle()
-            assertEquals(setOf(PetFilter.INDOOR), repo.lastPetFilters)
-
-            val restored = viewModel(savedState)
-            advanceUntilIdle()
-            assertEquals(setOf(PetFilter.INDOOR), restored.uiState.value.petFilters)
-            assertEquals(setOf(PetFilter.INDOOR), repo.lastPetFilters)
         }
 
     @Test

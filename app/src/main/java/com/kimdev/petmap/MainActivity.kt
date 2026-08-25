@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -138,9 +139,10 @@ private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivit
         onDispose { activity.removeOnNewIntentListener(listener) }
     }
 
-    // 상세 화면 등에서는 하단탭을 숨긴다.
+    // 상세 화면 등에서는 하단탭을 숨긴다. 라우트는 선택 인자를 가질 수 있어(map?focus=…) 패턴의
+    // 쿼리 부분을 떼고 비교한다.
     val showBottomBar = TopLevelDestination.entries.any { dest ->
-        currentDestination?.hierarchy?.any { it.route == dest.route } == true
+        currentDestination?.hierarchy?.any { it.baseRoute == dest.route } == true
     }
     // 키보드가 올라오면 배너·하단탭을 감춘다. 검색 중에는 결과·최근 검색어를 보여줄 공간이
     // 우선인데, 셋을 모두 키보드 위에 쌓으면 목록 영역이 한 줄도 안 남는다.
@@ -169,7 +171,7 @@ private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivit
                     ) {
                         TopLevelDestination.entries.forEach { dest ->
                             val selected =
-                                currentDestination?.hierarchy?.any { it.route == dest.route } == true
+                                currentDestination?.hierarchy?.any { it.baseRoute == dest.route } == true
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = {
@@ -219,3 +221,6 @@ private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivit
         )
     }
 }
+
+/** 라우트 패턴에서 선택 인자(?a={a}) 를 뗀 기본 경로 — 하단탭 매칭용 */
+private val NavDestination.baseRoute: String? get() = route?.substringBefore('?')

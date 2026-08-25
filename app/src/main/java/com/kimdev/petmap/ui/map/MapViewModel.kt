@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.common.DefaultDispatcher
-import com.kimdev.petmap.core.common.MapFocusBus
 import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.data.local.RecentSearchStore
@@ -16,6 +15,7 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.ui.common.SavedFilters
+import com.kimdev.petmap.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -77,7 +77,6 @@ sealed interface MapEvent {
 @HiltViewModel
 class MapViewModel @Inject constructor(
     private val repository: PlaceRepository,
-    private val mapFocusBus: MapFocusBus,
     private val recentSearchStore: RecentSearchStore,
     private val locationProvider: LocationProvider,
     @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
@@ -116,9 +115,11 @@ class MapViewModel @Inject constructor(
     private var fetchJob: Job? = null
     // 첫 진입 현재 위치 이동을 이미 처리했는지(중복 이동 방지)
     private var initialLocationHandled = false
-    // "지도에서 보기" 요청을 받았는지. 요청이 있으면 초기 현재 위치 이동을 양보한다.
-    // (DB 조회 전에 세팅하므로, 조회 지연 때문에 두 카메라 이동이 경쟁하지 않는다)
-    private var focusRequested = false
+    // "지도에서 보기"로 push 된 지도인가(라우트 인자). 있으면 초기 현재 위치 이동을 양보하고
+    // 첫 조회를 그 장소 주변으로 한다. 프로세스 사망 복원 시에도 같은 장소를 다시 비춘다.
+    private val focusPlaceId: String? = savedStateHandle[Routes.MAP_ARG_FOCUS]
+    private val focusRequested: Boolean get() = focusPlaceId != null
+    private var initialFocusHandled = false
 
     init {
         seed()
@@ -163,14 +164,6 @@ class MapViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .onEach { savedStateHandle[KEY_PET_FILTERS] = SavedFilters.petFiltersToNames(it) }
                 .collect {}
-        }
-        // "지도에서 보기" 요청 → 해당 장소를 포커스 이벤트로
-        viewModelScope.launch {
-            mapFocusBus.requests.collect { id ->
-                focusRequested = true
-                val place = repository.getPlace(id)
-                if (place != null) _events.send(MapEvent.FocusPlace(place))
-            }
         }
     }
 
@@ -229,8 +222,24 @@ class MapViewModel @Inject constructor(
                 return@launch
             }
             _uiState.update { it.copy(isSeeding = false) }
+            applyInitialFocus()
             fetch()
         }
+    }
+
+    /**
+     * 라우트 인자로 받은 포커스 장소가 있으면 첫 조회 위치를 그 장소로 잡고 카메라 이동 이벤트를 보낸다.
+     * 조회는 뒤이은 [fetch] 한 번으로 끝난다(화면은 이 이벤트에서 재조회하지 않는다).
+     */
+    private suspend fun applyInitialFocus() {
+        val id = focusPlaceId ?: return
+        if (initialFocusHandled) return
+        initialFocusHandled = true
+        val place = runCatching { repository.getPlace(id) }.getOrNull() ?: return
+        lastCenterLat = place.lat
+        lastCenterLng = place.lng
+        lastZoom = FOCUS_ZOOM
+        _events.send(MapEvent.FocusPlace(place))
     }
 
     /** 준비 실패 안내의 "다시 시도" — 공간 확보 후 재시도하면 Room 이 에셋 복사를 다시 시도한다 */
@@ -457,5 +466,8 @@ class MapViewModel @Inject constructor(
          * 이보다 많으면 목록이 과해 기존처럼 줌인한다. 시트 목록 높이(480dp)에 무리 없는 수준.
          */
         const val AGGREGATE_EXPAND_MAX = 30
+
+        /** "지도에서 보기"로 특정 장소를 비출 때의 줌. */
+        const val FOCUS_ZOOM = 16.0
     }
 }

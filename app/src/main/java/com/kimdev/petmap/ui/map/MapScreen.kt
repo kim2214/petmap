@@ -208,9 +208,9 @@ fun MapScreen(
                     viewModel.researchHere(event.location.lat, event.location.lng, INITIAL_LOCATION_ZOOM)
                 }
                 is MapEvent.FocusPlace -> {
-                    moveCameraTo(event.place.lat, event.place.lng, FOCUS_ZOOM)
+                    // 조회는 ViewModel 이 이 장소 기준으로 이미 시작했다 — 여기선 카메라·미리보기만
+                    moveCameraTo(event.place.lat, event.place.lng, MapViewModel.FOCUS_ZOOM)
                     previewPlace = event.place
-                    viewModel.researchHere(event.place.lat, event.place.lng, FOCUS_ZOOM)
                 }
                 is MapEvent.ExpandCluster -> clusterList = event.places
                 MapEvent.NoResults ->
@@ -619,8 +619,6 @@ private const val MAX_CLUSTER_ZOOM = 19.0
 private const val CO_LOCATED_M = 25.0
 // 첫 진입 시 현재 위치로 이동할 때의 줌(동네 단위로 주변 장소가 보이는 수준).
 private const val INITIAL_LOCATION_ZOOM = 15.0
-// "지도에서 보기"로 특정 장소를 비출 때의 줌.
-private const val FOCUS_ZOOM = 16.0
 
 /**
  * 지도 위 마커/클러스터 렌더링. [MapScreen] 본문에서 분리해, 지도와 무관한 상태 변경

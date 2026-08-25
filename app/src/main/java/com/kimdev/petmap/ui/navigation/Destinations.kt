@@ -8,6 +8,13 @@ import com.kimdev.petmap.R
 /** 앱 라우트 정의 */
 object Routes {
     const val MAP = "map"
+    /**
+     * "지도에서 보기" 포커스 대상. 지도를 새 백스택 엔트리로 push 하면서 라우트 인자로 전달한다 —
+     * 앱 스코프 버스로 넘기면 살아 있는 기존 지도 ViewModel 이 요청을 가로채 새 지도는 포커스되지
+     * 않았다(그래서 popUpTo 로 상세를 날려야 했고 뒤로가기로 상세 복귀가 불가능했다).
+     */
+    const val MAP_ARG_FOCUS = "focus"
+    const val MAP_PATTERN = "$MAP?$MAP_ARG_FOCUS={$MAP_ARG_FOCUS}"
     const val LIST = "list"
     const val FAVORITE = "favorite"
     const val SETTINGS = "settings"
@@ -23,6 +30,9 @@ object Routes {
      * (Navigation 이 인자를 읽을 때 디코딩하므로 DetailViewModel 은 원본 문자열을 받는다)
      */
     fun detail(placeId: String) = "$DETAIL/${Uri.encode(placeId)}"
+
+    /** 특정 장소를 비추는 지도 (상세 위에 push — 뒤로가기로 상세 복귀) */
+    fun mapFocused(placeId: String) = "$MAP?$MAP_ARG_FOCUS=${Uri.encode(placeId)}"
 
     /**
      * 구버전 공유 링크(커스텀 스킴). 이미 뿌려진 링크가 계속 열리도록 유지한다

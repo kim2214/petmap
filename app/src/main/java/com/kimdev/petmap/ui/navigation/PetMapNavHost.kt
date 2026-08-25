@@ -35,7 +35,7 @@ fun PetMapNavHost(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.MAP,
+        startDestination = Routes.MAP_PATTERN,
         modifier = modifier,
         // 탭/일반 화면 기본 전환: 부드러운 페이드
         enterTransition = { fadeIn(tween(220)) },
@@ -49,7 +49,17 @@ fun PetMapNavHost(
             }
         }
 
-        composable(Routes.MAP) {
+        composable(
+            route = Routes.MAP_PATTERN,
+            // focus: "지도에서 보기"로 push 될 때만 채워진다. 탭 이동(Routes.MAP)은 null.
+            arguments = listOf(
+                navArgument(Routes.MAP_ARG_FOCUS) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) {
             val reselects = remember { tabReselects.filter { it == Routes.MAP }.map { } }
             MapScreen(onPlaceClick = openDetail, reselects = reselects)
         }
@@ -100,17 +110,10 @@ fun PetMapNavHost(
         ) {
             DetailScreen(
                 onBack = { navController.popBackStack() },
-                onShowOnMap = {
-                    // 기존 지도 탭 엔트리로 복귀한다 (포커스는 MapFocusBus 가 전달).
-                    // 지도를 새 엔트리로 push 하면 안 된다: MapFocusBus 는 단일 소비 Channel 이라
-                    // 살아있는 기존 지도 ViewModel 이 요청을 가로채 새 지도는 포커스되지 않고,
-                    // 상세→지도 반복 시 백스택도 무한정 쌓인다.
-                    // (popUpTo 로 상세가 빠져 뒤로가기로 상세에 못 돌아가는 한계는 알려진 트레이드오프)
-                    navController.navigate(Routes.MAP) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                onShowOnMap = { placeId ->
+                    // 포커스 대상을 라우트 인자로 실어 지도를 상세 위에 push 한다 → 뒤로가기로 상세 복귀.
+                    // (새 지도 ViewModel 이 자기 인자를 읽으므로 기존 지도 탭과 경쟁하지 않는다)
+                    navController.navigate(Routes.mapFocused(placeId)) { launchSingleTop = true }
                 },
             )
         }
