@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 // local.properties 에서 비공개 키를 읽어 BuildConfig / Manifest 로 주입한다.
@@ -132,6 +133,26 @@ android {
     }
 }
 
+// Baseline Profile 플러그인이 만드는 nonMinifiedRelease(프로필 생성용, release 에서 initWith) 는
+// 실제 AdMob ID 를 물려받는다. 에뮬레이터에서 실제 광고를 요청하지 않도록 테스트 ID 로 되돌린다.
+androidComponents {
+    onVariants(selector().withBuildType("nonMinifiedRelease")) { variant ->
+        variant.manifestPlaceholders.put("admobAppId", "ca-app-pub-3940256099942544~3347511713")
+        variant.buildConfigFields?.put(
+            "ADMOB_BANNER_UNIT_ID",
+            com.android.build.api.variant.BuildConfigField("String", "\"ca-app-pub-3940256099942544/6300978111\"", null),
+        )
+    }
+}
+
+// 생성된 프로필(app/src/release/generated/baselineProfiles/)은 리포에 커밋한다.
+// 재생성: 에뮬레이터/기기 연결 후 ./gradlew :app:generateBaselineProfile (README "Baseline Profile" 참고)
+baselineProfile {
+    // 빌드마다 자동 생성하지 않는다 — 기기가 필요하고 느리다. 명시적 태스크로만 갱신.
+    automaticGenerationDuringBuild = false
+    saveInSrc = true
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
@@ -172,6 +193,10 @@ dependencies {
 
     // Java 8+ API 디슈가링(java.time 등) — minSdk 24 지원
     coreLibraryDesugaring(libs.desugar.jdk.libs)
+
+    // Baseline Profile: 동봉된 프로필을 설치 직후 ART 에 넘겨 콜드 스타트 JIT 비용을 줄인다
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
 
     // AndroidX core / lifecycle
     implementation(libs.androidx.core.ktx)

@@ -11,6 +11,7 @@
 ./gradlew :app:compileDebugKotlin   # 컴파일만 (빠른 검증)
 ./gradlew :app:assembleDebug        # 디버그 APK → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:testDebugUnitTest    # JUnit 단위 테스트
+python3 tools/verify_db.py          # 에셋 DB ↔ Room 스키마 동기화 오프라인 검사
 ```
 
 - 오래 걸리는 Gradle 작업은 `timeout 580 ./gradlew ...` 로 감싼다.
@@ -18,6 +19,7 @@
 - 빌드 툴체인: **AGP 9.x / Gradle 9.6.1 / Kotlin 2.3 / KSP 2.3 / Hilt 2.60 / Room 2.8**. 정확한 버전은 `gradle/libs.versions.toml`·`gradle/wrapper/gradle-wrapper.properties`가 단일 소스.
 - Gradle 실행에는 JDK 17+ 필요하나 바이트코드는 Java 11 타깃(`compilerOptions.jvmTarget=JVM_11`, `sourceCompatibility=11`).
 - SDK: minSdk 24 / targetSdk 36 / compileSdk 37. 버전: versionCode 8, versionName 1.7.
+- **Baseline Profile**: `app/src/release/generated/baselineProfiles/`(커밋됨)를 릴리스에 동봉. 시작 경로·주요 화면을 크게 바꿨으면 에뮬레이터/기기(API 33+) 연결 후 `./gradlew :app:generateBaselineProfile`로 재생성(`:baselineprofile` 모듈, 화면 라벨 텍스트로 탐색). 빌드 중 자동 생성은 꺼져 있다.
 
 ## 릴리스
 

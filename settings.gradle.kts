@@ -23,4 +23,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "PetMap"
 include(":app")
+// Baseline Profile 생성기 (com.android.test). 앱 빌드에는 프로필 파일만 쓰이고 모듈 자체는 실려 가지 않는다
+include(":baselineprofile")
  

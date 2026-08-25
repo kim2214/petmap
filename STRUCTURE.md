@@ -78,6 +78,13 @@ Room(places + favorites) ─→ PlaceRepositoryImpl ─→ ViewModel(StateFlow) 
 - 지도 조회 경로 2종: 고줌은 뷰포트 개별 로우 + 클라이언트 클러스터링(`ui/map/Clustering.kt`),
   저줌(zoom < 11)은 SQL 그리드 집계(`PlaceDao.getClusterCells`)로 셀별 개수만 가져온다.
 
+## 모듈
+
+- `:app` — 앱 본체.
+- `:baselineprofile` — Baseline Profile 생성기(`com.android.test`). 앱의 `nonMinifiedRelease`를 기기에서
+  구동해 시작·지도·목록·즐겨찾기·설정 경로를 수집 → `app/src/release/generated/baselineProfiles/`.
+  앱 바이너리에는 프로필 파일만 들어가고 이 모듈은 실리지 않는다.
+
 ## 실행 전 설정 (local.properties)
 
 ```properties

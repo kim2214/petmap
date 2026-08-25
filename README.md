@@ -124,6 +124,18 @@ API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 �
   색인하고 검색어를 구문(phrase)으로 변환한다 — 자세한 건 `data/local/PlaceFts.kt` 참고.
 - 에셋 DB 로드·FTS 검색·meta 계약은 androidTest `PetMapDatabaseAssetTest`, 버전 업 재생성·즐겨찾기 보존은 `LegacyDatabaseRecreateTest` 가 실기기에서 검증한다.
 
+### ⚡ Baseline Profile
+
+콜드 스타트 JIT 비용을 줄이기 위해 릴리스에 Baseline Profile 을 동봉한다(`androidx.profileinstaller`).
+
+- 프로필: `app/src/release/generated/baselineProfiles/{baseline-prof,startup-prof}.txt` — 리포에 커밋되며 빌드 시 자동 생성하지 않는다.
+- 재생성(시작 경로나 주요 화면 구조를 크게 바꿨을 때): API 33+ 에뮬레이터/기기를 연결하고
+  ```bash
+  ./gradlew :app:generateBaselineProfile
+  ```
+  `:baselineprofile/…/BaselineProfileGenerator.kt` 가 온보딩 건너뛰기 → 지도 → 목록 스크롤 → 즐겨찾기 → 설정을 재현한다
+  (하단 탭 라벨 텍스트로 탐색하므로 라벨을 바꾸면 함께 수정). 생성용 `nonMinifiedRelease` 는 AdMob 테스트 ID 를 쓴다.
+
 ### 📦 데이터 갱신 절차
 데이터셋이 갱신되면 아래로 프리빌트 DB를 다시 만든다.
 
