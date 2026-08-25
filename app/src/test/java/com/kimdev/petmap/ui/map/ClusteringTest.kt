@@ -75,10 +75,13 @@ class ClusteringTest {
         assertEquals(0.0, c.spanMeters(), 0.0001)
     }
 
-    @Test fun `clusterLabel - 세 자리까지는 그대로`() {
+    @Test fun `clusterLabel - 두 자리까지는 그대로, 세 자리는 10 단위 버킷`() {
         assertEquals("1", clusterLabel(1))
         assertEquals("48", clusterLabel(48))
-        assertEquals("999", clusterLabel(999))
+        assertEquals("99", clusterLabel(99))
+        assertEquals("100+", clusterLabel(100))
+        assertEquals("630+", clusterLabel(634))
+        assertEquals("990+", clusterLabel(999))
     }
 
     @Test fun `clusterLabel - 네 자리 이상은 천 단위로 축약`() {

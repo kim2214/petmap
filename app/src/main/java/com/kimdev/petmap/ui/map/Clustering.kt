@@ -63,13 +63,25 @@ fun isResearchNeeded(
 }
 
 /**
- * 클러스터 버블에 표시할 개수 라벨. 네 자리 이상은 "1.2천" 형태로 줄여 원 안에 들어가게 한다.
- * (저줌 집계 클러스터는 개수가 수천까지 나온다)
+ * 클러스터 버블에 표시할 개수 라벨.
+ * - 100 미만: 정확한 개수
+ * - 100~999: 10 단위로 내림 + "+" (예: 634 → "630+") — 저줌 집계 클러스터는 개수가 제각각이라
+ *   그대로 쓰면 비트맵 캐시 키가 수백 개로 불어난다. 광역 개수는 근사치로 충분하다.
+ * - 1000 이상: "1.2천" 형태로 줄여 원 안에 들어가게 한다 (100 단위 버킷)
  */
 fun clusterLabel(count: Int): String = when {
-    count < 1000 -> count.toString()
+    count < 100 -> count.toString()
+    count < 1000 -> "${count / 10 * 10}+"
     count < 10_000 -> "${count / 1000}.${(count % 1000) / 100}천"
     else -> "${count / 1000}천"
+}
+
+/** 클러스터 버블 지름(dp) 버킷. [makeClusterBitmap] 과 [ClusterIconCache] 키가 공유한다. */
+fun clusterSizeDp(count: Int): Float = when {
+    count >= 1000 -> 52f
+    count >= 100 -> 46f
+    count >= 10 -> 40f
+    else -> 34f
 }
 
 /** 줌 레벨에 따른 장소 조회 반경(km) 근사 */
@@ -125,12 +137,7 @@ fun clusterPlaces(places: List<Place>, zoom: Double, cellPx: Double = 72.0): Lis
  * 저배율 기기에서 버블이 과도하게 커져 인접 클러스터끼리 겹친다(카테고리 핀은 이미 dp 기준).
  */
 fun makeClusterBitmap(count: Int, typeface: Typeface? = null, density: Float = 3f): Bitmap {
-    val sizeDp = when {
-        count >= 1000 -> 52f
-        count >= 100 -> 46f
-        count >= 10 -> 40f
-        else -> 34f
-    }
+    val sizeDp = clusterSizeDp(count)
     val sizePx = (sizeDp * density).toInt().coerceAtLeast(1)
     val bmp = createBitmap(sizePx, sizePx)
     val canvas = Canvas(bmp)
@@ -152,7 +159,7 @@ fun makeClusterBitmap(count: Int, typeface: Typeface? = null, density: Float = 3
         textAlign = Paint.Align.CENTER
         textSize = sizePx * when (label.length) {
             1, 2 -> 0.34f
-            3 -> 0.29f
+            3, 4 -> 0.29f
             else -> 0.23f
         }
         this.typeface = typeface ?: Typeface.DEFAULT_BOLD
