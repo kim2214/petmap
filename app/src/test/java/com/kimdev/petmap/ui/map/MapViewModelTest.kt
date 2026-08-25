@@ -51,6 +51,43 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `시딩 실패 시 seedFailed 로 드러내고 조회를 시작하지 않는다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
+        repo.seedFailure = IllegalStateException("asset copy failed")
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertFalse(state.isSeeding)
+        assertTrue(state.seedFailed)
+        assertTrue(state.clusters.isEmpty())
+
+        // 실패 상태에서는 카메라 이동/재검색도 DB 를 건드리지 않는다
+        vm.researchHere(37.5, 127.0, 16.0)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.clusters.isEmpty())
+    }
+
+    @Test
+    fun `시딩 재시도가 성공하면 정상 진입한다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
+        repo.seedFailure = IllegalStateException("asset copy failed")
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.seedFailed)
+
+        repo.seedFailure = null
+        vm.retrySeeding()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(2, repo.ensureSeededCount)
+        assertFalse(state.seedFailed)
+        assertFalse(state.isSeeding)
+        assertEquals(1, state.clusters.sumOf { it.count })
+    }
+
+    @Test
     fun `고줌에서는 개별 조회 경로를 쓴다`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
         val vm = viewModel()

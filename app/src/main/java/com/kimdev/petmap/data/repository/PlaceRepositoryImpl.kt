@@ -1,5 +1,6 @@
 package com.kimdev.petmap.data.repository
 
+import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.kimdev.petmap.core.common.IoDispatcher
@@ -47,10 +48,15 @@ class PlaceRepositoryImpl @Inject constructor(
      * DB 는 에셋(미리 시딩됨)에서 로드되므로 별도 시딩이 필요 없다.
      * 첫 접근 시 에셋 복사(구버전 파일이면 삭제 후 재복사)가 일어나도록 가벼운 쿼리로 워밍업만 하고,
      * favorites 가 비어 있으면(백업 복원 설치·버전 업 재생성) 즐겨찾기 미러를 DB 에 다시 심는다.
+     *
+     * 에셋 복사·open 실패(저장 공간 부족, 파일 손상 등)는 예외로 전파한다 — 삼키면 빈 지도가
+     * "데이터 없음"으로 보여 사용자가 원인을 알 수 없다. 뷰모델이 재시도 가능한 오류 상태로 보여준다.
+     * 즐겨찾기 복원 실패는 장소 데이터 사용을 막을 이유가 아니므로 로그만 남긴다.
      */
     override suspend fun ensureSeeded() {
-        runCatching { placeDao.count() }
+        placeDao.count()
         runCatching { restoreFavoritesIfNeeded() }
+            .onFailure { Log.w(TAG, "즐겨찾기 미러 복원 실패", it) }
     }
 
     override suspend fun getDataInfo(): DataInfo = withContext(ioDispatcher) {
@@ -282,8 +288,12 @@ class PlaceRepositoryImpl @Inject constructor(
         }
     }
 
+    private companion object {
+        const val TAG = "PlaceRepository"
+    }
 }
 
 /** 장소 목록에 즐겨찾기 상태를 결합 (ViewModel 에서 사용) */
 fun List<Place>.withFavorites(favoriteIds: Set<String>): List<Place> =
     map { it.copy(isFavorite = it.id in favoriteIds) }
+

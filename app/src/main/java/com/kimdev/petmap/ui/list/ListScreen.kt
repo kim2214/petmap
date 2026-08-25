@@ -282,6 +282,14 @@ fun ListScreen(
                 state.isLoading && state.places.isEmpty() ->
                     PlaceListSkeleton(modifier = Modifier.fillMaxSize())
 
+                // DB 준비 실패(저장 공간 부족·손상) → 원인 안내. 일반 조회 실패보다 먼저 판정한다
+                state.seedFailed && state.places.isEmpty() -> EmptyState(
+                    icon = Icons.Filled.CloudOff,
+                    title = stringResource(R.string.seed_failed_title),
+                    description = stringResource(R.string.seed_failed_desc),
+                    action = { Button(onClick = { viewModel.retry() }) { Text(stringResource(R.string.action_retry)) } },
+                )
+
                 // 조회 실패 → "결과 없음"과 구분해 에러 상태 + 재시도 동선 제공
                 state.isError && state.places.isEmpty() -> EmptyState(
                     icon = Icons.Filled.CloudOff,

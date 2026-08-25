@@ -39,6 +39,25 @@ class ListViewModelTest {
         )
 
     @Test
+    fun `시딩 실패 시 seedFailed 로 드러내고 retry 가 준비부터 다시 한다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("a"))
+        repo.seedFailure = IllegalStateException("asset copy failed")
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.seedFailed)
+        assertFalse(vm.uiState.value.isLoading)
+
+        repo.seedFailure = null
+        vm.retry()
+        advanceUntilIdle()
+
+        assertEquals(2, repo.ensureSeededCount)
+        assertFalse(vm.uiState.value.seedFailed)
+        assertEquals(listOf("a"), vm.uiState.value.places.map { it.id })
+    }
+
+    @Test
     fun `초기화 시 시딩하고 위치 없으면 hasLocation false`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel(location = null)
         advanceUntilIdle()

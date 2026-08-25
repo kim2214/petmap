@@ -50,6 +50,8 @@ data class ListUiState(
     val recentSearches: List<String> = emptyList(),
     /** 조회 실패 여부. true 면 "결과 없음"이 아니라 에러 상태로 표시한다. */
     val isError: Boolean = false,
+    /** 에셋 DB 준비(복사/open) 실패 — 조회 실패(isError)와 구분해 원인 안내 */
+    val seedFailed: Boolean = false,
     /** 다음 페이지가 있을 수 있음 → 목록 끝에서 추가 로드 */
     val canLoadMore: Boolean = false,
     /** 추가 페이지 로딩 중(첫 로딩 스피너와 구분) */
@@ -105,18 +107,11 @@ class ListViewModel @Inject constructor(
     // 현재까지 불러온 페이지 크기. 검색 조건이 바뀌면 첫 페이지로 되돌린다.
     private var pageLimit = PAGE_SIZE
     private var loadMoreJob: Job? = null
+    // ensureSeeded 성공 여부. 실패 후 retry() 는 검색만 아니라 준비도 다시 한다.
+    private var seeded = false
 
     init {
-        viewModelScope.launch {
-            repository.ensureSeeded()
-            userLocation = locationProvider.lastLocation()
-            // 콜드스타트 직후 lastLocation 은 흔히 null → 단발성 현재 위치로 보완한다.
-            // (검색 플로우는 아래 별도 launch 에서 돌아가므로 이 지연이 목록 로딩을 막지 않는다)
-            if (userLocation == null) userLocation = locationProvider.currentLocation()
-            _uiState.update { it.copy(hasLocation = userLocation != null) }
-            // 위치를 뒤늦게 확보했고 거리순 정렬이 켜져 있으면 거리 반영을 위해 재조회
-            if (userLocation != null && _uiState.value.sortByDistance) refreshSearch()
-        }
+        seedAndLocate()
         // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
         viewModelScope.launch {
             _uiState
@@ -197,6 +192,33 @@ class ListViewModel @Inject constructor(
     }
 
     /**
+     * 에셋 DB 준비 후 위치 확보. 준비 실패는 [ListUiState.seedFailed] 로 드러낸다 — 검색 플로우는
+     * 별도 코루틴이라 같은 이유(저장 공간 부족·파일 손상)로 isError 도 세우지만, 원인 안내는 이쪽이 맡는다.
+     */
+    private fun seedAndLocate() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(seedFailed = false) }
+            try {
+                repository.ensureSeeded()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "에셋 DB 준비 실패", e)
+                _uiState.update { it.copy(isLoading = false, seedFailed = true) }
+                return@launch
+            }
+            seeded = true
+            userLocation = locationProvider.lastLocation()
+            // 콜드스타트 직후 lastLocation 은 흔히 null → 단발성 현재 위치로 보완한다.
+            // (검색 플로우는 별도 launch 에서 돌아가므로 이 지연이 목록 로딩을 막지 않는다)
+            if (userLocation == null) userLocation = locationProvider.currentLocation()
+            _uiState.update { it.copy(hasLocation = userLocation != null) }
+            // 위치를 뒤늦게 확보했고 거리순 정렬이 켜져 있으면 거리 반영을 위해 재조회
+            if (userLocation != null && _uiState.value.sortByDistance) refreshSearch()
+        }
+    }
+
+    /**
      * 목록 끝에 도달했을 때 다음 페이지를 이어 붙인다.
      * 로컬 DB 라 한도를 늘려 재조회하는 방식으로 충분하다(거리 정렬·영업중 필터가 조회 후
      * 후처리라 오프셋 기반 페이징과 맞지 않는다).
@@ -225,7 +247,11 @@ class ListViewModel @Inject constructor(
     }
 
     /** 에러 상태에서 사용자가 "다시 시도" 를 눌렀을 때. */
-    fun retry() = refreshSearch()
+    /** 오류 안내의 "다시 시도". DB 준비가 안 됐으면 준비부터 다시 하고, 검색도 재조회한다 */
+    fun retry() {
+        if (!seeded) seedAndLocate()
+        refreshSearch()
+    }
 
     fun onQueryChange(q: String) = _uiState.update { it.copy(query = q) }
 

@@ -39,7 +39,13 @@ class FakePlaceRepository : PlaceRepository {
                 (categories.isEmpty() || p.category in categories)
         }
 
-    override suspend fun ensureSeeded() { ensureSeededCount++ }
+    /** 설정하면 ensureSeeded 가 이 예외를 던진다 (에셋 DB 준비 실패 시뮬레이션) */
+    var seedFailure: Throwable? = null
+
+    override suspend fun ensureSeeded() {
+        ensureSeededCount++
+        seedFailure?.let { throw it }
+    }
 
     override suspend fun getDataInfo(): DataInfo = DataInfo(dataDate = null, placeCount = dataset.size)
 

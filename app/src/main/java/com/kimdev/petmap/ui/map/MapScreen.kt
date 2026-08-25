@@ -119,6 +119,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.foundation.layout.ColumnScope
+import com.kimdev.petmap.ui.components.EmptyState
 
 @OptIn(
     ExperimentalNaverMapApi::class,
@@ -547,6 +551,7 @@ fun MapScreen(
 
         when {
             state.isSeeding -> SeedingOverlay()
+            state.seedFailed -> SeedFailedOverlay(onRetry = viewModel::retrySeeding)
             state.isLoading -> {
                 val loadingDesc = stringResource(R.string.map_loading)
                 CircularProgressIndicator(
@@ -757,6 +762,34 @@ private fun SearchResultRow(place: Place, onClick: () -> Unit) {
 
 @Composable
 private fun SeedingOverlay() {
+    BlockingOverlay {
+        CircularProgressIndicator()
+        Text(
+            stringResource(R.string.map_seeding),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+    }
+}
+
+/**
+ * 에셋 DB 준비 실패(저장 공간 부족·파일 손상) 전면 안내. 조용히 빈 지도를 보이면 "데이터가 없다"로
+ * 오해되므로 원인 후보와 재시도 동선을 준다.
+ */
+@Composable
+private fun SeedFailedOverlay(onRetry: () -> Unit) {
+    BlockingOverlay {
+        EmptyState(
+            icon = Icons.Filled.CloudOff,
+            title = stringResource(R.string.seed_failed_title),
+            description = stringResource(R.string.seed_failed_desc),
+            action = { Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) } },
+        )
+    }
+}
+
+@Composable
+private fun BlockingOverlay(content: @Composable ColumnScope.() -> Unit) {
     // Surface 만으로는 히트 테스트를 막지 못해 오버레이 뒤의 검색창·지도가 눌린다 → 입력을 삼킨다.
     Surface(
         modifier = Modifier
@@ -769,13 +802,7 @@ private fun SeedingOverlay() {
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            CircularProgressIndicator()
-            Text(
-                stringResource(R.string.map_seeding),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-        }
+            content = content,
+        )
     }
 }

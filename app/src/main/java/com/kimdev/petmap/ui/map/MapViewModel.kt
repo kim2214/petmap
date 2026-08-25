@@ -37,6 +37,8 @@ import javax.inject.Inject
 
 data class MapUiState(
     val isSeeding: Boolean = true,
+    /** 에셋 DB 준비(복사/open) 실패 → 전면 오류 안내 + 재시도. 조회는 성공할 때까지 막는다 */
+    val seedFailed: Boolean = false,
     val isLoading: Boolean = false,
     val clusters: List<MapCluster> = emptyList(),
     val selectedCategories: Set<PlaceCategory> = emptySet(),
@@ -113,11 +115,7 @@ class MapViewModel @Inject constructor(
     private var focusRequested = false
 
     init {
-        viewModelScope.launch {
-            repository.ensureSeeded()
-            _uiState.update { it.copy(isSeeding = false) }
-            fetch()
-        }
+        seed()
         // 거리 표시용 마지막 위치(권한 없으면 null). 카메라 이동과 무관하게 조용히 확보한다.
         viewModelScope.launch {
             _userLocation.value = locationProvider.lastLocation()
@@ -202,11 +200,37 @@ class MapViewModel @Inject constructor(
      * - 이미 불러온 장소들을 새 줌에 맞게 **로컬에서만** 재클러스터링(데이터 재조회 없음).
      * - 마지막 조회 지점에서 충분히 멀어지거나 조회 반경이 달라지면 "다시 검색" 버튼을 노출.
      */
+    /**
+     * 에셋 DB 준비. 실패하면 [MapUiState.seedFailed] 로 전면 안내하고 조회를 시작하지 않는다
+     * (실패 원인은 대개 저장 공간 부족·파일 손상이라 조회도 같은 이유로 실패한다).
+     */
+    private fun seed() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSeeding = true, seedFailed = false) }
+            try {
+                repository.ensureSeeded()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "에셋 DB 준비 실패", e)
+                _uiState.update { it.copy(isSeeding = false, seedFailed = true) }
+                return@launch
+            }
+            _uiState.update { it.copy(isSeeding = false) }
+            fetch()
+        }
+    }
+
+    /** 준비 실패 안내의 "다시 시도" — 공간 확보 후 재시도하면 Room 이 에셋 복사를 다시 시도한다 */
+    fun retrySeeding() {
+        if (_uiState.value.seedFailed) seed()
+    }
+
     fun onCameraMove(centerLat: Double, centerLng: Double, zoom: Double) {
         lastCenterLat = centerLat
         lastCenterLng = centerLng
         lastZoom = zoom
-        if (_uiState.value.isSeeding) return
+        if (_uiState.value.isSeeding || _uiState.value.seedFailed) return
 
         // 줌 버킷이 바뀌면 조회 반경과 집계 격자 크기가 달라져, 지금 표시 중인 개수 자체가 의미를
         // 잃는다(예: 12km 격자로 센 개수를 4km 뷰에 그대로 남기면 오정보). 로컬 DB 쿼리라 비용이
@@ -259,7 +283,7 @@ class MapViewModel @Inject constructor(
 
     /** 현재 카메라 위치 기준으로 DB 조회 후 클러스터링. canResearch 해제. */
     private fun fetch() {
-        if (_uiState.value.isSeeding) return
+        if (_uiState.value.isSeeding || _uiState.value.seedFailed) return
         // 재조회가 클러스터 결과를 확정하므로 진행 중인 카메라-이동 클러스터링은 취소.
         clusterJob?.cancel()
         // 진행 중인 이전 조회도 취소 → 필터 연타/줌 연속 변경 시 결과 역전 방지.
