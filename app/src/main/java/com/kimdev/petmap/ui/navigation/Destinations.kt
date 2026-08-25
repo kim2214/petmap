@@ -24,11 +24,25 @@ object Routes {
      */
     fun detail(placeId: String) = "$DETAIL/${Uri.encode(placeId)}"
 
-    /** 상세 딥링크 패턴 (AndroidManifest 의 intent-filter 와 일치해야 함) */
+    /**
+     * 구버전 공유 링크(커스텀 스킴). 이미 뿌려진 링크가 계속 열리도록 유지한다
+     * (AndroidManifest 의 intent-filter 와 일치해야 함).
+     */
     const val DETAIL_DEEP_LINK_PATTERN = "petmap://place/{$DETAIL_ARG_ID}"
 
-    /** 공유 텍스트에 넣는 상세 딥링크. */
-    fun detailDeepLink(placeId: String) = "petmap://place/${Uri.encode(placeId)}"
+    /**
+     * HTTPS App Link. 미설치 기기에서도 브라우저로 안내 페이지가 열리고, 설치 기기에서는
+     * assetlinks.json(kim2214.github.io/.well-known) 검증을 거쳐 앱이 바로 열린다.
+     * 호스트·경로는 AndroidManifest 의 autoVerify intent-filter 및 GitHub Pages 의
+     * petmap/place.html 과 일치해야 한다. 장소 id 는 경로가 아니라 쿼리로 싣는다 —
+     * GitHub Pages 는 정적이라 임의 경로를 서빙할 수 없기 때문.
+     */
+    const val APP_LINK_HOST = "kim2214.github.io"
+    const val APP_LINK_PATH = "/petmap/place"
+    const val DETAIL_APP_LINK_PATTERN = "https://$APP_LINK_HOST$APP_LINK_PATH?id={$DETAIL_ARG_ID}"
+
+    /** 공유 텍스트에 넣는 상세 링크 (HTTPS App Link). */
+    fun detailDeepLink(placeId: String) = "https://$APP_LINK_HOST$APP_LINK_PATH?id=${Uri.encode(placeId)}"
 }
 
 /** 하단 탭 항목. 컬러 일러스트 아이콘(브랜드 커스텀)을 사용. */

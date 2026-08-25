@@ -53,7 +53,19 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 공유 링크로 장소 상세 진입: petmap://place/{placeId} -->
+            <!-- 공유 링크로 장소 상세 진입 (HTTPS App Link): https://kim2214.github.io/petmap/place?id={placeId}
+                 autoVerify: 설치 시 https://kim2214.github.io/.well-known/assetlinks.json 의 서명 지문과
+                 대조해 통과하면 브라우저 선택 없이 앱이 바로 열린다. 지문에는 Play 앱 서명 키가 포함돼야 한다. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="kim2214.github.io"
+                    android:pathPrefix="/petmap/place" />
+            </intent-filter>
+            <!-- 구버전 공유 링크(커스텀 스킴) 호환: petmap://place/{placeId} -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

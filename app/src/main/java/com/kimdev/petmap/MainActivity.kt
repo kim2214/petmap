@@ -130,7 +130,7 @@ private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivit
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
-    // 앱 실행 중 딥링크(petmap://place/{id}) 수신 → 상세로 이동.
+    // 앱 실행 중 딥링크(https://kim2214.github.io/petmap/place?id=… 또는 petmap://place/{id}) 수신 → 상세로 이동.
     // 콜드 스타트 딥링크는 NavHost 가 Activity 인텐트에서 자동 처리한다.
     DisposableEffect(navController) {
         val listener = Consumer<Intent> { intent -> navController.handleDeepLink(intent) }

@@ -86,9 +86,12 @@ fun PetMapNavHost(
         composable(
             route = Routes.DETAIL_PATTERN,
             arguments = listOf(navArgument(Routes.DETAIL_ARG_ID) { type = NavType.StringType }),
-            // 공유 링크(petmap://place/{id})로 진입. 콜드 스타트는 NavHost 가 Activity 인텐트를
-            // 자동 처리하고, 실행 중 수신은 MainActivity 의 onNewIntent 리스너가 handleDeepLink 로 넘긴다.
-            deepLinks = listOf(navDeepLink { uriPattern = Routes.DETAIL_DEEP_LINK_PATTERN }),
+            // 공유 링크로 진입 (HTTPS App Link + 구버전 petmap:// 스킴). 콜드 스타트는 NavHost 가
+            // Activity 인텐트를 자동 처리하고, 실행 중 수신은 MainActivity 의 onNewIntent 리스너가 넘긴다.
+            deepLinks = listOf(
+                navDeepLink { uriPattern = Routes.DETAIL_APP_LINK_PATTERN },
+                navDeepLink { uriPattern = Routes.DETAIL_DEEP_LINK_PATTERN },
+            ),
             // 상세는 오른쪽에서 밀려 들어오는 push 전환
             enterTransition = { slideInHorizontally(tween(300)) { it } + fadeIn(tween(300)) },
             exitTransition = { fadeOut(tween(200)) },

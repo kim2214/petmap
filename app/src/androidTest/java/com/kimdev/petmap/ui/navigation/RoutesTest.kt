@@ -46,6 +46,19 @@ class RoutesTest {
         }
     }
 
+    @Test
+    fun detailDeepLink_isHttpsAppLinkWithEncodedQuery() {
+        val link = Routes.detailDeepLink("가게?이름/1_37.5_127.0")
+        val prefix = "https://${Routes.APP_LINK_HOST}${Routes.APP_LINK_PATH}?id="
+        assertEquals(prefix, link.substring(0, prefix.length))
+        val encoded = link.removePrefix(prefix)
+        // 쿼리 값 안의 예약문자가 남아 있으면 id 가 잘리거나 두 번째 파라미터로 오해된다
+        assertFalse(encoded.contains('?'))
+        assertFalse(encoded.contains('/'))
+        assertFalse(encoded.contains('&'))
+        assertEquals("가게?이름/1_37.5_127.0", Uri.decode(encoded))
+    }
+
     private companion object {
         const val DETAIL_PREFIX = "detail"
     }
