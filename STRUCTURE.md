@@ -46,6 +46,7 @@ com.kimdev.petmap
     ├── settings/   SettingsScreen·SettingsViewModel(테마), LicensesScreen(오픈소스 고지)
     ├── onboarding/ OnboardingScreen (최초 실행 + 설정에서 다시 보기)
     ├── components/ BannerAd, CategoryFilterRow, CategoryVisuals, EmptyState,
+│   │              TabScreenScaffold(목록·즐겨찾기 공통 골격), PetFilterChips, LocationPermission(ui/common)
     │               LocationSettingsDialog, PlaceCard, PlacePreviewSheet, SearchTextField
     ├── common/     SavedFilters (SavedStateHandle 필터 직렬화)
     └── theme/      Color, Theme, Type
