@@ -51,7 +51,15 @@ data class MapUiState(
     val recentSearches: List<String> = emptyList(),
     /** 지도를 충분히 이동/축소해 현재 표시 데이터가 오래된 상태 → "이 지역에서 다시 검색" 노출 */
     val canResearch: Boolean = false,
+    /**
+     * 검색 확정(키보드 검색 키) 상태: 뷰포트 조회 대신 검색 결과 전체를 마커로 보여준다.
+     * 카메라를 움직여도 재조회하지 않고 로컬 재클러스터링만 한다. 검색어를 지우면 해제.
+     */
+    val searchMarkers: SearchMarkers? = null,
 )
+
+/** 지도에 뿌린 검색 결과 요약 (칩 아래 안내 pill) */
+data class SearchMarkers(val query: String, val count: Int, val truncated: Boolean)
 
 /**
  * 지도 화면의 일회성 이벤트.
@@ -71,6 +79,8 @@ sealed interface MapEvent {
     data object LoadFailed : MapEvent
     /** 저줌 집계 클러스터를 셀 범위 재조회로 펼친 결과 → 장소 목록 시트 표시 */
     data class ExpandCluster(val places: List<Place>) : MapEvent
+    /** 검색 결과 전체가 보이도록 카메라를 결과 범위에 맞춤 */
+    data class FitPlaces(val places: List<Place>) : MapEvent
 }
 
 @OptIn(FlowPreview::class)
@@ -145,7 +155,8 @@ class MapViewModel @Inject constructor(
                 .debounce(250)
                 .collect { q ->
                     // 검색 실패로 collector 가 취소되면 자동완성이 영구 중단되므로 예외를 흡수한다.
-                    val results = if (q.isBlank()) emptyList()
+                    // 확정된 검색어(마커로 표시 중)와 같으면 자동완성 목록을 다시 띄우지 않는다.
+                    val results = if (q.isBlank() || q.trim() == _uiState.value.searchMarkers?.query) emptyList()
                     else runCatching { repository.search(q.trim(), limit = 8) }
                         .onFailure { Log.w(TAG, "search failed: ${it.message}") }
                         .getOrDefault(emptyList())
@@ -197,7 +208,52 @@ class MapViewModel @Inject constructor(
 
     fun onSearchQueryChange(q: String) = _uiState.update { it.copy(searchQuery = q) }
 
-    fun clearSearch() = _uiState.update { it.copy(searchQuery = "", searchResults = emptyList()) }
+    fun clearSearch() {
+        val hadMarkers = _uiState.value.searchMarkers != null
+        _uiState.update { it.copy(searchQuery = "", searchResults = emptyList(), searchMarkers = null) }
+        // 검색 마커를 내리면 원래의 뷰포트 조회로 복귀한다
+        if (hadMarkers) fetch()
+    }
+
+    /**
+     * 검색 확정: 검색어에 맞는 장소 전체(상한 [SEARCH_MARKERS_LIMIT])를 마커로 뿌리고 카메라를 결과
+     * 범위에 맞춘다. 자동완성(상위 8건 중 하나 선택)과 달리 "근처 동물병원 전부"처럼 결과를 한눈에
+     * 비교할 때 쓴다. 카테고리·동반 조건 필터는 그대로 적용된다.
+     */
+    fun submitSearch(rawQuery: String) {
+        val query = rawQuery.trim()
+        if (query.isBlank()) return
+        fetchJob?.cancel()
+        clusterJob?.cancel()
+        fetchJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, searchResults = emptyList()) }
+            runCatching {
+                val filters = _uiState.value.petFilters
+                repository.search(query, _uiState.value.selectedCategories, limit = SEARCH_MARKERS_LIMIT + 1)
+                    .filter { place -> filters.all { it.matches(place) } }
+            }.onSuccess { found ->
+                val truncated = found.size > SEARCH_MARKERS_LIMIT
+                val shown = found.take(SEARCH_MARKERS_LIMIT)
+                places = shown
+                val clusters = withContext(defaultDispatcher) { clusterPlaces(shown, lastZoom) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        clusters = clusters,
+                        canResearch = false,
+                        searchMarkers = SearchMarkers(query, shown.size, truncated),
+                    )
+                }
+                if (shown.isEmpty()) _events.send(MapEvent.NoResults)
+                else _events.send(MapEvent.FitPlaces(shown))
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                Log.w(TAG, "search markers failed: ${e.message}")
+                _uiState.update { it.copy(isLoading = false) }
+                _events.send(MapEvent.LoadFailed)
+            }
+        }
+    }
 
     /** 검색 확정(결과 선택 등) 시 최근 검색어로 저장 */
     fun recordRecentSearch(query: String) = recentSearchStore.add(query)
@@ -262,12 +318,13 @@ class MapViewModel @Inject constructor(
         // 줌 버킷이 바뀌면 조회 반경과 집계 격자 크기가 달라져, 지금 표시 중인 개수 자체가 의미를
         // 잃는다(예: 12km 격자로 센 개수를 4km 뷰에 그대로 남기면 오정보). 로컬 DB 쿼리라 비용이
         // 낮으므로 이 경우만 자동 재조회하고, 같은 줌에서의 팬 이동은 "다시 검색" 버튼을 유지한다.
-        if (radiusForZoom(zoom) != radiusForZoom(loadedZoom)) {
+        if (_uiState.value.searchMarkers == null && radiusForZoom(zoom) != radiusForZoom(loadedZoom)) {
             fetch()
             return
         }
 
-        val stale = isResearchNeeded(
+        // 검색 마커 모드: 결과 집합이 고정이라 "다시 검색"은 의미가 없다 — 재클러스터링만 한다
+        val stale = _uiState.value.searchMarkers == null && isResearchNeeded(
             loadedCenterLat, loadedCenterLng, loadedZoom,
             centerLat, centerLng, zoom,
         )
@@ -319,6 +376,8 @@ class MapViewModel @Inject constructor(
     /** 현재 카메라 위치 기준으로 DB 조회 후 클러스터링. canResearch 해제. */
     private fun fetch() {
         if (_uiState.value.isSeeding || _uiState.value.seedFailed) return
+        // 검색 마커 모드에서 필터가 바뀌면 같은 검색어로 결과를 다시 뿌린다
+        _uiState.value.searchMarkers?.let { submitSearch(it.query); return }
         // 재조회가 클러스터 결과를 확정하므로 진행 중인 카메라-이동 클러스터링은 취소.
         clusterJob?.cancel()
         // 진행 중인 이전 조회도 취소 → 필터 연타/줌 연속 변경 시 결과 역전 방지.
@@ -475,5 +534,11 @@ class MapViewModel @Inject constructor(
 
         /** "지도에서 보기"로 특정 장소를 비출 때의 줌. */
         const val FOCUS_ZOOM = 16.0
+
+        /**
+         * 검색 확정 시 마커로 뿌리는 결과 상한. 목록 화면 상한(200)과 맞춘다 — 그 이상은 클러스터로
+         * 뭉쳐도 한눈에 비교할 수 없고, 넘치면 pill 에 "이상"으로 알려 검색어를 좁히게 한다.
+         */
+        const val SEARCH_MARKERS_LIMIT = 200
     }
 }

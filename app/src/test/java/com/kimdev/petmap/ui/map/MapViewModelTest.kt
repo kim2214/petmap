@@ -232,6 +232,44 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `검색 확정은 결과 전체를 마커로 뿌리고 카메라 맞춤 이벤트를 보낸다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(
+                testPlace("행복카페", lat = 37.50, lng = 127.00),
+                testPlace("행복동물병원", lat = 35.10, lng = 129.00),
+                testPlace("다른곳", lat = 37.51, lng = 127.01),
+            )
+            val vm = viewModel()
+            advanceUntilIdle()
+            val received = mutableListOf<MapEvent>()
+            val job = launch { vm.events.toList(received) }
+
+            vm.onSearchQueryChange("행복")
+            vm.submitSearch("행복")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertEquals(SearchMarkers("행복", 2, truncated = false), state.searchMarkers)
+            assertEquals(2, state.clusters.sumOf { it.count })
+            assertTrue(state.searchResults.isEmpty()) // 자동완성 목록은 내려간다
+            assertEquals(2, (received.last() as MapEvent.FitPlaces).places.size)
+
+            // 카메라를 크게 옮겨도 재조회하지 않고 "다시 검색"도 뜨지 않는다
+            val boundsBefore = repo.lastBoundsLimit
+            vm.onCameraMove(33.0, 126.0, 9.0)
+            advanceUntilIdle()
+            assertFalse(vm.uiState.value.canResearch)
+            assertEquals(boundsBefore, repo.lastBoundsLimit)
+
+            // 해제하면 뷰포트 조회로 복귀
+            vm.clearSearch()
+            advanceUntilIdle()
+            assertNull(vm.uiState.value.searchMarkers)
+            assertEquals(3, vm.uiState.value.clusters.sumOf { it.count })
+            job.cancel()
+        }
+
+    @Test
     fun `조회 결과가 0건이면 NoResults 이벤트를 보낸다`() =
         runTest(mainDispatcherRule.testDispatcher) {
             repo.dataset = emptyList()

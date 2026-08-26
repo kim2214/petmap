@@ -92,6 +92,9 @@ import com.kimdev.petmap.ui.components.color
 import com.kimdev.petmap.ui.components.icon
 import com.kimdev.petmap.ui.components.softColor
 import com.naver.maps.geometry.LatLng
+import com.naver.maps.geometry.LatLngBounds
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.naver.maps.map.CameraAnimation
 import com.naver.maps.map.CameraPosition
@@ -215,6 +218,20 @@ fun MapScreen(
                     previewPlace = event.place
                 }
                 is MapEvent.ExpandCluster -> clusterList = event.places
+                is MapEvent.FitPlaces -> {
+                    val bounds = LatLngBounds.Builder().apply {
+                        event.places.forEach { include(LatLng(it.lat, it.lng)) }
+                    }.build()
+                    scope.launch {
+                        // 결과가 한 곳이면 fitBounds 가 최대 줌으로 파고든다 → 포커스 줌으로 제한
+                        val update = if (event.places.size == 1) {
+                            CameraUpdate.scrollAndZoomTo(bounds.center, MapViewModel.FOCUS_ZOOM)
+                        } else {
+                            CameraUpdate.fitBounds(bounds, FIT_BOUNDS_PADDING_PX)
+                        }
+                        cameraPositionState.animate(update, CameraAnimation.Fly)
+                    }
+                }
                 MapEvent.NoResults ->
                     snackbarHostState.showSnackbar(resources.getString(R.string.map_no_results))
                 MapEvent.LoadFailed -> {
@@ -324,10 +341,13 @@ fun MapScreen(
                     viewModel.clearSearch()
                     focusManager.clearFocus()
                 },
-                // 목록 화면과 동일하게 키보드 "검색" 키 지원 (기록 + 키보드 내리기)
+                // 키보드 "검색" 키: 자동완성 대신 검색 결과 전체를 마커로 뿌린다 (+ 최근 검색어 기록)
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
-                    if (state.searchQuery.isNotBlank()) viewModel.recordRecentSearch(state.searchQuery)
+                    if (state.searchQuery.isNotBlank()) {
+                        viewModel.recordRecentSearch(state.searchQuery)
+                        viewModel.submitSearch(state.searchQuery)
+                    }
                     focusManager.clearFocus()
                 }),
                 onFocusChanged = { searchFocused = it },
@@ -431,6 +451,42 @@ fun MapScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             PetFilterChips(selected = state.petFilters, onToggle = viewModel::togglePetFilter)
+                        }
+                    }
+                }
+            }
+
+            // 검색 결과 마커 모드 안내 pill: 결과 수 + 해제(✕). 자동완성 목록이 떠 있으면 숨긴다.
+            val markers = state.searchMarkers
+            if (markers != null && state.searchResults.isEmpty() && !(searchFocused && state.searchQuery.isBlank())) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    shape = RoundedCornerShape(50),
+                    shadowElevation = 2.dp,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 10.dp),
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (markers.truncated) R.string.map_search_markers_more_format
+                                else R.string.map_search_markers_format,
+                                markers.query, markers.count,
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        IconButton(
+                            onClick = {
+                                viewModel.clearSearch()
+                                focusManager.clearFocus()
+                            },
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear_search))
                         }
                     }
                 }
@@ -621,6 +677,8 @@ private const val MAX_CLUSTER_ZOOM = 19.0
 private const val CO_LOCATED_M = 25.0
 // 첫 진입 시 현재 위치로 이동할 때의 줌(동네 단위로 주변 장소가 보이는 수준).
 private const val INITIAL_LOCATION_ZOOM = 15.0
+// 검색 결과 범위 맞춤 시 가장자리 마커가 검색바·FAB 에 가리지 않도록 두는 여백(px)
+private const val FIT_BOUNDS_PADDING_PX = 160
 
 /**
  * 지도 위 마커/클러스터 렌더링. [MapScreen] 본문에서 분리해, 지도와 무관한 상태 변경
