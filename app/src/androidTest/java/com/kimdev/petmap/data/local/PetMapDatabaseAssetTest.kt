@@ -78,8 +78,8 @@ class PetMapDatabaseAssetTest {
     fun assetDb_hasDataDateMeta() = runBlocking {
         val raw = db.metaDao().get(MetaEntity.KEY_DATA_DATE)
         assertNotNull("meta.data_date 없음 — build_db.py 가 meta 를 기록하지 않았음", raw)
-        // ISO-8601 날짜여야 설정 화면이 파싱한다
-        LocalDate.parse(raw)
+        // ISO-8601 날짜여야 설정 화면이 파싱한다 (마지막 식이 값을 반환하면 JUnit 이 클래스를 거부한다 → Unit)
+        assertNotNull(LocalDate.parse(raw))
     }
 
     private companion object {
