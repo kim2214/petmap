@@ -12,7 +12,7 @@ com.kimdev.petmap
 │
 ├── core/                         # 공통/인프라
 │   ├── ads/       AdsConsent (UMP 동의 → AdMob 초기화)
-│   ├── common/    Constants(지도 기본 카메라), Dispatchers(@IoDispatcher/@DefaultDispatcher),
+│   ├── common/    Constants(지도 기본 카메라), Dispatchers(@IoDispatcher/@DefaultDispatcher)
 │   ├── location/  LocationProvider (FusedLocation 래퍼)
 │   ├── review/    InAppReview (실행 횟수 기반 Play 인앱 리뷰)
 │   └── util/      IntentActions (전화·공유·네이버 길찾기·홈페이지 열기)
