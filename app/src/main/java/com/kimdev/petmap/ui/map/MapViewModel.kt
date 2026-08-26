@@ -121,6 +121,12 @@ class MapViewModel @Inject constructor(
     private val focusRequested: Boolean get() = focusPlaceId != null
     private var initialFocusHandled = false
 
+    /**
+     * 이 지도가 특정 장소를 비추기 위해 push 된 것인지. 화면은 이 경우 첫 진입 Follow(내 위치 추적)를
+     * 켜지 않는다 — 켜면 위치 소스가 카메라를 내 위치로 끌고 가 포커스 이동을 덮어쓴다.
+     */
+    val hasFocusTarget: Boolean get() = focusRequested
+
     init {
         seed()
         // 거리 표시용 마지막 위치(권한 없으면 null). 카메라 이동과 무관하게 조용히 확보한다.

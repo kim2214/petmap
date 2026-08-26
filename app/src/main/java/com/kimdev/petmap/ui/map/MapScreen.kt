@@ -185,10 +185,12 @@ fun MapScreen(
 
     LaunchedEffect(granted) {
         if (granted) {
-            // Follow 전환은 최초 1회만 (탭 전환·회전마다 보던 지역에서 내 위치로 튀지 않게)
+            // Follow 전환은 최초 1회만 (탭 전환·회전마다 보던 지역에서 내 위치로 튀지 않게).
+            // "지도에서 보기"로 push 된 지도는 장소를 비추는 게 목적이라 Follow 를 켜지 않는다
+            // (켜면 위치 소스가 카메라를 내 위치로 끌고 가 포커스 이동을 덮어쓴다).
             if (!followInitialized) {
                 followInitialized = true
-                trackingMode = LocationTrackingMode.Follow
+                if (!viewModel.hasFocusTarget) trackingMode = LocationTrackingMode.Follow
             }
             // 카메라 1회 이동은 ViewModel 이 관리한다 — 성공 전엔 재호출이 재시도가 되고
             // (위치 못 잡은 콜드스타트), 성공 후엔 no-op 이라 카메라가 다시 튀지 않는다.
