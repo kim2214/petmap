@@ -232,6 +232,13 @@ class MapViewModel @Inject constructor(
                 repository.search(query, _uiState.value.selectedCategories, limit = SEARCH_MARKERS_LIMIT + 1)
                     .filter { place -> filters.all { it.matches(place) } }
             }.onSuccess { found ->
+                // 0건이면 마커 모드에 들어가지 않는다 — 기존 마커를 지우고 "0곳 표시 중" 을 띄우는 대신
+                // 자동완성의 "검색 결과가 없어요" 안내 + NoResults 스낵바만으로 충분하다
+                if (found.isEmpty()) {
+                    _uiState.update { it.copy(isLoading = false) }
+                    _events.send(MapEvent.NoResults)
+                    return@onSuccess
+                }
                 val truncated = found.size > SEARCH_MARKERS_LIMIT
                 val shown = found.take(SEARCH_MARKERS_LIMIT)
                 places = shown
@@ -244,8 +251,7 @@ class MapViewModel @Inject constructor(
                         searchMarkers = SearchMarkers(query, shown.size, truncated),
                     )
                 }
-                if (shown.isEmpty()) _events.send(MapEvent.NoResults)
-                else _events.send(MapEvent.FitPlaces(shown))
+                _events.send(MapEvent.FitPlaces(shown))
             }.onFailure { e ->
                 if (e is CancellationException) throw e
                 Log.w(TAG, "search markers failed: ${e.message}")

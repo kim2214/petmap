@@ -385,8 +385,9 @@ fun MapScreen(
                     }
                 }
 
-                // 검색했지만 결과 없음
-                state.searchQuery.isNotBlank() -> Surface(
+                // 검색했지만 결과 없음. 확정된 검색어(마커 표시 중)는 결과가 지도에 있으니 제외 —
+                // 그 경우 자동완성 목록이 비어 있어도 아래 칩 + pill 을 보여준다.
+                state.searchQuery.isNotBlank() && state.searchMarkers?.query != state.searchQuery.trim() -> Surface(
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(16.dp),
                     shadowElevation = 4.dp,

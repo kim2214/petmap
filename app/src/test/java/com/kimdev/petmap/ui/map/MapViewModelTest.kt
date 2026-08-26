@@ -270,6 +270,20 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `검색 확정 결과가 0건이면 마커 모드에 들어가지 않고 기존 마커를 유지한다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            vm.submitSearch("없는이름")
+            advanceUntilIdle()
+
+            assertNull(vm.uiState.value.searchMarkers)
+            assertEquals(1, vm.uiState.value.clusters.sumOf { it.count })
+        }
+
+    @Test
     fun `조회 결과가 0건이면 NoResults 이벤트를 보낸다`() =
         runTest(mainDispatcherRule.testDispatcher) {
             repo.dataset = emptyList()
