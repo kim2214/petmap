@@ -482,7 +482,12 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
         NaverMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(isNightModeEnabled = isDarkTheme),
+            properties = MapProperties(
+                isNightModeEnabled = isDarkTheme,
+                // 라이트 모드: 벡터 렌더러 대신 정적 래스터로 그려 메모리·GPU 부담이 작다.
+                // 제스처가 없는 미리보기라 회전·기울임·3D 가 필요 없으므로 손해가 없다.
+                isLiteModeEnabled = true,
+            ),
             // 미리보기용: 제스처/버튼 비활성 (네이버 로고는 약관상 노출 유지)
             uiSettings = MapUiSettings(
                 isScrollGesturesEnabled = false,
