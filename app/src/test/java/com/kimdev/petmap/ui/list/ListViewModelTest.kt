@@ -111,6 +111,29 @@ class ListViewModelTest {
     }
 
     @Test
+    fun `거리순은 반경을 넘겨 주변만 남기고, 0건이면 화면이 거리순 해제를 안내할 수 있게 sortByDistance 를 유지`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(
+                testPlace("near", lat = 37.52, lng = 127.02),
+                testPlace("far", lat = 35.10, lng = 129.00), // 부산 — 반경 밖
+            )
+            val vm = viewModel(location = UserLocation(37.5, 127.0))
+            advanceUntilIdle()
+
+            vm.setSortByDistance(true)
+            advanceUntilIdle()
+
+            assertEquals(ListViewModel.NEARBY_RADIUS_KM, repo.lastSearchNearbyRadiusKm)
+            assertEquals(listOf("near"), vm.uiState.value.places.map { it.id })
+
+            repo.dataset = listOf(testPlace("far", lat = 35.10, lng = 129.00))
+            vm.retry()
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.places.isEmpty())
+            assertTrue(vm.uiState.value.sortByDistance)
+        }
+
+    @Test
     fun `거리순 정렬이고 위치 있으면 searchNearby 사용`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = listOf(testPlace("a"))
         val vm = viewModel(location = UserLocation(37.5, 127.0))

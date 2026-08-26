@@ -104,6 +104,9 @@
     <string name="list_location_unavailable">현재 위치를 확인할 수 없어요</string>
     <string name="empty_error_title">장소를 불러오지 못했어요</string>
     <string name="empty_error_desc">잠시 후 다시 시도해 주세요.</string>
+    <string name="empty_nearby_title_format">내 주변 %1$d km 안에 장소가 없어요</string>
+    <string name="empty_nearby_desc">거리순을 끄면 전국 결과를 볼 수 있어요.</string>
+    <string name="action_distance_off">거리순 끄기</string>
     <string name="empty_open_now_title">지금 영업중인 장소가 없어요</string>
     <string name="empty_open_now_desc">영업시간 정보가 없는 장소는 제외돼요. 필터를 끄거나 다른 지역에서 찾아보세요.</string>
     <string name="empty_search_title_format">\'%1$s\' 검색 결과가 없어요</string>

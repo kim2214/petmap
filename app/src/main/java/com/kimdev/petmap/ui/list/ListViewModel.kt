@@ -150,7 +150,8 @@ class ListViewModel @Inject constructor(
 
         runCatching {
             val fetched = if (key.sortByDistance && loc != null) {
-                repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, fetchLimit)
+                // 거리순은 "주변" 탐색 의도 → 반경 밖은 제외 (0건이면 화면이 거리순 해제를 안내)
+                repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, NEARBY_RADIUS_KM, fetchLimit)
             } else {
                 val results = repository.search(key.query, key.categories, fetchLimit)
                 // 위치를 알면 거리순 정렬을 켜지 않아도 카드에 거리를 표시한다
@@ -331,5 +332,11 @@ class ListViewModel @Inject constructor(
         private const val KEY_SORT_BY_DISTANCE = "list_sort_by_distance"
         private const val KEY_OPEN_NOW_ONLY = "list_open_now_only"
         private const val KEY_PET_FILTERS = "list_pet_filters"
+
+        /**
+         * 거리순 정렬 반경(km). 전국 데이터를 거리순으로 나열하면 상한(200건) 안에서도 수십 km
+         * 밖 결과가 섞여 "주변" 탐색 의도와 어긋난다. 광역시 하나를 덮는 수준으로 잡았다.
+         */
+        const val NEARBY_RADIUS_KM = 30.0
     }
 }

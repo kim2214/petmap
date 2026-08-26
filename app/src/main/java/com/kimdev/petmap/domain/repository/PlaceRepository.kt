@@ -65,12 +65,17 @@ interface PlaceRepository {
         limit: Int = 200,
     ): List<Place>
 
-    /** 목록: 이름/주소 검색 + 카테고리 다중 필터, 사용자 위치에서 가까운 순 (각 항목에 거리 채움) */
+    /**
+     * 목록: 이름/주소 검색 + 카테고리 다중 필터, 사용자 위치에서 가까운 순 (각 항목에 거리 채움).
+     * [radiusKm] 을 주면 그 반경(위경도 박스 근사) 밖은 제외한다 — "거리순"은 주변 탐색 의도라
+     * 수백 km 떨어진 결과까지 나열하지 않는다.
+     */
     suspend fun searchNearby(
         query: String,
         categories: Set<PlaceCategory>,
         userLat: Double,
         userLng: Double,
+        radiusKm: Double? = null,
         limit: Int = 200,
     ): List<Place>
 

@@ -154,9 +154,18 @@ class PlaceDaoTest {
 
         val result = dao.browseByDistance(
             cats = allCats.first, catCount = allCats.second,
-            lat = 37.5, lng = 127.0, lngScaleSq = 0.63, limit = 10,
+            lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
+            minLat = -90.0, maxLat = 90.0, minLng = -180.0, maxLng = 180.0, limit = 10,
         )
         assertEquals(listOf("near", "far"), result.map { it.id })
+
+        // 박스(반경) 밖은 제외된다
+        val boxed = dao.browseByDistance(
+            cats = allCats.first, catCount = allCats.second,
+            lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
+            minLat = 37.3, maxLat = 37.7, minLng = 126.8, maxLng = 127.2, limit = 10,
+        )
+        assertEquals(listOf("near"), boxed.map { it.id })
     }
 
     @Test

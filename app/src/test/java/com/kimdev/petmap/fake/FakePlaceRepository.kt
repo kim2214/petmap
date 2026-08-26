@@ -28,6 +28,7 @@ class FakePlaceRepository : PlaceRepository {
     var searchNearbyCount = 0
     var lastSearchLimit: Int? = null
     var lastSearchNearbyLimit: Int? = null
+    var lastSearchNearbyRadiusKm: Double? = null
     var lastCategories: Set<PlaceCategory>? = null
     var lastPetFilters: Set<PetFilter>? = null
     var lastBoundsLimit: Int? = null
@@ -124,13 +125,18 @@ class FakePlaceRepository : PlaceRepository {
         categories: Set<PlaceCategory>,
         userLat: Double,
         userLng: Double,
+        radiusKm: Double?,
         limit: Int,
     ): List<Place> {
         searchNearbyCount++
         lastSearchNearbyLimit = limit
+        lastSearchNearbyRadiusKm = radiusKm
         lastCategories = categories
-        return dataset.filterBy(query, categories).take(limit)
+        return dataset.filterBy(query, categories)
             .map { it.copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
+            .filter { radiusKm == null || (it.distanceMeters ?: 0.0) <= radiusKm * 1000 }
+            .sortedBy { it.distanceMeters }
+            .take(limit)
     }
 
     override suspend fun getPlace(id: String): Place? = dataset.find { it.id == id }

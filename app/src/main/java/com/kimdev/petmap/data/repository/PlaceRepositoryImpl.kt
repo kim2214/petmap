@@ -90,6 +90,13 @@ class PlaceRepositoryImpl @Inject constructor(
         if (categories.isEmpty()) listOf("") to 0
         else categories.map { it.name } to categories.size
 
+    /** 반경(km) → [minLat, maxLat, minLng, maxLng] 위경도 박스 근사 (지도 뷰포트 조회와 같은 방식) */
+    private fun boundingBox(lat: Double, lng: Double, radiusKm: Double): DoubleArray {
+        val latDelta = radiusKm / 111.0
+        val lngDelta = radiusKm / (111.0 * max(0.1, cos(Math.toRadians(lat))))
+        return doubleArrayOf(lat - latDelta, lat + latDelta, lng - lngDelta, lng + lngDelta)
+    }
+
     /** 경도 항 가중치 cos²(lat). 거리 정렬에서 경도 1도가 위도 1도보다 짧은 것을 보정한다. */
     private fun lngScaleSq(lat: Double): Double {
         val c = cos(Math.toRadians(lat))
@@ -212,14 +219,19 @@ class PlaceRepositoryImpl @Inject constructor(
         categories: Set<PlaceCategory>,
         userLat: Double,
         userLng: Double,
+        radiusKm: Double?,
         limit: Int,
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
         val match = PlaceFts.match(query)
+        val box = radiusKm?.let { boundingBox(userLat, userLng, it) } ?: WORLD_BOX
         val rows = if (match == null) {
-            placeDao.browseByDistance(cats, catCount, userLat, userLng, lngScaleSq(userLat), limit)
+            placeDao.browseByDistance(
+                cats, catCount, userLat, userLng, lngScaleSq(userLat),
+                minLat = box[0], maxLat = box[1], minLng = box[2], maxLng = box[3], limit = limit,
+            )
         } else {
-            placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat, userLng, limit))
+            placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat, userLng, box, limit))
         }
         // SQL 정렬은 근사(cos 보정)로 top-N 을 뽑고, 표시 순서는 정확한 거리로 다시 정렬한다.
         return rows.map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
@@ -238,6 +250,7 @@ class PlaceRepositoryImpl @Inject constructor(
         catCount: Int,
         userLat: Double?,
         userLng: Double?,
+        box: DoubleArray? = null,
         limit: Int,
     ): SupportSQLiteQuery {
         val args = mutableListOf<Any>(match)
@@ -251,6 +264,10 @@ class PlaceRepositoryImpl @Inject constructor(
             sql.append(cats.joinToString(",") { "?" })
             sql.append(")")
             args.addAll(cats)
+        }
+        if (box != null && box !== WORLD_BOX) {
+            sql.append(" AND places.lat BETWEEN ? AND ? AND places.lng BETWEEN ? AND ?")
+            args.add(box[0]); args.add(box[1]); args.add(box[2]); args.add(box[3])
         }
         if (userLat != null && userLng != null) {
             sql.append(
@@ -306,6 +323,8 @@ class PlaceRepositoryImpl @Inject constructor(
 
     private companion object {
         const val TAG = "PlaceRepository"
+        /** 반경 제한 없음 — 전 세계 박스 (DAO 파라미터를 항상 채우기 위한 값) */
+        val WORLD_BOX = doubleArrayOf(-90.0, 90.0, -180.0, 180.0)
     }
 }
 

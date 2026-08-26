@@ -107,11 +107,16 @@ interface PlaceDao {
     )
     suspend fun browse(cats: List<String>, catCount: Int, limit: Int): List<PlaceEntity>
 
-    /** 검색어 없이 카테고리 필터만, 지정 좌표에서 가까운 순 (lng 항에 cos²(lat) 보정) */
+    /**
+     * 검색어 없이 카테고리 필터만, 지정 좌표에서 가까운 순 (lng 항에 cos²(lat) 보정).
+     * min/max 박스로 반경을 제한한다(제한 없으면 전 세계 범위를 넘긴다).
+     */
     @Query(
         """
         SELECT * FROM places
         WHERE (:catCount = 0 OR category IN (:cats))
+          AND lat BETWEEN :minLat AND :maxLat
+          AND lng BETWEEN :minLng AND :maxLng
         ORDER BY ((lat - :lat) * (lat - :lat)
                   + (lng - :lng) * (lng - :lng) * :lngScaleSq) ASC
         LIMIT :limit
@@ -123,6 +128,10 @@ interface PlaceDao {
         lat: Double,
         lng: Double,
         lngScaleSq: Double,
+        minLat: Double,
+        maxLat: Double,
+        minLng: Double,
+        maxLng: Double,
         limit: Int,
     ): List<PlaceEntity>
 

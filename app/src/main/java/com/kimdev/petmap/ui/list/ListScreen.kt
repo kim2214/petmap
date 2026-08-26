@@ -247,6 +247,10 @@ fun ListScreen(
             state.places.isEmpty() -> {
                 val hasFilters = state.selectedCategories.isNotEmpty() || state.petFilters.isNotEmpty()
                 val (title, desc) = when {
+                    // 거리순 반경(주변 N km) 밖만 남은 경우 — 다른 필터보다 먼저 안내한다
+                    state.sortByDistance ->
+                        stringResource(R.string.empty_nearby_title_format, ListViewModel.NEARBY_RADIUS_KM.toInt()) to
+                            stringResource(R.string.empty_nearby_desc)
                     state.openNowOnly -> stringResource(R.string.empty_open_now_title) to stringResource(R.string.empty_open_now_desc)
                     state.query.isNotBlank() -> stringResource(R.string.empty_search_title_format, state.query) to stringResource(R.string.empty_search_desc)
                     hasFilters -> stringResource(R.string.empty_filter_title) to stringResource(R.string.empty_filter_desc)
@@ -254,6 +258,9 @@ fun ListScreen(
                 }
                 // 0건일 때 곧바로 빠져나갈 수 있는 복구 동선
                 val recovery: (@Composable () -> Unit)? = when {
+                    state.sortByDistance -> {
+                        { Button(onClick = { viewModel.setSortByDistance(false) }) { Text(stringResource(R.string.action_distance_off)) } }
+                    }
                     state.openNowOnly -> {
                         { Button(onClick = { viewModel.setOpenNowOnly(false) }) { Text(stringResource(R.string.action_open_now_off)) } }
                     }
