@@ -3,21 +3,12 @@ package com.kimdev.petmap.ui.list
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -31,9 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,8 +40,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.kimdev.petmap.R
@@ -61,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.common.rememberLocationPermission
 import com.kimdev.petmap.ui.components.EmptyState
+import com.kimdev.petmap.ui.components.TabScreenScaffold
 import com.kimdev.petmap.ui.components.PetFilterChips
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlaceCardSkeleton
@@ -139,226 +127,195 @@ fun ListScreen(
         }
     }
 
-    // 스크롤이 시작되면 큰 제목을 접어 결과 영역을 넓히고, 헤더에 구분 그림자를 띄운다.
-    // 검색 중(최근 검색 오버레이)에도 제목을 접어 입력에 집중시킨다.
-    val contentScrolled by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
-    }
-    val headerShadow by animateDpAsState(
-        targetValue = if (contentScrolled) 4.dp else 0.dp,
-        label = "headerShadow",
-    )
+    TabScreenScaffold(
+        title = stringResource(R.string.nav_list),
+        listState = listState,
+        // 검색 중(최근 검색 오버레이)에도 제목을 접어 입력에 집중시킨다
+        collapseTitle = searchFocused,
+        snackbarHostState = snackbarHostState,
+        header = {
+            SearchTextField(
+                value = state.query,
+                onValueChange = viewModel::onQueryChange,
+                onClear = { viewModel.onQueryChange("") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    viewModel.recordRecentSearch(state.query)
+                    focusManager.clearFocus()
+                }),
+                onFocusChanged = { searchFocused = it },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+            CategoryFilterRow(
+                selected = state.selectedCategories,
+                onToggle = viewModel::toggleCategory,
+                onClearAll = viewModel::clearCategories,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
 
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-        Surface(
-            color = MaterialTheme.colorScheme.background,
-            shadowElevation = headerShadow,
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                AnimatedVisibility(
-                    visible = !contentScrolled && !searchFocused,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    Text(
-                        stringResource(R.string.nav_list),
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier
-                            .padding(start = 20.dp, top = 24.dp, bottom = 4.dp)
-                            .semantics { heading() },
-                    )
-                }
-                SearchTextField(
-                    value = state.query,
-                    onValueChange = viewModel::onQueryChange,
-                    onClear = { viewModel.onQueryChange("") },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = {
-                        viewModel.recordRecentSearch(state.query)
-                        focusManager.clearFocus()
-                    }),
-                    onFocusChanged = { searchFocused = it },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                )
-                CategoryFilterRow(
-                    selected = state.selectedCategories,
-                    onToggle = viewModel::toggleCategory,
-                    onClearAll = viewModel::clearCategories,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-
-                // 정렬/필터 토글 + 결과 개수
+            // 정렬/필터 토글 + 결과 개수
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 칩이 늘어나 가로 스크롤로 흐르게 한다. 결과 개수는 스크롤 밖 우측 고정.
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
                 ) {
-                    // 칩이 늘어나 가로 스크롤로 흐르게 한다. 결과 개수는 스크롤 밖 우측 고정.
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .weight(1f)
-                            .horizontalScroll(rememberScrollState()),
-                    ) {
-                        FilterChip(
-                            selected = state.sortByDistance,
-                            onClick = {
-                                when {
-                                    state.hasLocation -> viewModel.setSortByDistance(!state.sortByDistance)
-                                    // 권한은 있는데 위치만 없음 → 위치 재확보 시도
-                                    granted -> viewModel.enableDistanceSortWithLocation()
-                                    else -> {
-                                        // 허용되면 LaunchedEffect(granted) 가 거리순을 켠다
-                                        pendingDistanceSort = true
-                                        locationPermission.request() // 시스템 요청 또는(영구 거부) 설정 안내
-                                    }
+                    FilterChip(
+                        selected = state.sortByDistance,
+                        onClick = {
+                            when {
+                                state.hasLocation -> viewModel.setSortByDistance(!state.sortByDistance)
+                                // 권한은 있는데 위치만 없음 → 위치 재확보 시도
+                                granted -> viewModel.enableDistanceSortWithLocation()
+                                else -> {
+                                    // 허용되면 LaunchedEffect(granted) 가 거리순을 켠다
+                                    pendingDistanceSort = true
+                                    locationPermission.request() // 시스템 요청 또는(영구 거부) 설정 안내
                                 }
-                            },
-                            label = { Text(stringResource(R.string.filter_distance)) },
-                            leadingIcon = leadingCheck(state.sortByDistance),
-                        )
-                        FilterChip(
-                            selected = state.openNowOnly,
-                            onClick = { viewModel.setOpenNowOnly(!state.openNowOnly) },
-                            label = { Text(stringResource(R.string.label_open_now)) },
-                            leadingIcon = leadingCheck(state.openNowOnly),
-                        )
-                        // 반려동물 동반 조건 (모든 크기/실내/실외) — 지도와 같은 칩
-                        PetFilterChips(selected = state.petFilters, onToggle = viewModel::togglePetFilter)
-                    }
-                    // 검색어·필터를 좁힌 효과를 가늠할 수 있게 결과 개수를 보여준다
-                    if (!state.isLoading && state.places.isNotEmpty()) {
-                        val countRes =
-                            if (state.canLoadMore || state.reachedLimit) R.string.list_count_more_format
-                            else R.string.list_count_format
-                        Text(
-                            stringResource(countRes, state.places.size),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                            }
+                        },
+                        label = { Text(stringResource(R.string.filter_distance)) },
+                        leadingIcon = leadingCheck(state.sortByDistance),
+                    )
+                    FilterChip(
+                        selected = state.openNowOnly,
+                        onClick = { viewModel.setOpenNowOnly(!state.openNowOnly) },
+                        label = { Text(stringResource(R.string.label_open_now)) },
+                        leadingIcon = leadingCheck(state.openNowOnly),
+                    )
+                    // 반려동물 동반 조건 (모든 크기/실내/실외) — 지도와 같은 칩
+                    PetFilterChips(selected = state.petFilters, onToggle = viewModel::togglePetFilter)
+                }
+                // 검색어·필터를 좁힌 효과를 가늠할 수 있게 결과 개수를 보여준다
+                if (!state.isLoading && state.places.isNotEmpty()) {
+                    val countRes =
+                        if (state.canLoadMore || state.reachedLimit) R.string.list_count_more_format
+                        else R.string.list_count_format
+                    Text(
+                        stringResource(countRes, state.places.size),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-        }
-
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                // 최근 검색어 (검색창 포커스 + 입력 비어있음)
-                searchFocused && state.query.isBlank() && state.recentSearches.isNotEmpty() ->
-                    RecentSearchList(
-                        recents = state.recentSearches,
-                        onPick = {
-                            viewModel.onQueryChange(it)
-                            // 재선택도 최근 검색 최상단으로 승격 + 키보드를 내려 결과가 보이게 한다
-                            viewModel.recordRecentSearch(it)
-                            focusManager.clearFocus()
-                        },
-                        onRemove = { viewModel.removeRecentSearch(it) },
-                        onClearAll = { viewModel.clearRecentSearches() },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-
-                state.isLoading && state.places.isEmpty() ->
-                    PlaceListSkeleton(modifier = Modifier.fillMaxSize())
-
-                // DB 준비 실패(저장 공간 부족·손상) → 원인 안내. 일반 조회 실패보다 먼저 판정한다
-                state.seedFailed && state.places.isEmpty() -> EmptyState(
-                    icon = Icons.Filled.CloudOff,
-                    title = stringResource(R.string.seed_failed_title),
-                    description = stringResource(R.string.seed_failed_desc),
-                    action = { Button(onClick = { viewModel.retry() }) { Text(stringResource(R.string.action_retry)) } },
+        },
+    ) {
+        when {
+            // 최근 검색어 (검색창 포커스 + 입력 비어있음)
+            searchFocused && state.query.isBlank() && state.recentSearches.isNotEmpty() ->
+                RecentSearchList(
+                    recents = state.recentSearches,
+                    onPick = {
+                        viewModel.onQueryChange(it)
+                        // 재선택도 최근 검색 최상단으로 승격 + 키보드를 내려 결과가 보이게 한다
+                        viewModel.recordRecentSearch(it)
+                        focusManager.clearFocus()
+                    },
+                    onRemove = { viewModel.removeRecentSearch(it) },
+                    onClearAll = { viewModel.clearRecentSearches() },
+                    modifier = Modifier.fillMaxSize(),
                 )
 
-                // 조회 실패 → "결과 없음"과 구분해 에러 상태 + 재시도 동선 제공
-                state.isError && state.places.isEmpty() -> EmptyState(
-                    icon = Icons.Filled.CloudOff,
-                    title = stringResource(R.string.empty_error_title),
-                    description = stringResource(R.string.empty_error_desc),
-                    action = { Button(onClick = { viewModel.retry() }) { Text(stringResource(R.string.action_retry)) } },
-                )
+            state.isLoading && state.places.isEmpty() ->
+                PlaceListSkeleton(modifier = Modifier.fillMaxSize())
 
-                state.places.isEmpty() -> {
-                    val hasFilters = state.selectedCategories.isNotEmpty() || state.petFilters.isNotEmpty()
-                    val (title, desc) = when {
-                        state.openNowOnly -> stringResource(R.string.empty_open_now_title) to stringResource(R.string.empty_open_now_desc)
-                        state.query.isNotBlank() -> stringResource(R.string.empty_search_title_format, state.query) to stringResource(R.string.empty_search_desc)
-                        hasFilters -> stringResource(R.string.empty_filter_title) to stringResource(R.string.empty_filter_desc)
-                        else -> stringResource(R.string.empty_none_title) to null
-                    }
-                    // 0건일 때 곧바로 빠져나갈 수 있는 복구 동선
-                    val recovery: (@Composable () -> Unit)? = when {
-                        state.openNowOnly -> {
-                            { Button(onClick = { viewModel.setOpenNowOnly(false) }) { Text(stringResource(R.string.action_open_now_off)) } }
-                        }
-                        state.query.isNotBlank() -> {
-                            { Button(onClick = { viewModel.onQueryChange("") }) { Text(stringResource(R.string.action_clear_search)) } }
-                        }
-                        hasFilters -> {
-                            { Button(onClick = { viewModel.clearFilters() }) { Text(stringResource(R.string.action_reset_filter)) } }
-                        }
-                        else -> null
-                    }
-                    EmptyState(
-                        icon = Icons.Filled.SearchOff,
-                        title = title,
-                        description = desc,
-                        action = recovery,
-                    )
+            // DB 준비 실패(저장 공간 부족·손상) → 원인 안내. 일반 조회 실패보다 먼저 판정한다
+            state.seedFailed && state.places.isEmpty() -> EmptyState(
+                icon = Icons.Filled.CloudOff,
+                title = stringResource(R.string.seed_failed_title),
+                description = stringResource(R.string.seed_failed_desc),
+                action = { Button(onClick = { viewModel.retry() }) { Text(stringResource(R.string.action_retry)) } },
+            )
+
+            // 조회 실패 → "결과 없음"과 구분해 에러 상태 + 재시도 동선 제공
+            state.isError && state.places.isEmpty() -> EmptyState(
+                icon = Icons.Filled.CloudOff,
+                title = stringResource(R.string.empty_error_title),
+                description = stringResource(R.string.empty_error_desc),
+                action = { Button(onClick = { viewModel.retry() }) { Text(stringResource(R.string.action_retry)) } },
+            )
+
+            state.places.isEmpty() -> {
+                val hasFilters = state.selectedCategories.isNotEmpty() || state.petFilters.isNotEmpty()
+                val (title, desc) = when {
+                    state.openNowOnly -> stringResource(R.string.empty_open_now_title) to stringResource(R.string.empty_open_now_desc)
+                    state.query.isNotBlank() -> stringResource(R.string.empty_search_title_format, state.query) to stringResource(R.string.empty_search_desc)
+                    hasFilters -> stringResource(R.string.empty_filter_title) to stringResource(R.string.empty_filter_desc)
+                    else -> stringResource(R.string.empty_none_title) to null
                 }
+                // 0건일 때 곧바로 빠져나갈 수 있는 복구 동선
+                val recovery: (@Composable () -> Unit)? = when {
+                    state.openNowOnly -> {
+                        { Button(onClick = { viewModel.setOpenNowOnly(false) }) { Text(stringResource(R.string.action_open_now_off)) } }
+                    }
+                    state.query.isNotBlank() -> {
+                        { Button(onClick = { viewModel.onQueryChange("") }) { Text(stringResource(R.string.action_clear_search)) } }
+                    }
+                    hasFilters -> {
+                        { Button(onClick = { viewModel.clearFilters() }) { Text(stringResource(R.string.action_reset_filter)) } }
+                    }
+                    else -> null
+                }
+                EmptyState(
+                    icon = Icons.Filled.SearchOff,
+                    title = title,
+                    description = desc,
+                    action = recovery,
+                )
+            }
 
-                else -> {
-                    // 마지막에서 몇 칸 앞에 도달하면 다음 페이지를 미리 불러온다(스크롤이 끊기지 않게).
-                    val shouldLoadMore by remember(listState, state.places.size) {
-                        derivedStateOf {
-                            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                            last >= state.places.size - LOAD_MORE_THRESHOLD
-                        }
+            else -> {
+                // 마지막에서 몇 칸 앞에 도달하면 다음 페이지를 미리 불러온다(스크롤이 끊기지 않게).
+                val shouldLoadMore by remember(listState, state.places.size) {
+                    derivedStateOf {
+                        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                        last >= state.places.size - LOAD_MORE_THRESHOLD
                     }
-                    LaunchedEffect(shouldLoadMore) {
-                        if (shouldLoadMore) viewModel.loadMore()
+                }
+                LaunchedEffect(shouldLoadMore) {
+                    if (shouldLoadMore) viewModel.loadMore()
+                }
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    items(state.places, key = { it.id }) { place ->
+                        PlaceCard(
+                            place = place,
+                            onClick = {
+                                // 가장 흔한 동선(타이핑 → 결과 카드 탭)에서도 검색어를 기록한다
+                                if (state.query.isNotBlank()) viewModel.recordRecentSearch(state.query)
+                                onPlaceClick(place.id)
+                            },
+                            onToggleFavorite = { viewModel.toggleFavorite(place) },
+                            modifier = Modifier.animateItem(),
+                        )
                     }
-                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                        items(state.places, key = { it.id }) { place ->
-                            PlaceCard(
-                                place = place,
-                                onClick = {
-                                    // 가장 흔한 동선(타이핑 → 결과 카드 탭)에서도 검색어를 기록한다
-                                    if (state.query.isNotBlank()) viewModel.recordRecentSearch(state.query)
-                                    onPlaceClick(place.id)
-                                },
-                                onToggleFavorite = { viewModel.toggleFavorite(place) },
-                                modifier = Modifier.animateItem(),
+                    if (state.isLoadingMore) {
+                        item(key = "loading_more") { PlaceCardSkeleton() }
+                    } else if (state.reachedLimit) {
+                        // 상한까지 불러왔음을 숨기지 않고 좁히는 방법을 안내한다
+                        item(key = "reached_limit") {
+                            Text(
+                                stringResource(R.string.list_reached_limit),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 20.dp),
                             )
                         }
-                        if (state.isLoadingMore) {
-                            item(key = "loading_more") { PlaceCardSkeleton() }
-                        } else if (state.reachedLimit) {
-                            // 상한까지 불러왔음을 숨기지 않고 좁히는 방법을 안내한다
-                            item(key = "reached_limit") {
-                                Text(
-                                    stringResource(R.string.list_reached_limit),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 24.dp, vertical = 20.dp),
-                                )
-                            }
-                        }
                     }
                 }
             }
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
         }
-
     }
-
 }
 
 private fun leadingCheck(selected: Boolean): (@Composable () -> Unit)? =
