@@ -1,7 +1,6 @@
 package com.kimdev.petmap.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -25,6 +24,10 @@ interface FavoriteDao {
     @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE id = :id)")
     suspend fun exists(id: String): Boolean
 
+    // 삭제 직전 스냅샷(실행취소 복원용)
+    @Query("SELECT * FROM favorites WHERE id = :id")
+    suspend fun getById(id: String): FavoriteEntity?
+
     // 백업 미러 기록/복원용 (FavoriteBackup)
     @Query("SELECT * FROM favorites")
     suspend fun getAll(): List<FavoriteEntity>
@@ -40,9 +43,6 @@ interface FavoriteDao {
 
     @Query("UPDATE favorites SET memo = :memo WHERE id = :id")
     suspend fun updateMemo(id: String, memo: String?)
-
-    @Delete
-    suspend fun delete(entity: FavoriteEntity)
 
     @Query("DELETE FROM favorites WHERE id = :id")
     suspend fun deleteById(id: String)

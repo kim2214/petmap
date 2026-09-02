@@ -62,15 +62,18 @@ fun FavoriteScreen(
     val resources = LocalResources.current
 
     // 하트 탭으로 목록에서 즉시 사라지므로, 실수 방지용 실행취소 동선을 준다.
+    // 토글이 아니라 삭제/스냅샷 복원을 쓴다: 토글로 되살리면 메모가 비고 목록 맨 위로 올라가며,
+    // 퇴장 애니메이션 중 하트를 다시 누르면 삭제가 아니라 재추가가 되어 "실행취소"가 거꾸로 동작했다.
     fun removeWithUndo(place: Place) {
-        viewModel.toggleFavorite(place)
         scope.launch {
+            // 이미 지워진 카드(퇴장 애니메이션 중 재탭)면 아무것도 하지 않는다
+            val snapshot = viewModel.removeFavorite(place.id) ?: return@launch
             val result = snackbarHostState.showSnackbar(
                 message = resources.getString(R.string.favorite_removed_format, place.name),
                 actionLabel = resources.getString(R.string.action_undo),
                 duration = SnackbarDuration.Short,
             )
-            if (result == SnackbarResult.ActionPerformed) viewModel.toggleFavorite(place)
+            if (result == SnackbarResult.ActionPerformed) viewModel.restoreFavorite(snapshot)
         }
     }
 

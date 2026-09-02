@@ -1,6 +1,7 @@
 package com.kimdev.petmap.domain.repository
 
 import com.kimdev.petmap.domain.model.DataInfo
+import com.kimdev.petmap.domain.model.FavoriteSnapshot
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
@@ -83,5 +84,19 @@ interface PlaceRepository {
 
     fun observeFavorites(): Flow<List<Place>>
     fun observeFavoriteIds(): Flow<Set<String>>
+
+    /**
+     * 하트 토글. 해제하면 favorites 행이 지워져 메모도 함께 사라진다 — 실행취소가 필요한 곳은
+     * [removeFavorite]/[restoreFavorite] 를 쓴다.
+     */
     suspend fun toggleFavorite(place: Place)
+
+    /**
+     * 즐겨찾기 삭제. 실행취소용으로 삭제 직전 상태(메모·추가 시각 포함)를 돌려준다.
+     * 즐겨찾기가 아니었으면(이미 지워짐 등) 아무것도 하지 않고 null.
+     */
+    suspend fun removeFavorite(placeId: String): FavoriteSnapshot?
+
+    /** [removeFavorite] 가 돌려준 스냅샷을 그대로 되살린다 (메모·순서 보존) */
+    suspend fun restoreFavorite(snapshot: FavoriteSnapshot)
 }

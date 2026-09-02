@@ -13,6 +13,7 @@ import com.kimdev.petmap.data.local.entity.MetaEntity
 import com.kimdev.petmap.data.mapper.toDomain
 import com.kimdev.petmap.data.mapper.toFavoriteEntity
 import com.kimdev.petmap.domain.model.DataInfo
+import com.kimdev.petmap.domain.model.FavoriteSnapshot
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
@@ -20,6 +21,7 @@ import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.distanceMeters
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -44,6 +46,9 @@ class PlaceRepositoryImpl @Inject constructor(
     @Volatile
     private var favoritesRestored = false
     private val restoreMutex = Mutex()
+
+    /** 즐겨찾기 DB 변경 + 미러 기록을 한 단위로 묶는 락 ([writeFavorites]) */
+    private val favoriteMutex = Mutex()
 
     /**
      * DB 는 에셋(미리 시딩됨)에서 로드되므로 별도 시딩이 필요 없다.
@@ -303,23 +308,51 @@ class PlaceRepositoryImpl @Inject constructor(
     override fun observeFavoriteIds(): Flow<Set<String>> =
         favoriteDao.observeIds().map { it.toSet() }
 
-    override suspend fun toggleFavorite(place: Place) {
+    override suspend fun toggleFavorite(place: Place) = writeFavorites {
         if (favoriteDao.exists(place.id)) favoriteDao.deleteById(place.id)
         else favoriteDao.insert(place.toFavoriteEntity())
-        writeFavoriteMirror()
     }
 
-    override suspend fun updateFavoriteMemo(placeId: String, memo: String?) {
+    override suspend fun updateFavoriteMemo(placeId: String, memo: String?) = writeFavorites {
         favoriteDao.updateMemo(placeId, memo?.trim()?.takeIf { it.isNotEmpty() })
-        writeFavoriteMirror()
     }
 
-    /** 변경 즉시 미러 갱신 — 실패해도 원 작업은 성공으로 둔다 (다음 변경에서 재기록) */
-    private suspend fun writeFavoriteMirror() {
-        runCatching {
-            withContext(ioDispatcher) { favoriteBackup.write(favoriteDao.getAll()) }
-        }
+    override suspend fun removeFavorite(placeId: String): FavoriteSnapshot? = writeFavorites {
+        val entity = favoriteDao.getById(placeId) ?: return@writeFavorites null
+        favoriteDao.deleteById(placeId)
+        FavoriteSnapshot(place = entity.toDomain(), addedAt = entity.addedAt)
     }
+
+    override suspend fun restoreFavorite(snapshot: FavoriteSnapshot) = writeFavorites {
+        favoriteDao.insert(
+            snapshot.place.toFavoriteEntity(memo = snapshot.place.memo, addedAt = snapshot.addedAt)
+        )
+    }
+
+    /**
+     * 즐겨찾기 변경의 공통 골격. 세 가지를 보장한다.
+     * 1. **복원 우선**: 미러 복원이 아직 안 됐으면(딥링크 콜드스타트처럼 ensureSeeded 를 거치지 않은
+     *    경로) 먼저 복원한다. 그러지 않으면 1건짜리 즐겨찾기가 미러를 덮어써 나머지가 영구 소실된다
+     *    (count()!=0 이 되어 이후 복원이 스킵됨).
+     * 2. **직렬화**: DB 변경과 미러 기록을 [favoriteMutex] 안에서 한 단위로 처리해, 서로 다른
+     *    ViewModel 의 연속 토글이 오래된 스냅샷을 나중에 기록하거나 임시 파일을 서로 덮지 않게 한다.
+     * 3. **취소 불가**: 토글 직후 화면을 떠나 viewModelScope 가 취소돼도 DB 변경과 미러가 어긋나지
+     *    않도록 [NonCancellable] 로 감싼다. 작업 자체는 수 ms 짜리 로컬 I/O 라 부담이 없다.
+     *
+     * 미러 기록 실패는 원 작업을 되돌릴 이유가 아니라 로그만 남긴다 (다음 변경에서 재기록).
+     */
+    private suspend fun <T> writeFavorites(block: suspend () -> T): T =
+        withContext(NonCancellable) {
+            favoriteMutex.withLock {
+                runCatching { restoreFavoritesIfNeeded() }
+                    .onFailure { Log.w(TAG, "즐겨찾기 미러 복원 실패", it) }
+                val result = block()
+                runCatching {
+                    withContext(ioDispatcher) { favoriteBackup.write(favoriteDao.getAll()) }
+                }.onFailure { Log.w(TAG, "즐겨찾기 미러 기록 실패", it) }
+                result
+            }
+        }
 
     private companion object {
         const val TAG = "PlaceRepository"

@@ -32,7 +32,14 @@ class FavoriteBackup internal constructor(private val file: File) {
     @Inject
     constructor(@ApplicationContext context: Context) : this(File(context.filesDir, FILE_NAME))
 
-    /** 현재 즐겨찾기 전체를 미러에 기록한다 (빈 목록이면 빈 배열 — 삭제도 반영). */
+    /**
+     * 현재 즐겨찾기 전체를 미러에 기록한다 (빈 목록이면 빈 배열 — 삭제도 반영).
+     *
+     * 임시 파일 이름이 고정이라 동시 호출되면 서로의 임시 파일을 덮거나 rename 이 실패해 미러가
+     * 지워질 수 있다 → 동기화한다. 리포지토리도 자체 락으로 직렬화하지만, 시작 시점의
+     * [preserveLegacyDatabase] 등 다른 호출자와의 경쟁까지 여기서 막는다.
+     */
+    @Synchronized
     fun write(favorites: List<FavoriteEntity>) {
         val array = JSONArray()
         favorites.forEach { f ->
@@ -54,12 +61,19 @@ class FavoriteBackup internal constructor(private val file: File) {
         val tmp = File(file.parentFile, "$FILE_NAME.tmp")
         tmp.writeText(array.toString())
         if (!tmp.renameTo(file)) {
+            // 같은 볼륨의 rename 은 기존 파일을 덮지만, 실패하는 파일시스템도 있어 삭제 후 재시도.
+            // 그것도 실패하면 임시 파일을 남기지 않고 예외로 알린다(기존 미러는 이미 삭제된 상태 —
+            // 호출자가 로그만 남기고 다음 변경에서 재기록한다).
             file.delete()
-            tmp.renameTo(file)
+            if (!tmp.renameTo(file)) {
+                tmp.delete()
+                throw java.io.IOException("즐겨찾기 미러 rename 실패: ${file.path}")
+            }
         }
     }
 
     /** 미러를 읽는다. 파일 없음/손상 시 빈 목록 (복원을 조용히 건너뛴다). */
+    @Synchronized
     fun read(): List<FavoriteEntity> = runCatching {
         if (!file.exists()) return emptyList()
         val array = JSONArray(file.readText())

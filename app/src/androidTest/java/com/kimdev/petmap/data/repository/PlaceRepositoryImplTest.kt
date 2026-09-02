@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.kimdev.petmap.data.local.FavoriteBackup
 import com.kimdev.petmap.data.local.PetMapDatabase
 import com.kimdev.petmap.data.local.buildFtsIndex
+import com.kimdev.petmap.data.local.entity.FavoriteEntity
 import kotlinx.coroutines.Dispatchers
 import com.kimdev.petmap.data.local.insertPlace
 import com.kimdev.petmap.domain.model.PlaceCategory
@@ -20,6 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 /**
  * PlaceRepositoryImpl 통합 테스트 (실제 Room in-memory + 실제 DAO).
@@ -32,22 +34,24 @@ class PlaceRepositoryImplTest {
 
     private lateinit var db: PetMapDatabase
     private lateinit var repo: PlaceRepositoryImpl
+    private lateinit var mirrorFile: File
+    private lateinit var backup: FavoriteBackup
 
     @Before
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(context, PetMapDatabase::class.java).build()
-        repo = PlaceRepositoryImpl(
-            db.placeDao(),
-            db.favoriteDao(),
-            db.metaDao(),
-            FavoriteBackup(context),
-            Dispatchers.IO,
-        )
+        // 실 filesDir 미러 대신 테스트별 임시 파일 — 토글이 미러 복원을 먼저 하므로 오염되면 결과가 흔들린다
+        mirrorFile = File(context.cacheDir, "favorites_backup_repo_test.json").also { it.delete() }
+        backup = FavoriteBackup(mirrorFile)
+        repo = PlaceRepositoryImpl(db.placeDao(), db.favoriteDao(), db.metaDao(), backup, Dispatchers.IO)
     }
 
     @After
-    fun tearDown() = db.close()
+    fun tearDown() {
+        db.close()
+        mirrorFile.delete()
+    }
 
     @Test
     fun getPlacesInBounds_convertsRadiusToLatLngBox() = runBlocking {
@@ -127,6 +131,63 @@ class PlaceRepositoryImplTest {
 
         repo.toggleFavorite(place)
         assertEquals(emptySet<String>(), repo.observeFavoriteIds().first())
+        // 삭제도 미러에 반영된다
+        assertTrue(backup.read().isEmpty())
+    }
+
+    @Test
+    fun removeFavorite_thenRestore_keepsMemoAndAddedAt() = runBlocking {
+        db.insertPlace("p1", name = "단골카페")
+        db.insertPlace("p2", name = "다른카페")
+        val p1 = repo.getPlace("p1")!!
+        val p2 = repo.getPlace("p2")!!
+        repo.toggleFavorite(p1)
+        repo.updateFavoriteMemo("p1", "주차는 뒷골목")
+        repo.toggleFavorite(p2) // p1 보다 나중에 담김 → 최신순에서 위
+        val addedAtBefore = db.favoriteDao().getById("p1")!!.addedAt
+
+        val snapshot = repo.removeFavorite("p1")
+        assertNotNull(snapshot)
+        assertEquals("주차는 뒷골목", snapshot!!.place.memo)
+        assertEquals(addedAtBefore, snapshot.addedAt)
+        assertEquals(setOf("p2"), repo.observeFavoriteIds().first())
+        assertEquals(listOf("p2"), backup.read().map { it.id })
+
+        repo.restoreFavorite(snapshot)
+        val restored = db.favoriteDao().getById("p1")!!
+        assertEquals("주차는 뒷골목", restored.memo)
+        assertEquals(addedAtBefore, restored.addedAt)
+        // 원래 순서(p2 가 더 최신)로 돌아온다 — 토글 재추가였다면 p1 이 맨 위로 튀었을 것
+        assertEquals(listOf("p2", "p1"), repo.observeFavorites().first().map { it.id })
+        assertEquals(setOf("p1", "p2"), backup.read().map { it.id }.toSet())
+    }
+
+    @Test
+    fun removeFavorite_returnsNullWhenNotFavorite() = runBlocking {
+        db.insertPlace("p1")
+        assertNull(repo.removeFavorite("p1"))
+        assertNull(repo.removeFavorite("없는id"))
+    }
+
+    @Test
+    fun toggleFavorite_restoresMirrorBeforeWriting() = runBlocking {
+        // 딥링크 콜드스타트: ensureSeeded 없이 상세에서 바로 토글하는 경로.
+        // 미러(백업 복원·버전 업 직후)에 2건이 있고 DB favorites 는 비어 있다.
+        backup.write(
+            listOf(
+                FavoriteEntity("m1", "미러1", "CAFE", "서울 1", 37.5, 127.0, null, memo = "메모1", addedAt = 10L),
+                FavoriteEntity("m2", "미러2", "CAFE", "서울 2", 37.5, 127.0, null, memo = null, addedAt = 20L),
+            ),
+        )
+        db.insertPlace("p1")
+        val place = repo.getPlace("p1")!!
+
+        repo.toggleFavorite(place)
+
+        // 기존 2건이 복원된 뒤 새 1건이 더해진다 — 이전에는 1건짜리 미러가 2건을 덮어 영구 소실됐다
+        assertEquals(setOf("m1", "m2", "p1"), repo.observeFavoriteIds().first())
+        assertEquals(setOf("m1", "m2", "p1"), backup.read().map { it.id }.toSet())
+        assertEquals("메모1", db.favoriteDao().getById("m1")!!.memo)
     }
 
     @Test

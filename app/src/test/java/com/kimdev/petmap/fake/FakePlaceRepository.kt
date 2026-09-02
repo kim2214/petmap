@@ -1,6 +1,7 @@
 package com.kimdev.petmap.fake
 
 import com.kimdev.petmap.domain.model.DataInfo
+import com.kimdev.petmap.domain.model.FavoriteSnapshot
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
@@ -149,5 +150,17 @@ class FakePlaceRepository : PlaceRepository {
     override suspend fun toggleFavorite(place: Place) {
         favorites.value = if (place.id in favorites.value) favorites.value - place.id
         else favorites.value + place.id
+    }
+
+    override suspend fun removeFavorite(placeId: String): FavoriteSnapshot? {
+        if (placeId !in favorites.value) return null
+        val place = dataset.find { it.id == placeId } ?: return null
+        favorites.value = favorites.value - placeId
+        return FavoriteSnapshot(place.copy(isFavorite = true, memo = memos.remove(placeId)), addedAt = 0L)
+    }
+
+    override suspend fun restoreFavorite(snapshot: FavoriteSnapshot) {
+        favorites.value = favorites.value + snapshot.place.id
+        memos[snapshot.place.id] = snapshot.place.memo
     }
 }

@@ -2,10 +2,12 @@ package com.kimdev.petmap.ui.favorite
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kimdev.petmap.domain.model.FavoriteSnapshot
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -68,7 +70,15 @@ class FavoriteViewModel @Inject constructor(
         selectedCategories.value = emptySet()
     }
 
-    fun toggleFavorite(place: Place) {
-        viewModelScope.launch { repository.toggleFavorite(place) }
+    /**
+     * 즐겨찾기 삭제. 실행취소용 스냅샷을 돌려준다(이미 지워졌으면 null).
+     * 화면 스코프가 아닌 viewModelScope 에서 실행해, 스낵바 도중 화면을 떠나도 삭제가 끊기지 않는다.
+     */
+    suspend fun removeFavorite(placeId: String): FavoriteSnapshot? =
+        viewModelScope.async { repository.removeFavorite(placeId) }.await()
+
+    /** 실행취소: 메모·추가 시각까지 삭제 직전 상태로 되살린다 */
+    fun restoreFavorite(snapshot: FavoriteSnapshot) {
+        viewModelScope.launch { repository.restoreFavorite(snapshot) }
     }
 }

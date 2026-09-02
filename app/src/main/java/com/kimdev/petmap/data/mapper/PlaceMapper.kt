@@ -27,8 +27,14 @@ fun PlaceEntity.toDomain(): Place = Place(
     description = description,
 )
 
-/** 도메인 → 로컬 즐겨찾기 Entity (새 즐겨찾기 — 추가 시각을 지금으로 기록) */
-fun Place.toFavoriteEntity(): FavoriteEntity = FavoriteEntity(
+/**
+ * 도메인 → 로컬 즐겨찾기 Entity. 기본값은 새 즐겨찾기(메모 없음, 추가 시각 = 지금).
+ * 실행취소 복원처럼 이전 상태를 되살릴 때는 [memo]·[addedAt] 을 스냅샷 값으로 넘긴다.
+ */
+fun Place.toFavoriteEntity(
+    memo: String? = null,
+    addedAt: Long = System.currentTimeMillis(),
+): FavoriteEntity = FavoriteEntity(
     id = id,
     name = name,
     category = category.name,
@@ -36,8 +42,8 @@ fun Place.toFavoriteEntity(): FavoriteEntity = FavoriteEntity(
     lat = lat,
     lng = lng,
     phone = phone,
-    memo = null,
-    addedAt = System.currentTimeMillis(),
+    memo = memo,
+    addedAt = addedAt,
 )
 
 /**

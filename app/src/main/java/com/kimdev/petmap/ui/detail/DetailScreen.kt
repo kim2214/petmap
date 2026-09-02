@@ -264,7 +264,8 @@ private fun DetailContent(
                 place.petFee?.let { Pill(stringResource(R.string.pet_fee_format, it), highlight = false) }
             }
 
-            // 즐겨찾기한 장소에만 메모를 남길 수 있다 (즐겨찾기 해제 시 행도 사라짐 — 메모는 보존)
+            // 즐겨찾기한 장소에만 메모를 남길 수 있다. 해제하면 favorites 행이 지워져 메모도 함께 사라진다
+            // (즐겨찾기 화면의 실행취소만 스냅샷으로 되살린다).
             if (place.isFavorite) {
                 SectionTitle(stringResource(R.string.section_memo))
                 var showMemoDialog by rememberSaveable { mutableStateOf(false) }
