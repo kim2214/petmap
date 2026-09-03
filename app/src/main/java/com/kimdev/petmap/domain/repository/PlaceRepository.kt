@@ -59,10 +59,16 @@ interface PlaceRepository {
         limit: Int = 50,
     ): List<Place>
 
-    /** 목록: 이름/주소 검색 + 카테고리 다중 필터 (이름순) */
+    /**
+     * 이름/주소 검색 + 카테고리 다중 필터 (관련도·이름순). petFilters 는 SQL 에서 AND 로 걸린다.
+     * - 검색어가 비면 카테고리·동반 조건만으로 전체를 이름순 탐색한다(목록 화면 브라우징).
+     * - 검색어가 있는데 색인 가능한 글자가 하나도 없으면(이모지·구두점만) **빈 목록** — 전체 폴백은
+     *   가나다순 앞 N 건을 "검색 결과"로 보이게 해 오해를 낳는다.
+     */
     suspend fun search(
         query: String,
         categories: Set<PlaceCategory> = emptySet(),
+        petFilters: Set<PetFilter> = emptySet(),
         limit: Int = 200,
     ): List<Place>
 

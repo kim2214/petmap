@@ -8,6 +8,7 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.distanceMeters
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -114,11 +115,22 @@ class FakePlaceRepository : PlaceRepository {
             .take(limit)
     }
 
-    override suspend fun search(query: String, categories: Set<PlaceCategory>, limit: Int): List<Place> {
+    /** 설정하면 search 가 완료될 때까지 suspend 한다 (진행 중 취소 시나리오 재현용) */
+    var searchGate: CompletableDeferred<Unit>? = null
+    var lastSearchPetFilters: Set<PetFilter>? = null
+
+    override suspend fun search(
+        query: String,
+        categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter>,
+        limit: Int,
+    ): List<Place> {
         searchCount++
         lastSearchLimit = limit
         lastCategories = categories
-        return dataset.filterBy(query, categories).take(limit)
+        lastSearchPetFilters = petFilters
+        searchGate?.await()
+        return dataset.filterBy(query, categories, petFilters).take(limit)
     }
 
     override suspend fun searchNearby(

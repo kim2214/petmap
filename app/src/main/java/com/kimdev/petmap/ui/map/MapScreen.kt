@@ -110,7 +110,6 @@ import com.naver.maps.map.compose.Marker
 import com.naver.maps.map.compose.NaverMap
 import com.naver.maps.map.compose.rememberCameraPositionState
 import com.naver.maps.map.compose.rememberUpdatedMarkerState
-import com.naver.maps.map.compose.rememberFusedLocationSource
 import com.naver.maps.map.NaverMap as NaverMapSdk
 import com.naver.maps.map.overlay.OverlayImage
 import kotlinx.coroutines.FlowPreview
@@ -123,6 +122,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.foundation.layout.ColumnScope
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.common.rememberLocationPermission
+import com.kimdev.petmap.ui.common.rememberLocationSource
 
 @OptIn(
     ExperimentalNaverMapApi::class,
@@ -158,7 +158,9 @@ fun MapScreen(
     val locationPermission = rememberLocationPermission(
         settingsMessage = stringResource(R.string.location_message_map),
     )
-    val locationSource = rememberFusedLocationSource()
+    // 라이브러리 기본 rememberFusedLocationSource 는 FINE+COARSE 둘 다 있어야 권한 있음으로 보고,
+    // 아니면 Follow 를 켤 때마다 시스템 권한 요청을 다시 띄운다. 권한 상태머신과 같은 기준(하나라도 허용)을 쓴다.
+    val locationSource = rememberLocationSource(locationPermission)
     // rememberSaveable: 탭 전환·회전 시 NoFollow 로 초기화되면 아래 효과가 Follow 를 재지정해
     // 보고 있던 지역에서 내 위치로 카메라가 튀어 버린다.
     var trackingMode by rememberSaveable { mutableStateOf(LocationTrackingMode.NoFollow) }
@@ -232,14 +234,16 @@ fun MapScreen(
                         cameraPositionState.animate(update, CameraAnimation.Fly)
                     }
                 }
-                MapEvent.NoResults ->
+                // 스낵바는 해제될 때까지 suspend 한다. 이 수집기에서 직접 기다리면 4~10초 동안 뒤의
+                // 카메라 이동·클러스터 펼침 이벤트가 큐에 갇힌다 → 별도 코루틴으로 띄운다.
+                MapEvent.NoResults -> scope.launch {
                     snackbarHostState.showSnackbar(resources.getString(R.string.map_no_results))
-                MapEvent.LoadFailed -> {
+                }
+                MapEvent.LoadFailed -> scope.launch {
                     val result = snackbarHostState.showSnackbar(
                         message = resources.getString(R.string.map_load_failed),
                         actionLabel = resources.getString(R.string.action_retry),
-                        // actionLabel 이 있으면 기본이 Indefinite — 이 수집기는 순차 처리라
-                        // 해제 불가 스낵바가 남은 이벤트(초기 카메라 이동 등)를 전부 막는다.
+                        // actionLabel 이 있으면 기본이 Indefinite → 시간 제한을 둔다
                         duration = SnackbarDuration.Long,
                     )
                     if (result == SnackbarResult.ActionPerformed) {

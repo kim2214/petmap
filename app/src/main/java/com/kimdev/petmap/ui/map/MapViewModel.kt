@@ -123,6 +123,9 @@ class MapViewModel @Inject constructor(
     private var clusterJob: Job? = null
     // 데이터 조회 잡. 취소하지 않으면 먼저 시작한 조회가 늦게 끝나 오래된 결과가 최신을 덮어쓴다.
     private var fetchJob: Job? = null
+    // 검색 확정(마커 모드 진입/갱신) 잡. fetchJob 과 별도로 들어야 clearSearch 가 "진행 중인 검색"만
+    // 정확히 취소할 수 있다 — 취소하지 않으면 ✕ 를 누른 뒤에 결과가 도착해 빈 검색창 + 마커 모드가 된다.
+    private var searchJob: Job? = null
     // 첫 진입 현재 위치 이동을 이미 처리했는지(중복 이동 방지)
     private var initialLocationHandled = false
     // "지도에서 보기"로 push 된 지도인가(라우트 인자). 있으면 초기 현재 위치 이동을 양보하고
@@ -206,31 +209,56 @@ class MapViewModel @Inject constructor(
         viewModelScope.launch { repository.toggleFavorite(place) }
     }
 
-    fun onSearchQueryChange(q: String) = _uiState.update { it.copy(searchQuery = q) }
+    fun onSearchQueryChange(q: String) {
+        // 백스페이스로 검색어를 다 지우는 것도 ✕ 와 같은 해제다 — 마커 모드(또는 진행 중인 검색 확정)를
+        // 남기면 빈 검색창 + pill 만 남고 "다시 검색"·뒤로가기 어느 쪽으로도 빠져나올 수 없다.
+        if (q.isBlank() && (_uiState.value.searchMarkers != null || searchJob?.isActive == true)) {
+            clearSearch()
+            return
+        }
+        _uiState.update { it.copy(searchQuery = q) }
+    }
 
     fun clearSearch() {
         val hadMarkers = _uiState.value.searchMarkers != null
-        _uiState.update { it.copy(searchQuery = "", searchResults = emptyList(), searchMarkers = null) }
+        val hadPendingSearch = searchJob?.isActive == true
+        searchJob?.cancel()
+        _uiState.update {
+            it.copy(
+                searchQuery = "",
+                searchResults = emptyList(),
+                searchMarkers = null,
+                // 진행 중이던 검색 확정을 취소했으면 그 잡이 켠 로딩도 함께 내린다
+                isLoading = if (hadPendingSearch && !hadMarkers) false else it.isLoading,
+            )
+        }
         // 검색 마커를 내리면 원래의 뷰포트 조회로 복귀한다
         if (hadMarkers) fetch()
     }
 
     /**
-     * 검색 확정: 검색어에 맞는 장소 전체(상한 [SEARCH_MARKERS_LIMIT])를 마커로 뿌리고 카메라를 결과
-     * 범위에 맞춘다. 자동완성(상위 8건 중 하나 선택)과 달리 "근처 동물병원 전부"처럼 결과를 한눈에
-     * 비교할 때 쓴다. 카테고리·동반 조건 필터는 그대로 적용된다.
+     * 검색 확정: 검색어에 맞는 장소 전체(상한 [SEARCH_MARKERS_LIMIT])를 마커로 뿌린다. 자동완성(상위
+     * 8건 중 하나 선택)과 달리 "근처 동물병원 전부"처럼 결과를 한눈에 비교할 때 쓴다.
+     * 카테고리·동반 조건 필터는 SQL 단계에서 함께 걸린다(상한 전에 걸려야 결과가 유실되지 않는다).
+     *
+     * @param fitCamera 결과 범위로 카메라를 맞출지. 키보드 검색 키에서는 true, 마커 모드 중 필터
+     *   토글·재시도로 같은 검색어를 다시 뿌릴 때는 false — 사용자가 줌인해 보던 곳에서 전국 뷰로 튀지 않게.
      */
-    fun submitSearch(rawQuery: String) {
+    fun submitSearch(rawQuery: String, fitCamera: Boolean = true) {
         val query = rawQuery.trim()
         if (query.isBlank()) return
         fetchJob?.cancel()
+        searchJob?.cancel()
         clusterJob?.cancel()
-        fetchJob = viewModelScope.launch {
+        searchJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, searchResults = emptyList()) }
             runCatching {
-                val filters = _uiState.value.petFilters
-                repository.search(query, _uiState.value.selectedCategories, limit = SEARCH_MARKERS_LIMIT + 1)
-                    .filter { place -> filters.all { it.matches(place) } }
+                repository.search(
+                    query,
+                    _uiState.value.selectedCategories,
+                    _uiState.value.petFilters,
+                    limit = SEARCH_MARKERS_LIMIT + 1,
+                )
             }.onSuccess { found ->
                 // 0건이면 마커 모드에 들어가지 않는다 — 기존 마커를 지우고 "0곳 표시 중" 을 띄우는 대신
                 // 자동완성의 "검색 결과가 없어요" 안내 + NoResults 스낵바만으로 충분하다
@@ -251,7 +279,7 @@ class MapViewModel @Inject constructor(
                         searchMarkers = SearchMarkers(query, shown.size, truncated),
                     )
                 }
-                _events.send(MapEvent.FitPlaces(shown))
+                if (fitCamera) _events.send(MapEvent.FitPlaces(shown))
             }.onFailure { e ->
                 if (e is CancellationException) throw e
                 Log.w(TAG, "search markers failed: ${e.message}")
@@ -382,12 +410,14 @@ class MapViewModel @Inject constructor(
     /** 현재 카메라 위치 기준으로 DB 조회 후 클러스터링. canResearch 해제. */
     private fun fetch() {
         if (_uiState.value.isSeeding || _uiState.value.seedFailed) return
-        // 검색 마커 모드에서 필터가 바뀌면 같은 검색어로 결과를 다시 뿌린다
-        _uiState.value.searchMarkers?.let { submitSearch(it.query); return }
+        // 검색 마커 모드에서 필터가 바뀌면 같은 검색어로 결과를 다시 뿌린다 (카메라는 그대로)
+        _uiState.value.searchMarkers?.let { submitSearch(it.query, fitCamera = false); return }
         // 재조회가 클러스터 결과를 확정하므로 진행 중인 카메라-이동 클러스터링은 취소.
         clusterJob?.cancel()
         // 진행 중인 이전 조회도 취소 → 필터 연타/줌 연속 변경 시 결과 역전 방지.
+        // 아직 마커 모드에 들어가기 전인 검색 확정도 취소한다 — 늦게 끝나면 옛 필터로 마커 모드에 들어간다.
         fetchJob?.cancel()
+        searchJob?.cancel()
         loadedCenterLat = lastCenterLat
         loadedCenterLng = lastCenterLng
         loadedZoom = lastZoom

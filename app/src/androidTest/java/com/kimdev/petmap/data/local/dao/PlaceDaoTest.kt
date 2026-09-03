@@ -140,10 +140,10 @@ class PlaceDaoTest {
         db.insertPlace("c2", name = "가온카페", category = "CAFE")
         db.insertPlace("h1", name = "나눔병원", category = "HOSPITAL")
 
-        val all = dao.browse(allCats.first, allCats.second, limit = 10)
+        val all = dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = "", limit = 10)
         assertEquals(listOf("가온카페", "나눔병원", "다정카페"), all.map { it.name })
 
-        val cafes = dao.browse(listOf("CAFE"), 1, limit = 10)
+        val cafes = dao.browse(listOf("CAFE"), 1, anySize = false, indoor = false, outdoor = false, sizeAll = "", limit = 10)
         assertEquals(listOf("가온카페", "다정카페"), cafes.map { it.name })
     }
 

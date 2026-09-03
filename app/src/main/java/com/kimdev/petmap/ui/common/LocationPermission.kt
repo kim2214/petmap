@@ -9,9 +9,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.content.ContextCompat
+import android.content.Context
+import android.content.pm.PackageManager
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.MultiplePermissionsState
+import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.naver.maps.map.LocationSource
+import com.naver.maps.map.location.FusedLocationSource
 import com.kimdev.petmap.core.util.openAppSettings
 import com.kimdev.petmap.ui.components.LocationSettingsDialog
 
@@ -30,7 +37,12 @@ class LocationPermissionController internal constructor(
     private val markRequested: () -> Unit,
     private val showSettingsDialog: () -> Unit,
 ) {
-    val granted: Boolean get() = permissions.allPermissionsGranted
+    /**
+     * 정밀(FINE)·대략(COARSE) 중 하나라도 허용되면 위치 기능을 쓸 수 있다.
+     * Android 12+ 의 "대략적인 위치" 선택은 COARSE 만 허용하므로, 둘 다를 요구하면 그 사용자는
+     * 파란 점도 못 보고 FAB 를 눌러도 요청만 반복된다. FusedLocation 은 COARSE 만으로도 동작한다.
+     */
+    val granted: Boolean get() = permissions.permissions.any { it.status.isGranted }
 
     /**
      * 사용자가 위치 기능을 명시적으로 눌렀을 때. 이미 허용됐으면 아무것도 하지 않는다
@@ -93,3 +105,33 @@ fun rememberLocationPermission(
         )
     }
 }
+
+/**
+ * 네이버 지도 위치 소스(파란 점·Follow). 권한 판정을 [LocationPermissionController.granted] 와 같은
+ * 기준(FINE 또는 COARSE 하나라도 허용)으로 맞춘 구현.
+ *
+ * 라이브러리의 rememberFusedLocationSource 는 allPermissionsGranted 를 요구해 COARSE 만 허용한
+ * 사용자에게 Follow 진입마다 시스템 권한 요청을 다시 띄웠다. 권한 요청 자체도 컨트롤러로 위임해
+ * 영구 거부 시 설정 안내 다이얼로그가 뜨게 한다.
+ */
+@Composable
+fun rememberLocationSource(controller: LocationPermissionController): LocationSource {
+    val context = LocalContext.current
+    val source = remember(context, controller) {
+        object : FusedLocationSource(context) {
+            override fun hasPermissions(): Boolean = context.hasAnyLocationPermission()
+            override fun onPermissionRequest() = controller.request()
+        }
+    }
+    // 권한이 (방금) 허용되면 대기 중이던 활성화를 이어간다
+    val granted = controller.granted
+    LaunchedEffect(source, granted) {
+        if (granted) source.onPermissionGranted()
+    }
+    return source
+}
+
+private fun Context.hasAnyLocationPermission(): Boolean =
+    listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION).any {
+        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+    }

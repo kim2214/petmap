@@ -97,15 +97,27 @@ interface PlaceDao {
     ): List<ClusterCell>
 
     /** 검색어 없이 카테고리 필터만 (이름순) */
+    /** 검색어 없이 카테고리·동반 조건만으로 이름순 탐색 (동반 조건 정책은 [getInBounds] 와 동일) */
     @Query(
         """
         SELECT * FROM places
         WHERE (:catCount = 0 OR category IN (:cats))
+          AND (:anySize = 0 OR allowedPetSize = :sizeAll)
+          AND (:indoor = 0 OR indoorAllowed = 1)
+          AND (:outdoor = 0 OR outdoorAllowed = 1)
         ORDER BY name ASC
         LIMIT :limit
         """
     )
-    suspend fun browse(cats: List<String>, catCount: Int, limit: Int): List<PlaceEntity>
+    suspend fun browse(
+        cats: List<String>,
+        catCount: Int,
+        anySize: Boolean,
+        indoor: Boolean,
+        outdoor: Boolean,
+        sizeAll: String,
+        limit: Int,
+    ): List<PlaceEntity>
 
     /**
      * 검색어 없이 카테고리 필터만, 지정 좌표에서 가까운 순 (lng 항에 cos²(lat) 보정).

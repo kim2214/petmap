@@ -10,6 +10,7 @@ import com.kimdev.petmap.data.local.buildFtsIndex
 import com.kimdev.petmap.data.local.entity.FavoriteEntity
 import kotlinx.coroutines.Dispatchers
 import com.kimdev.petmap.data.local.insertPlace
+import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.PlaceCategory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -81,15 +82,32 @@ class PlaceRepositoryImplTest {
     }
 
     @Test
-    fun search_blankOrSymbolQuery_fallsBackToBrowseAll() = runBlocking {
+    fun search_blankQueryBrowsesAll_symbolOnlyQueryReturnsNothing() = runBlocking {
         db.insertPlace("c1", name = "나비카페")
         db.insertPlace("c2", name = "가람식당", category = "RESTAURANT")
         db.buildFtsIndex()
 
-        // 빈 검색어 → 전체 이름순
+        // 빈 검색어 → 전체 이름순 (목록 브라우징)
         assertEquals(listOf("가람식당", "나비카페"), repo.search("").map { it.name })
-        // 색인 가능한 글자가 없는 검색어(match null) → 동일 폴백
-        assertEquals(listOf("가람식당", "나비카페"), repo.search("!!").map { it.name })
+        // 색인 가능한 글자가 없는 검색어(match null) → 결과 없음. 전체 폴백은 "'!!' 검색 결과 200곳" 으로 오해된다
+        assertTrue(repo.search("!!").isEmpty())
+        assertTrue(repo.search("🐶").isEmpty())
+    }
+
+    @Test
+    fun search_appliesPetFiltersInSql_beforeLimit() = runBlocking {
+        // 이름순 앞쪽은 실외만, 뒤쪽 1건만 실내 가능. LIMIT 뒤에 걸렀다면 실내 1건이 잘려 나간다.
+        (1..5).forEach { db.insertPlace("o$it", name = "가카페$it", indoorAllowed = false, outdoorAllowed = true) }
+        db.insertPlace("i1", name = "하카페", indoorAllowed = true, outdoorAllowed = false, allowedPetSize = PetFilter.SIZE_ALL)
+        db.buildFtsIndex()
+
+        val indoor = repo.search("카페", petFilters = setOf(PetFilter.INDOOR), limit = 3)
+        assertEquals(listOf("i1"), indoor.map { it.id })
+        val indoorAnySize = repo.search("카페", petFilters = setOf(PetFilter.INDOOR, PetFilter.ANY_SIZE), limit = 3)
+        assertEquals(listOf("i1"), indoorAnySize.map { it.id })
+        // 검색어 없는 브라우징도 같은 조건을 쓴다
+        assertEquals(listOf("i1"), repo.search("", petFilters = setOf(PetFilter.INDOOR), limit = 3).map { it.id })
+        assertEquals(3, repo.search("", petFilters = setOf(PetFilter.OUTDOOR), limit = 3).size)
     }
 
     @Test

@@ -211,11 +211,29 @@ class PlaceRepositoryImpl @Inject constructor(
         ).map { it.toDomain() }
     }
 
-    override suspend fun search(query: String, categories: Set<PlaceCategory>, limit: Int): List<Place> {
+    override suspend fun search(
+        query: String,
+        categories: Set<PlaceCategory>,
+        petFilters: Set<PetFilter>,
+        limit: Int,
+    ): List<Place> {
         val (cats, catCount) = catsOf(categories)
         val match = PlaceFts.match(query)
-        val rows = if (match == null) placeDao.browse(cats, catCount, limit)
-        else placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat = null, userLng = null, limit = limit))
+        val rows = when {
+            match != null -> placeDao.searchByFts(
+                ftsQuery(match, query, cats, catCount, userLat = null, userLng = null, petFilters = petFilters, limit = limit),
+            )
+            // 검색어는 있는데 색인할 글자가 없다("🐶", "…") → 결과 없음. 전체 폴백은 오해를 낳는다.
+            query.isNotBlank() -> return emptyList()
+            else -> placeDao.browse(
+                cats, catCount,
+                anySize = PetFilter.ANY_SIZE in petFilters,
+                indoor = PetFilter.INDOOR in petFilters,
+                outdoor = PetFilter.OUTDOOR in petFilters,
+                sizeAll = PetFilter.SIZE_ALL,
+                limit = limit,
+            )
+        }
         return rows.map { it.toDomain() }
     }
 
@@ -236,7 +254,7 @@ class PlaceRepositoryImpl @Inject constructor(
                 minLat = box[0], maxLat = box[1], minLng = box[2], maxLng = box[3], limit = limit,
             )
         } else {
-            placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat, userLng, box, limit))
+            placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat, userLng, box, limit = limit))
         }
         // SQL 정렬은 근사(cos 보정)로 top-N 을 뽑고, 표시 순서는 정확한 거리로 다시 정렬한다.
         return rows.map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
@@ -256,6 +274,7 @@ class PlaceRepositoryImpl @Inject constructor(
         userLat: Double?,
         userLng: Double?,
         box: DoubleArray? = null,
+        petFilters: Set<PetFilter> = emptySet(),
         limit: Int,
     ): SupportSQLiteQuery {
         val args = mutableListOf<Any>(match)
@@ -274,6 +293,14 @@ class PlaceRepositoryImpl @Inject constructor(
             sql.append(" AND places.lat BETWEEN ? AND ? AND places.lng BETWEEN ? AND ?")
             args.add(box[0]); args.add(box[1]); args.add(box[2]); args.add(box[3])
         }
+        // 동반 조건은 LIMIT 전에 SQL 로 걸어야 한다 — 결과를 잘라낸 뒤 클라이언트에서 거르면
+        // 조건에 맞는 장소가 상한 밖으로 밀려 유실되고 개수·"이상" 표기도 틀린다.
+        if (PetFilter.ANY_SIZE in petFilters) {
+            sql.append(" AND places.allowedPetSize = ?")
+            args.add(PetFilter.SIZE_ALL)
+        }
+        if (PetFilter.INDOOR in petFilters) sql.append(" AND places.indoorAllowed = 1")
+        if (PetFilter.OUTDOOR in petFilters) sql.append(" AND places.outdoorAllowed = 1")
         if (userLat != null && userLng != null) {
             sql.append(
                 " ORDER BY ((places.lat - ?) * (places.lat - ?) + " +

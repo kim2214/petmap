@@ -10,6 +10,7 @@ import com.kimdev.petmap.fake.FakePlaceRepository
 import com.kimdev.petmap.fake.FakeRecentSearchStore
 import com.kimdev.petmap.fake.testPlace
 import com.kimdev.petmap.util.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -266,6 +267,100 @@ class MapViewModelTest {
             advanceUntilIdle()
             assertNull(vm.uiState.value.searchMarkers)
             assertEquals(3, vm.uiState.value.clusters.sumOf { it.count })
+            job.cancel()
+        }
+
+    @Test
+    fun `검색 확정 진행 중에 clearSearch 하면 마커 모드에 들어가지 않는다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("행복카페", lat = 37.50, lng = 127.00))
+            val vm = viewModel()
+            advanceUntilIdle()
+            val received = mutableListOf<MapEvent>()
+            val job = launch { vm.events.toList(received) }
+
+            val gate = CompletableDeferred<Unit>()
+            repo.searchGate = gate
+            vm.onSearchQueryChange("행복")
+            vm.submitSearch("행복")
+            advanceUntilIdle() // search 에서 대기 중
+            assertTrue(vm.uiState.value.isLoading)
+
+            vm.clearSearch() // ✕ 또는 뒤로가기
+            gate.complete(Unit)
+            repo.searchGate = null
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertNull("취소된 검색이 마커 모드를 켜면 빈 검색창 + pill 상태에 갇힌다", state.searchMarkers)
+            assertEquals("", state.searchQuery)
+            assertFalse(state.isLoading)
+            assertTrue(received.none { it is MapEvent.FitPlaces })
+            job.cancel()
+        }
+
+    @Test
+    fun `마커 모드에서 검색어를 지우면 해제되고 뷰포트 조회로 복귀한다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(
+                testPlace("행복카페", lat = 37.50, lng = 127.00),
+                testPlace("다른곳", lat = 37.51, lng = 127.01),
+            )
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.onSearchQueryChange("행복")
+            vm.submitSearch("행복")
+            advanceUntilIdle()
+            assertEquals(1, vm.uiState.value.clusters.sumOf { it.count })
+
+            vm.onSearchQueryChange("") // 백스페이스로 전부 지움
+            advanceUntilIdle()
+
+            assertNull(vm.uiState.value.searchMarkers)
+            assertEquals(2, vm.uiState.value.clusters.sumOf { it.count })
+        }
+
+    @Test
+    fun `검색 확정은 동반 조건을 SQL 로 넘기고 truncated 는 그 결과로 판단한다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            // 실내 가능 장소가 상한(200)+1 건: 필터를 조회 뒤에 걸었다면 앞 201건 중 일부만 남아 유실된다
+            repo.dataset = (1..201).map { testPlace("카페$it", lat = 37.5 + it * 1e-4, lng = 127.0, indoorAllowed = true) } +
+                (1..50).map { testPlace("실외카페$it", lat = 37.6, lng = 127.1, indoorAllowed = false) }
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.togglePetFilter(PetFilter.INDOOR)
+            advanceUntilIdle()
+
+            vm.submitSearch("카페")
+            advanceUntilIdle()
+
+            assertEquals(setOf(PetFilter.INDOOR), repo.lastSearchPetFilters)
+            val markers = vm.uiState.value.searchMarkers!!
+            assertEquals(MapViewModel.SEARCH_MARKERS_LIMIT, markers.count)
+            assertTrue("201건이 걸리면 '이상' 표기여야 한다", markers.truncated)
+        }
+
+    @Test
+    fun `마커 모드에서 필터를 토글하면 결과는 갱신되지만 카메라는 맞추지 않는다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(
+                testPlace("행복카페", lat = 37.50, lng = 127.00, indoorAllowed = true),
+                testPlace("행복정원", lat = 35.10, lng = 129.00, indoorAllowed = false),
+            )
+            val vm = viewModel()
+            advanceUntilIdle()
+            val received = mutableListOf<MapEvent>()
+            val job = launch { vm.events.toList(received) }
+            vm.submitSearch("행복")
+            advanceUntilIdle()
+            assertEquals(1, received.count { it is MapEvent.FitPlaces })
+            assertEquals(2, vm.uiState.value.searchMarkers?.count)
+
+            vm.togglePetFilter(PetFilter.INDOOR) // 사용자가 줌인해 보던 곳에서 전국 뷰로 튀면 안 된다
+            advanceUntilIdle()
+
+            assertEquals(1, vm.uiState.value.searchMarkers?.count)
+            assertEquals(1, received.count { it is MapEvent.FitPlaces })
             job.cancel()
         }
 

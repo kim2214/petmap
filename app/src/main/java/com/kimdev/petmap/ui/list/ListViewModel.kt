@@ -153,7 +153,7 @@ class ListViewModel @Inject constructor(
                 // 거리순은 "주변" 탐색 의도 → 반경 밖은 제외 (0건이면 화면이 거리순 해제를 안내)
                 repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, NEARBY_RADIUS_KM, fetchLimit)
             } else {
-                val results = repository.search(key.query, key.categories, fetchLimit)
+                val results = repository.search(key.query, key.categories, limit = fetchLimit)
                 // 위치를 알면 거리순 정렬을 켜지 않아도 카드에 거리를 표시한다
                 if (loc == null) results
                 else results.map { it.copy(distanceMeters = distanceMeters(loc.lat, loc.lng, it.lat, it.lng)) }
