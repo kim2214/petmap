@@ -8,9 +8,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -40,8 +42,12 @@ private const val RETRY_DELAY_MS = 5_000L
  * 하단탭 Scaffold 에 한 번만 배치해 탭을 옮겨도 AdView 가 유지된다
  * (화면마다 두면 탭 전환마다 파괴·재요청되어 노출/요청 비율이 나빠진다).
  */
+/**
+ * @param visible false 면 높이 0 으로 접고 자동 갱신을 멈춘다(pause). 컴포지션에서 빼지 않아
+ *   AdView 와 로드된 광고가 유지되고, 다시 보일 때 재요청 없이 그대로 노출된다.
+ */
 @Composable
-fun BannerAd(modifier: Modifier = Modifier) {
+fun BannerAd(modifier: Modifier = Modifier, visible: Boolean = true) {
     // UMP 동의 후 MobileAds 초기화가 끝나야 로드가 성공한다. 초기화 전에 요청하면 실패하고
     // 재시도가 없으면 첫 세션 내내 빈 배너가 된다.
     val adsReady by AdsConsent.adsReady.collectAsStateWithLifecycle()
@@ -73,18 +79,23 @@ fun BannerAd(modifier: Modifier = Modifier) {
         onDispose { adView.destroy() }
     }
 
-    // 앱이 백그라운드일 때 배너 자동 갱신을 멈춘다(노출되지 않는 광고 요청 방지).
+    // 앱이 백그라운드이거나 배너가 접혀 있을 때 자동 갱신을 멈춘다(노출되지 않는 광고 요청 방지).
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, adView) {
+    var resumed by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> adView.pause()
-                Lifecycle.Event.ON_RESUME -> adView.resume()
+                Lifecycle.Event.ON_PAUSE -> resumed = false
+                Lifecycle.Event.ON_RESUME -> resumed = true
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val active = resumed && visible
+    LaunchedEffect(adView, active) {
+        if (active) adView.resume() else adView.pause()
     }
 
     LaunchedEffect(adsReady, attempt, adView) {
@@ -93,8 +104,20 @@ fun BannerAd(modifier: Modifier = Modifier) {
         adView.loadAd(AdRequest.Builder().build())
     }
 
-    // 로드 성공 여부와 무관하게 높이를 예약 → 광고가 늦게 채워질 때 목록이 밀리는 점프 방지
-    Box(modifier = modifier.fillMaxWidth().height(adSize.height.dp)) {
+    // 로드 성공 여부와 무관하게 높이를 예약 → 광고가 늦게 채워질 때 목록이 밀리는 점프 방지.
+    // 숨김 상태에서는 자식을 정상 크기로 측정만 하고 배치하지 않는다(높이 0, 그리기·시맨틱 제외) —
+    // AdView 를 0 높이로 측정하면 SDK 가 크기를 잃는다.
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(adSize.height.dp)
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, if (visible) placeable.height else 0) {
+                    if (visible) placeable.placeRelative(0, 0)
+                }
+            },
+    ) {
         if (adsReady) {
             AndroidView(modifier = Modifier.fillMaxWidth(), factory = { adView })
         }

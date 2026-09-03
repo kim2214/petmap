@@ -57,8 +57,9 @@ fun CategoryFilterRow(
                 colors = FilterChipDefaults.filterChipColors(
                     iconColor = category.color,
                     selectedContainerColor = category.color,
-                    selectedLabelColor = Color.White,
-                    selectedLeadingIconColor = Color.White,
+                    // 밝은 카테고리 색 위 흰 글자는 대비 미달 → 배경 휘도에 따라 글자색 선택
+                    selectedLabelColor = category.onColor,
+                    selectedLeadingIconColor = category.onColor,
                 ),
                 border = FilterChipDefaults.filterChipBorder(
                     enabled = true,

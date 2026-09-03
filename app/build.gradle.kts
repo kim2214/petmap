@@ -108,7 +108,8 @@ android {
             val isApkRelease = gradle.startParameter.taskNames.any {
                 it.contains("assembleRelease", ignoreCase = true)
             }
-            isEnable = isApkRelease
+            // -Ppetmap.abiSplit: 디버그도 ABI 별로 분리(저장 공간이 빠듯한 에뮬레이터에 x86_64 만 설치할 때)
+            isEnable = isApkRelease || providers.gradleProperty("petmap.abiSplit").isPresent
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
             isUniversalApk = false

@@ -39,6 +39,8 @@ import javax.inject.Inject
 
 data class ListUiState(
     val isLoading: Boolean = true,
+    /** 첫 조회가 끝났는가(성공/실패 무관). false 인 동안만 스켈레톤을 보인다 */
+    val hasLoaded: Boolean = false,
     val places: List<Place> = emptyList(),
     val query: String = "",
     val selectedCategories: Set<PlaceCategory> = emptySet(),
@@ -177,6 +179,7 @@ class ListViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isLoading = false,
+                    hasLoaded = true,
                     isLoadingMore = false,
                     places = result.places.withFavorites(favoriteIds),
                     canLoadMore = result.hasMore && pageLimit < MAX_LIMIT,
@@ -188,7 +191,7 @@ class ListViewModel @Inject constructor(
             // 로딩 상태를 죽이고 isError 를 잘못 세운다(지도 쪽과 동일 패턴).
             if (e is CancellationException) throw e
             Log.w(TAG, "search failed: ${e.message}")
-            _uiState.update { it.copy(isLoading = false, isLoadingMore = false, isError = true) }
+            _uiState.update { it.copy(isLoading = false, hasLoaded = true, isLoadingMore = false, isError = true) }
         }
     }
 
@@ -250,6 +253,8 @@ class ListViewModel @Inject constructor(
     /** 에러 상태에서 사용자가 "다시 시도" 를 눌렀을 때. */
     /** 오류 안내의 "다시 시도". DB 준비가 안 됐으면 준비부터 다시 하고, 검색도 재조회한다 */
     fun retry() {
+        // 재시도는 처음부터 다시 불러오는 것 → 오류 화면 대신 스켈레톤을 보인다
+        _uiState.update { it.copy(hasLoaded = false) }
         if (!seeded) seedAndLocate()
         refreshSearch()
     }

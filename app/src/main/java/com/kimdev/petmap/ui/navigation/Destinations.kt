@@ -12,9 +12,14 @@ object Routes {
      * "지도에서 보기" 포커스 대상. 지도를 새 백스택 엔트리로 push 하면서 라우트 인자로 전달한다 —
      * 앱 스코프 버스로 넘기면 살아 있는 기존 지도 ViewModel 이 요청을 가로채 새 지도는 포커스되지
      * 않았다(그래서 popUpTo 로 상세를 날려야 했고 뒤로가기로 상세 복귀가 불가능했다).
+     *
+     * 탭의 지도(MAP)와 **다른 라우트**다. 같은 라우트의 선택 인자로 두면 하단탭 매칭이 포커스 지도를
+     * "지도 탭"으로 인식해 탭이 보이고, 탭 전환의 popUpTo 가 포커스 지도에서 멈춰 스택이 꼬이며
+     * 지도→상세→지도… 홉마다 MapViewModel 이 무한히 쌓였다.
      */
     const val MAP_ARG_FOCUS = "focus"
-    const val MAP_PATTERN = "$MAP?$MAP_ARG_FOCUS={$MAP_ARG_FOCUS}"
+    const val MAP_FOCUS = "mapFocus"
+    const val MAP_FOCUS_PATTERN = "$MAP_FOCUS?$MAP_ARG_FOCUS={$MAP_ARG_FOCUS}"
     const val LIST = "list"
     const val FAVORITE = "favorite"
     const val SETTINGS = "settings"
@@ -31,8 +36,8 @@ object Routes {
      */
     fun detail(placeId: String) = "$DETAIL/${Uri.encode(placeId)}"
 
-    /** 특정 장소를 비추는 지도 (상세 위에 push — 뒤로가기로 상세 복귀) */
-    fun mapFocused(placeId: String) = "$MAP?$MAP_ARG_FOCUS=${Uri.encode(placeId)}"
+    /** 특정 장소를 비추는 지도 (상세 위에 push — 하단탭 없음, 뒤로가기로 상세 복귀) */
+    fun mapFocused(placeId: String) = "$MAP_FOCUS?$MAP_ARG_FOCUS=${Uri.encode(placeId)}"
 
     /**
      * 구버전 공유 링크(커스텀 스킴). 이미 뿌려진 링크가 계속 열리도록 유지한다

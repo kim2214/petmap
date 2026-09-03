@@ -35,7 +35,7 @@ fun PetMapNavHost(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.MAP_PATTERN,
+        startDestination = Routes.MAP,
         modifier = modifier,
         // 탭/일반 화면 기본 전환: 부드러운 페이드
         enterTransition = { fadeIn(tween(220)) },
@@ -49,19 +49,20 @@ fun PetMapNavHost(
             }
         }
 
-        composable(
-            route = Routes.MAP_PATTERN,
-            // focus: "지도에서 보기"로 push 될 때만 채워진다. 탭 이동(Routes.MAP)은 null.
-            arguments = listOf(
-                navArgument(Routes.MAP_ARG_FOCUS) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-            ),
-        ) {
+        composable(Routes.MAP) {
             val reselects = remember { tabReselects.filter { it == Routes.MAP }.map { } }
             MapScreen(onPlaceClick = openDetail, reselects = reselects)
+        }
+        // "지도에서 보기": 상세 위에 push 되는 포커스 지도. 탭이 아니므로 하단탭이 숨고 재선택 이벤트도 없다.
+        composable(
+            route = Routes.MAP_FOCUS_PATTERN,
+            arguments = listOf(navArgument(Routes.MAP_ARG_FOCUS) { type = NavType.StringType }),
+            enterTransition = { slideInHorizontally(tween(300)) { it } + fadeIn(tween(300)) },
+            exitTransition = { fadeOut(tween(200)) },
+            popEnterTransition = { fadeIn(tween(200)) },
+            popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(200)) },
+        ) {
+            MapScreen(onPlaceClick = openDetail)
         }
         composable(Routes.LIST) {
             val reselects = remember { tabReselects.filter { it == Routes.LIST }.map { } }

@@ -204,6 +204,20 @@
 
     <!-- 라이선스 화면 -->
     <string name="licenses_intro">이 앱은 아래 오픈소스 및 제3자 구성요소를 사용합니다.</string>
+    <string name="license_name_compose">Jetpack Compose · AndroidX</string>
+    <string name="license_name_hilt">Hilt (Dagger)</string>
+    <string name="license_name_room">Room</string>
+    <string name="license_name_accompanist">Accompanist</string>
+    <string name="license_name_naver_map_compose">naver-map-compose (fornewid)</string>
+    <string name="license_name_naver_maps_sdk">NAVER Maps SDK</string>
+    <string name="license_name_admob">Google Mobile Ads (AdMob)</string>
+    <string name="license_name_ump_review">Google UMP · Play In-App Review</string>
+    <string name="license_name_firebase">Firebase (Crashlytics · Analytics)</string>
+    <string name="license_name_nanum_font">나눔스퀘어라운드 글꼴</string>
+    <string name="license_apache2">Apache License 2.0</string>
+    <string name="license_naver_cloud_terms">NAVER Cloud Platform 이용약관</string>
+    <string name="license_android_sdk">Android Software Development Kit License</string>
+    <string name="license_nanum_font">네이버 나눔글꼴 라이선스 (무료 사용)</string>
 
     <!-- 공유/토스트 (IntentActions) -->
     <string name="share_phone_format">전화: %1$s</string>

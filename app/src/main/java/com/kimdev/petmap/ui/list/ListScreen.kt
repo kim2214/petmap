@@ -80,7 +80,7 @@ fun ListScreen(
     // 조건이 "바뀐" 게 아니므로 보던 위치를 유지한다.
     LaunchedEffect(Unit) {
         snapshotFlow {
-            listOf(state.query, state.selectedCategories, state.sortByDistance, state.openNowOnly)
+            listOf(state.query, state.selectedCategories, state.sortByDistance, state.openNowOnly, state.petFilters)
         }
             .distinctUntilChanged()
             .drop(1)
@@ -225,7 +225,9 @@ fun ListScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-            state.isLoading && state.places.isEmpty() ->
+            // 스켈레톤은 첫 결과가 오기 전(또는 재시도)만. 매 조회마다 띄우면 "결과 없음"에서 글자를
+            // 더 칠 때마다 스켈레톤 → 결과 없음으로 깜빡인다.
+            state.isLoading && !state.hasLoaded ->
                 PlaceListSkeleton(modifier = Modifier.fillMaxSize())
 
             // DB 준비 실패(저장 공간 부족·손상) → 원인 안내. 일반 조회 실패보다 먼저 판정한다

@@ -20,19 +20,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
 import com.kimdev.petmap.R
 
+/** 구성요소 이름·라이선스 (표시 문구는 다른 화면과 같이 리소스에서) */
+private data class LicenseItem(@StringRes val name: Int, @StringRes val license: Int)
+
 private val LICENSES = listOf(
-    "Jetpack Compose · AndroidX" to "Apache License 2.0",
-    "Hilt (Dagger)" to "Apache License 2.0",
-    "Room" to "Apache License 2.0",
-    "Accompanist" to "Apache License 2.0",
-    "naver-map-compose (fornewid)" to "Apache License 2.0",
-    "NAVER Maps SDK" to "NAVER Cloud Platform 이용약관",
-    "Google Mobile Ads (AdMob)" to "Android Software Development Kit License",
-    "Google UMP · Play In-App Review" to "Android Software Development Kit License",
-    "Firebase (Crashlytics · Analytics)" to "Apache License 2.0",
-    "나눔스퀘어라운드 글꼴" to "네이버 나눔글꼴 라이선스 (무료 사용)",
+    LicenseItem(R.string.license_name_compose, R.string.license_apache2),
+    LicenseItem(R.string.license_name_hilt, R.string.license_apache2),
+    LicenseItem(R.string.license_name_room, R.string.license_apache2),
+    LicenseItem(R.string.license_name_accompanist, R.string.license_apache2),
+    LicenseItem(R.string.license_name_naver_map_compose, R.string.license_apache2),
+    LicenseItem(R.string.license_name_naver_maps_sdk, R.string.license_naver_cloud_terms),
+    LicenseItem(R.string.license_name_admob, R.string.license_android_sdk),
+    LicenseItem(R.string.license_name_ump_review, R.string.license_android_sdk),
+    LicenseItem(R.string.license_name_firebase, R.string.license_apache2),
+    LicenseItem(R.string.license_name_nanum_font, R.string.license_nanum_font),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,11 +69,11 @@ fun LicensesScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(20.dp),
             )
-            LICENSES.forEach { (name, license) ->
+            LICENSES.forEach { item ->
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                    Text(name, style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(item.name), style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        license,
+                        stringResource(item.license),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

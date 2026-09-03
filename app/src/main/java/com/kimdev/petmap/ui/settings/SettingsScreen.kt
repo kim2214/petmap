@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
@@ -95,9 +96,9 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
-    var showThemeDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by rememberSaveable { mutableStateOf(false) }
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
-    var showFontScaleDialog by remember { mutableStateOf(false) }
+    var showFontScaleDialog by rememberSaveable { mutableStateOf(false) }
     val dataInfo by viewModel.dataInfo.collectAsStateWithLifecycle()
     // EEA 등에서만 true. 이 경우 동의를 다시 변경할 진입점 제공이 Google 정책상 필수다.
     val adPrivacyRequired by AdsConsent.privacyOptionsRequired.collectAsStateWithLifecycle()

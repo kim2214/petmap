@@ -16,6 +16,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.kimdev.petmap.R
 import com.kimdev.petmap.domain.model.PlaceCategory
@@ -66,6 +67,17 @@ val PlaceCategory.markerColor: Color
 val PlaceCategory.color: Color
     @Composable get() =
         if (LocalIsDarkTheme.current) lerp(markerColor, Color.White, 0.28f) else markerColor
+
+/**
+ * [color] 를 배경으로 쓸 때 위에 얹는 글자/아이콘 색. 밝은 카테고리 색(문화 D9A23B·카페 F2913C 등)에
+ * 흰 글자는 대비 약 2.3:1 로 WCAG AA(4.5:1) 미달이라, 상대 휘도로 흰색/진한 색을 고른다.
+ * 임계 0.18: 흰 글자가 4.5:1 을 만족하는 배경 휘도 상한((1.05/4.5) − 0.05 ≈ 0.183).
+ */
+val PlaceCategory.onColor: Color
+    @Composable get() = if (color.luminance() > 0.18f) OnLightCategoryColor else Color.White
+
+/** 밝은 카테고리 색 위의 글자색 (M3 라이트 onSurface 톤) */
+private val OnLightCategoryColor = Color(0xFF1C1B1F)
 
 /** 아이콘 아바타 배경용 연한 틴트 (해당 카테고리 색의 옅은 버전) */
 val PlaceCategory.softColor: Color

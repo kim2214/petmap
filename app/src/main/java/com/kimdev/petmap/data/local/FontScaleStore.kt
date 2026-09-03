@@ -28,7 +28,7 @@ enum class FontScale(val factor: Float) {
 class FontScaleStore @Inject constructor(
     @ApplicationContext context: Context,
 ) {
-    private val prefs = context.getSharedPreferences("font_scale", Context.MODE_PRIVATE)
+    private val prefs = prefs(context)
     private val _scale = MutableStateFlow(load())
     val scale: StateFlow<FontScale> = _scale.asStateFlow()
 
@@ -37,11 +37,22 @@ class FontScaleStore @Inject constructor(
         _scale.value = scale
     }
 
-    private fun load(): FontScale =
-        runCatching { FontScale.valueOf(prefs.getString(KEY, null) ?: FontScale.NORMAL.name) }
-            .getOrDefault(FontScale.NORMAL)
+    private fun load(): FontScale = read(prefs)
 
-    private companion object {
-        const val KEY = "scale"
+    companion object {
+        private const val PREFS = "font_scale"
+        private const val KEY = "scale"
+
+        private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+        private fun read(prefs: android.content.SharedPreferences): FontScale =
+            runCatching { FontScale.valueOf(prefs.getString(KEY, null) ?: FontScale.NORMAL.name) }
+                .getOrDefault(FontScale.NORMAL)
+
+        /**
+         * 저장된 배율을 Hilt 없이 읽는다 — Activity.attachBaseContext 는 주입 전에 호출되는데
+         * 그 시점에 Configuration.fontScale 을 정해야 모든 윈도우(다이얼로그 포함)에 적용된다.
+         */
+        fun readStored(context: Context): FontScale = read(prefs(context))
     }
 }

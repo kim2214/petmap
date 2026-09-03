@@ -58,6 +58,29 @@ class ListViewModelTest {
     }
 
     @Test
+    fun `hasLoaded 는 첫 조회 뒤 true 로 유지되고 retry 에서만 되돌아간다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("카페"))
+        val vm = viewModel()
+        assertFalse(vm.uiState.value.hasLoaded) // 첫 결과 전 → 스켈레톤
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.hasLoaded)
+
+        // "결과 없음" 상태에서 글자를 더 쳐도 스켈레톤으로 되돌아가지 않는다
+        vm.onQueryChange("없는이름")
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.places.isEmpty())
+        vm.onQueryChange("없는이름을")
+        assertTrue(vm.uiState.value.hasLoaded)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.hasLoaded)
+
+        vm.retry()
+        assertFalse(vm.uiState.value.hasLoaded)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.hasLoaded)
+    }
+
+    @Test
     fun `초기화 시 시딩하고 위치 없으면 hasLocation false`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = viewModel(location = null)
         advanceUntilIdle()
