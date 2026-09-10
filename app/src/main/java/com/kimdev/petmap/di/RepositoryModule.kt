@@ -2,6 +2,8 @@ package com.kimdev.petmap.di
 
 import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.LocationProviderImpl
+import com.kimdev.petmap.data.local.PetProfileStore
+import com.kimdev.petmap.data.local.PetProfileStoreImpl
 import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.data.local.RecentSearchStoreImpl
 import com.kimdev.petmap.data.repository.PlaceRepositoryImpl
@@ -27,4 +29,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindRecentSearchStore(impl: RecentSearchStoreImpl): RecentSearchStore
+
+    @Binds
+    @Singleton
+    abstract fun bindPetProfileStore(impl: PetProfileStoreImpl): PetProfileStore
 }

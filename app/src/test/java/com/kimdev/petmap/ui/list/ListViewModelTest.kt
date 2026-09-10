@@ -6,6 +6,7 @@ import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.fake.FakeLocationProvider
 import com.kimdev.petmap.fake.FakePlaceRepository
+import com.kimdev.petmap.fake.FakePetProfileStore
 import com.kimdev.petmap.fake.FakeRecentSearchStore
 import com.kimdev.petmap.fake.testPlace
 import com.kimdev.petmap.util.MainDispatcherRule
@@ -26,6 +27,8 @@ class ListViewModelTest {
 
     private val repo = FakePlaceRepository()
 
+    private val petProfileStore = FakePetProfileStore()
+
     private fun viewModel(
         location: UserLocation? = null,
         savedState: SavedStateHandle = SavedStateHandle(),
@@ -34,6 +37,7 @@ class ListViewModelTest {
             repo,
             FakeLocationProvider(location),
             FakeRecentSearchStore(),
+            petProfileStore,
             mainDispatcherRule.testDispatcher,
             savedState,
         )
@@ -196,6 +200,32 @@ class ListViewModelTest {
 
         assertEquals(400, repo.lastSearchLimit)
         assertEquals(listOf("open"), vm.uiState.value.places.map { it.id })
+    }
+
+    @Test
+    fun `내 아이 필터는 등록 체중으로 거르고 체중 등록 해제 시 자동으로 꺼진다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(
+            testPlace("all", maxPetKg = 999.0),
+            testPlace("small", maxPetKg = 9.99),
+            testPlace("unknown"),
+        )
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.setMyPetWeight(12.0) // 칩에서 등록 → 저장 + 필터 on
+        advanceUntilIdle()
+        assertEquals(12.0, petProfileStore.weightKg.value)
+        assertEquals(setOf(PetFilter.MY_PET), vm.uiState.value.petFilters)
+        assertEquals(listOf("all"), vm.uiState.value.places.map { it.id })
+
+        petProfileStore.setWeight(5.0) // 설정 화면에서 변경 → 재조회
+        advanceUntilIdle()
+        assertEquals(listOf("all", "small"), vm.uiState.value.places.map { it.id })
+
+        petProfileStore.setWeight(null) // 등록 해제 → 칩도 꺼지고 전체
+        advanceUntilIdle()
+        assertTrue(PetFilter.MY_PET !in vm.uiState.value.petFilters)
+        assertEquals(3, vm.uiState.value.places.size)
     }
 
     @Test

@@ -21,6 +21,8 @@
 - 실내/실외 여부("장소(실내) 여부"/"장소(실외)여부")는 Y→1, N→0, 그 외·컬럼 없음 → NULL(정보 없음).
   v5 까지는 NOT NULL 0 이라 컬럼이 없는 데이터셋(액티비티)이 "동반 불가"로 표시됐다.
   제한사항이 "야외만/실외만 동반 가능"이면 실내=0·실외=1 로 정규화한다(원본 34건이 실내 Y 로 모순).
+- maxPetKg: "입장 가능 동물 크기" 문구를 parse_max_pet_kg() 로 숫자화한다("10kg 미만" → 9.99, "소형" → 10,
+  "모두 가능"/"대형" → 999, 판단 불가 → NULL). 앱의 "내 아이 가능" 필터가 SQL 로 비교한다.
 - 식약처 "반려동물 동반출입 음식점" 목록은 tools/fetch_restaurants.py 가 지오코딩해 같은 컬럼 형식의
   CSV 로 만들어 준다. 좌표가 지오코딩 결과라 기본 데이터셋과 좌표가 조금 달라도 같은 가게일 수 있으므로,
   **정규화한 이름이 같고 150m 안**이면 중복으로 보고 먼저 온 파일을 유지한다.
@@ -50,8 +52,8 @@ import re
 import sqlite3
 import sys
 
-ROOM_IDENTITY_HASH = "569b4fd80162fae214d1c81784d21f2e"  # app/schemas/**/6.json 의 identityHash
-DB_VERSION = 6  # v6: indoorAllowed/outdoorAllowed nullable(정보 없음) + 식약처 음식점. 앱 PetMapDatabase.VERSION 과 동일
+ROOM_IDENTITY_HASH = "1f4861412b56fabf6ac29d6bfae1f85d"  # app/schemas/**/7.json 의 identityHash
+DB_VERSION = 7  # v7: maxPetKg(입장 가능 최대 체중 숫자화). v6: 실내/실외 nullable + 식약처 음식점. 앱 PetMapDatabase.VERSION 과 동일
 
 # 앱이 읽는 meta 키 (MetaEntity.KEY_DATA_DATE)
 META_KEY_DATA_DATE = "data_date"
@@ -66,7 +68,7 @@ DDL = [
     "`roadAddress` TEXT NOT NULL, `lotAddress` TEXT NOT NULL, `lat` REAL NOT NULL, `lng` REAL NOT NULL, "
     "`phone` TEXT, `operatingTime` TEXT, `closedDays` TEXT, `homepage` TEXT, `allowedPetSize` TEXT, "
     "`restriction` TEXT, `indoorAllowed` INTEGER, `outdoorAllowed` INTEGER, "
-    "`parkingAvailable` INTEGER, `fee` TEXT, `petFee` TEXT, `description` TEXT, PRIMARY KEY(`id`))",
+    "`parkingAvailable` INTEGER, `fee` TEXT, `petFee` TEXT, `description` TEXT, `maxPetKg` REAL, PRIMARY KEY(`id`))",
     "CREATE INDEX `index_places_lat_lng` ON `places` (`lat`, `lng`)",
     "CREATE INDEX `index_places_category` ON `places` (`category`)",
     "CREATE INDEX `index_places_name` ON `places` (`name`)",
@@ -131,6 +133,41 @@ def build_fts(db):
         "INSERT INTO places_fts(docid, name, roadAddress) VALUES (?,?,?)",
         ((rid, fts_index(name), fts_index(road)) for rid, name, road in rows),
     )
+
+
+# "내 반려견" 필터용: 입장 가능 동물 크기 문구 → 최대 체중(kg). 앱 PetInfo.NO_LIMIT_KG 와 동일
+NO_LIMIT_KG = 999.0
+SMALL_KG = 10.0   # 소형견 상한 (통상 10kg 미만)
+MEDIUM_KG = 25.0  # 중형견 상한 (통상 10~25kg)
+_KG_RE = re.compile(r"(\d+(?:\.\d+)?)\s*kg", re.IGNORECASE)
+
+
+def parse_max_pet_kg(text):
+    """
+    '입장 가능 동물 크기' 문구를 최대 체중(kg) 하나로 정규화한다. 판단이 안 서면 None(정보 없음 → 필터 제외).
+    - "모두 가능" 포함 → 999 (다른 동물 종이 덧붙어 있어도)
+    - "N kg 미만" → N-0.01, "N kg 이하/이내/까지"·단서 없음 → N. 숫자가 여럿(주말/평일)이면 가장 작은 값(보수적)
+    - "이상"·범위("6~18kg")·"고양이"만·특수동물 등 개 크기를 뜻하지 않는 문구 → None
+    - kg 없이 "대형" → 999, "중형" → 25, "소형" → 10
+    """
+    t = (text or "").strip()
+    if not t:
+        return None
+    if "모두 가능" in t:
+        return NO_LIMIT_KG
+    if "이상" in t or re.search(r"\d\s*[~\-]\s*\d", t):
+        return None
+    nums = [float(m) for m in _KG_RE.findall(t)]
+    if nums:
+        kg = min(nums)
+        return round(kg - 0.01, 2) if "미만" in t else kg
+    if "대형" in t:
+        return NO_LIMIT_KG
+    if "중형" in t:
+        return MEDIUM_KG
+    if "소형" in t:
+        return SMALL_KG
+    return None
 
 
 def yn(value):
@@ -252,6 +289,7 @@ def main():
             if desc == (r.get("카테고리3") or "").strip():
                 desc = None
             restriction = meaningful(r.get("반려동물 제한사항"))
+            pet_size = meaningful(r.get("입장 가능 동물 크기"))
             indoor = yn(r.get("장소(실내) 여부"))
             outdoor = yn(r.get("장소(실외)여부"))
             if restriction and any(h in restriction for h in OUTDOOR_ONLY_HINTS):
@@ -261,9 +299,10 @@ def main():
                 (r.get("지번주소") or "").strip(), lat, lng,
                 meaningful(first_col(r, "전화번호", "시설 전화번호")), meaningful(r.get("운영시간")),
                 meaningful(r.get("휴무일")), meaningful(first_col(r, "홈페이지", "웹사이트")),
-                meaningful(r.get("입장 가능 동물 크기")), restriction,
+                pet_size, restriction,
                 indoor, outdoor,
                 parking, fee, meaningful(r.get("애견 동반 추가 요금")), desc,
+                parse_max_pet_kg(pet_size),
             )
             if key:
                 by_name.setdefault(key, []).append((lat, lng))
@@ -280,7 +319,7 @@ def main():
     db.execute("INSERT INTO android_metadata VALUES ('ko_KR')")
     db.execute("INSERT INTO room_master_table (id, identity_hash) VALUES (42, ?)", (ROOM_IDENTITY_HASH,))
     db.executemany(
-        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows.values()
+        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows.values()
     )
     build_fts(db)
     db.executemany(

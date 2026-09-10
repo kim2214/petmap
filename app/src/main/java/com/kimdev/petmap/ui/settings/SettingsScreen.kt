@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Storage
@@ -56,6 +57,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.BuildConfig
 import com.kimdev.petmap.R
+import com.kimdev.petmap.ui.components.PetWeightDialog
+import com.kimdev.petmap.ui.components.formatPetWeight
 import com.kimdev.petmap.core.ads.AdsConsent
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openUrl
@@ -97,6 +100,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
+    val petWeightKg by viewModel.petWeightKg.collectAsStateWithLifecycle()
+    var showPetWeightDialog by rememberSaveable { mutableStateOf(false) }
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     var showFontScaleDialog by rememberSaveable { mutableStateOf(false) }
     val dataInfo by viewModel.dataInfo.collectAsStateWithLifecycle()
@@ -116,6 +121,16 @@ fun SettingsScreen(
                 .padding(start = 20.dp, top = 24.dp, bottom = 8.dp)
                 .semantics { heading() },
         )
+
+        SectionTitle(stringResource(R.string.settings_section_pet))
+        SettingsCard {
+            SettingRow(
+                Icons.Filled.Pets,
+                stringResource(R.string.pet_weight_title),
+                subtitle = petWeightKg?.let { stringResource(R.string.pet_weight_value_format, formatPetWeight(it)) }
+                    ?: stringResource(R.string.pet_weight_desc),
+            ) { showPetWeightDialog = true }
+        }
 
         SectionTitle(stringResource(R.string.settings_section_screen))
         SettingsCard {
@@ -190,6 +205,21 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (showPetWeightDialog) {
+        PetWeightDialog(
+            current = petWeightKg,
+            onSave = { kg ->
+                viewModel.setPetWeight(kg)
+                showPetWeightDialog = false
+            },
+            onDismiss = { showPetWeightDialog = false },
+            onClear = {
+                viewModel.setPetWeight(null)
+                showPetWeightDialog = false
+            },
+        )
     }
 
     if (showThemeDialog) {

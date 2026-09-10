@@ -7,6 +7,7 @@ import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.ui.navigation.Routes
 import com.kimdev.petmap.fake.FakeLocationProvider
 import com.kimdev.petmap.fake.FakePlaceRepository
+import com.kimdev.petmap.fake.FakePetProfileStore
 import com.kimdev.petmap.fake.FakeRecentSearchStore
 import com.kimdev.petmap.fake.testPlace
 import com.kimdev.petmap.util.MainDispatcherRule
@@ -30,9 +31,10 @@ class MapViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repo = FakePlaceRepository()
+    private val petProfileStore = FakePetProfileStore()
 
     private fun viewModel(savedState: SavedStateHandle = SavedStateHandle()): MapViewModel =
-        MapViewModel(repo, FakeRecentSearchStore(), FakeLocationProvider(), mainDispatcherRule.testDispatcher, savedState)
+        MapViewModel(repo, FakeRecentSearchStore(), petProfileStore, FakeLocationProvider(), mainDispatcherRule.testDispatcher, savedState)
 
     @Test
     fun `초기화 후 시딩 완료되고 클러스터가 채워진다`() = runTest(mainDispatcherRule.testDispatcher) {

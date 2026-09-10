@@ -114,6 +114,7 @@ class PlaceRepositoryImpl @Inject constructor(
         radiusKm: Double,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         limit: Int,
     ): List<Place> {
         val latDelta = radiusKm / 111.0
@@ -133,6 +134,7 @@ class PlaceRepositoryImpl @Inject constructor(
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
+            myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
         ).map { it.toDomain() }
     }
@@ -143,6 +145,7 @@ class PlaceRepositoryImpl @Inject constructor(
         radiusKm: Double,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         gridDivisions: Int,
         limit: Int,
     ): List<GeoClusterCell> {
@@ -169,6 +172,7 @@ class PlaceRepositoryImpl @Inject constructor(
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
+            myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
         ).map {
             // 대표 좌표(셀 내 평균)로 격자 인덱스를 역산해 셀 경계를 복원한다
@@ -190,6 +194,7 @@ class PlaceRepositoryImpl @Inject constructor(
         cell: GeoClusterCell,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         limit: Int,
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
@@ -207,6 +212,7 @@ class PlaceRepositoryImpl @Inject constructor(
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
+            myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
         ).map { it.toDomain() }
     }
@@ -215,13 +221,17 @@ class PlaceRepositoryImpl @Inject constructor(
         query: String,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         limit: Int,
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
         val match = PlaceFts.match(query)
         val rows = when {
             match != null -> placeDao.searchByFts(
-                ftsQuery(match, query, cats, catCount, userLat = null, userLng = null, petFilters = petFilters, limit = limit),
+                ftsQuery(
+                    match, query, cats, catCount, userLat = null, userLng = null, petFilters = petFilters,
+                    myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg), limit = limit,
+                ),
             )
             // 검색어는 있는데 색인할 글자가 없다("🐶", "…") → 결과 없음. 전체 폴백은 오해를 낳는다.
             query.isNotBlank() -> return emptyList()
@@ -231,6 +241,7 @@ class PlaceRepositoryImpl @Inject constructor(
                 indoor = PetFilter.INDOOR in petFilters,
                 outdoor = PetFilter.OUTDOOR in petFilters,
                 sizeAll = PetFilter.SIZE_ALL,
+                myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
                 limit = limit,
             )
         }
@@ -275,6 +286,7 @@ class PlaceRepositoryImpl @Inject constructor(
         userLng: Double?,
         box: DoubleArray? = null,
         petFilters: Set<PetFilter> = emptySet(),
+        myPetKg: Double? = null,
         limit: Int,
     ): SupportSQLiteQuery {
         val args = mutableListOf<Any>(match)
@@ -301,6 +313,10 @@ class PlaceRepositoryImpl @Inject constructor(
         }
         if (PetFilter.INDOOR in petFilters) sql.append(" AND places.indoorAllowed = 1")
         if (PetFilter.OUTDOOR in petFilters) sql.append(" AND places.outdoorAllowed = 1")
+        if (myPetKg != null) {
+            sql.append(" AND places.maxPetKg >= ?")
+            args.add(myPetKg)
+        }
         if (userLat != null && userLng != null) {
             sql.append(
                 " ORDER BY ((places.lat - ?) * (places.lat - ?) + " +

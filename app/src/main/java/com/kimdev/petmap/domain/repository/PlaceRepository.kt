@@ -27,6 +27,7 @@ interface PlaceRepository {
     /**
      * 지도 뷰포트: 중심 좌표 기준 반경 박스 내 장소 (가까운 순, 개수 제한).
      * categories 비면 전체. petFilters 는 SQL 에서 AND 로 걸린다(정보 없는 장소 제외).
+     * myPetKg 는 [PetFilter.MY_PET] 이 켜졌을 때 비교할 내 반려견 체중(등록 안 됐으면 null → 조건 없음).
      */
     suspend fun getPlacesInBounds(
         centerLat: Double,
@@ -34,6 +35,7 @@ interface PlaceRepository {
         radiusKm: Double,
         categories: Set<PlaceCategory> = emptySet(),
         petFilters: Set<PetFilter> = emptySet(),
+        myPetKg: Double? = null,
         limit: Int = 300,
     ): List<Place>
 
@@ -47,6 +49,7 @@ interface PlaceRepository {
         radiusKm: Double,
         categories: Set<PlaceCategory> = emptySet(),
         petFilters: Set<PetFilter> = emptySet(),
+        myPetKg: Double? = null,
         gridDivisions: Int,
         limit: Int,
     ): List<GeoClusterCell>
@@ -56,6 +59,7 @@ interface PlaceRepository {
         cell: GeoClusterCell,
         categories: Set<PlaceCategory> = emptySet(),
         petFilters: Set<PetFilter> = emptySet(),
+        myPetKg: Double? = null,
         limit: Int = 50,
     ): List<Place>
 
@@ -69,6 +73,7 @@ interface PlaceRepository {
         query: String,
         categories: Set<PlaceCategory> = emptySet(),
         petFilters: Set<PetFilter> = emptySet(),
+        myPetKg: Double? = null,
         limit: Int = 200,
     ): List<Place>
 

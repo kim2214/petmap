@@ -40,4 +40,10 @@ data class PlaceEntity(
     val fee: String?,
     val petFee: String?,
     val description: String?,
+    /**
+     * v7: allowedPetSize 를 build_db.py 가 숫자로 정규화한 입장 가능 최대 체중(kg).
+     * "모두 가능"/"대형" 은 999, "10kg 미만" 은 9.99, "소형" 10, "중형" 25. null = 정보 없음(필터에서 제외).
+     * "내 반려견" 필터가 SQL 에서 `maxPetKg >= :myPetKg` 로 쓴다.
+     */
+    val maxPetKg: Double?,
 )

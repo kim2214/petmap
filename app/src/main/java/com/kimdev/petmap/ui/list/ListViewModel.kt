@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.common.DefaultDispatcher
 import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.UserLocation
+import com.kimdev.petmap.data.local.PetProfileStore
 import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.data.repository.withFavorites
 import com.kimdev.petmap.domain.model.PetFilter
@@ -46,8 +47,10 @@ data class ListUiState(
     val selectedCategories: Set<PlaceCategory> = emptySet(),
     val sortByDistance: Boolean = false,
     val openNowOnly: Boolean = false,
-    /** 반려동물 동반 조건 (모든 크기/실내/실외). 여러 개면 AND */
+    /** 반려동물 동반 조건 (모든 크기/실내/실외/내 아이). 여러 개면 AND */
     val petFilters: Set<PetFilter> = emptySet(),
+    /** 설정에 등록한 내 반려견 체중(kg). null 이면 '내 아이 가능' 칩이 등록 다이얼로그를 먼저 띄운다 */
+    val myPetKg: Double? = null,
     val hasLocation: Boolean = false,
     val recentSearches: List<String> = emptyList(),
     /** 조회 실패 여부. true 면 "결과 없음"이 아니라 에러 상태로 표시한다. */
@@ -77,6 +80,7 @@ private data class SearchKey(
     val sortByDistance: Boolean,
     val openNowOnly: Boolean,
     val petFilters: Set<PetFilter>,
+    val myPetKg: Double?,
 )
 
 @OptIn(FlowPreview::class)
@@ -85,6 +89,7 @@ class ListViewModel @Inject constructor(
     private val repository: PlaceRepository,
     private val locationProvider: LocationProvider,
     private val recentSearchStore: RecentSearchStore,
+    private val petProfileStore: PetProfileStore,
     @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -97,6 +102,7 @@ class ListViewModel @Inject constructor(
             sortByDistance = savedStateHandle[KEY_SORT_BY_DISTANCE] ?: false,
             openNowOnly = savedStateHandle[KEY_OPEN_NOW_ONLY] ?: false,
             petFilters = SavedFilters.namesToPetFilters(savedStateHandle[KEY_PET_FILTERS]),
+            myPetKg = petProfileStore.weightKg.value,
         )
     )
     val uiState: StateFlow<ListUiState> = _uiState.asStateFlow()
@@ -117,7 +123,7 @@ class ListViewModel @Inject constructor(
         // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
         viewModelScope.launch {
             _uiState
-                .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly, it.petFilters) }
+                .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly, it.petFilters, it.myPetKg) }
                 .distinctUntilChanged()
                 .onEach { persist(it) }
                 .debounce(250)
@@ -137,6 +143,14 @@ class ListViewModel @Inject constructor(
         viewModelScope.launch {
             recentSearchStore.recent.collect { list ->
                 _uiState.update { it.copy(recentSearches = list) }
+            }
+        }
+        // 체중은 SearchKey 에 포함돼 바뀌면 재조회된다. 등록 해제되면 '내 아이' 칩도 함께 꺼진다.
+        viewModelScope.launch {
+            petProfileStore.weightKg.collect { kg ->
+                _uiState.update {
+                    it.copy(myPetKg = kg, petFilters = if (kg == null) it.petFilters - PetFilter.MY_PET else it.petFilters)
+                }
             }
         }
     }
@@ -163,7 +177,7 @@ class ListViewModel @Inject constructor(
             // 동반 조건 필터: 단순 필드 비교라 메인에서 걸러도 충분히 싸다
             val petFiltered =
                 if (key.petFilters.isEmpty()) fetched
-                else fetched.filter { place -> key.petFilters.all { it.matches(place) } }
+                else fetched.filter { place -> key.petFilters.all { it.matches(place, key.myPetKg) } }
             val visible = if (key.openNowOnly) {
                 val now = LocalDateTime.now()
                 // 운영시간 파싱(정규식)은 CPU 작업이라 백그라운드에서 처리
@@ -234,7 +248,7 @@ class ListViewModel @Inject constructor(
         loadMoreJob?.cancel()
         loadMoreJob = viewModelScope.launch {
             runSearch(
-                SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters),
+                SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters, s.myPetKg),
                 loadingMore = true,
             )
         }
@@ -246,7 +260,7 @@ class ListViewModel @Inject constructor(
     private fun refreshSearch() {
         val s = _uiState.value
         viewModelScope.launch {
-            runSearch(SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters))
+            runSearch(SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters, s.myPetKg))
         }
     }
 
@@ -305,6 +319,12 @@ class ListViewModel @Inject constructor(
     fun togglePetFilter(filter: PetFilter) = _uiState.update {
         val next = if (filter in it.petFilters) it.petFilters - filter else it.petFilters + filter
         it.copy(petFilters = next)
+    }
+
+    /** '내 아이 가능' 칩에서 체중을 등록/수정하면 저장과 함께 필터를 켠다 (설정 화면과 같은 저장소) */
+    fun setMyPetWeight(kg: Double) {
+        petProfileStore.setWeight(kg)
+        _uiState.update { it.copy(petFilters = it.petFilters + PetFilter.MY_PET) }
     }
 
     /** 빈 결과 복구 동선: 카테고리·동반 조건을 한 번에 되돌린다. */

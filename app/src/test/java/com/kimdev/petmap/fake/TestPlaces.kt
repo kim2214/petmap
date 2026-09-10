@@ -16,6 +16,7 @@ fun testPlace(
     allowedPetSize: String? = null,
     indoorAllowed: Boolean? = null,
     outdoorAllowed: Boolean? = null,
+    maxPetKg: Double? = null,
 ): Place = Place(
     id = id,
     name = name,
@@ -28,5 +29,5 @@ fun testPlace(
     operatingTime = operatingTime,
     closedDays = closedDays,
     homepage = null,
-    petInfo = PetInfo(allowedPetSize, null, indoorAllowed = indoorAllowed, outdoorAllowed = outdoorAllowed),
+    petInfo = PetInfo(allowedPetSize, null, indoorAllowed = indoorAllowed, outdoorAllowed = outdoorAllowed, maxPetKg = maxPetKg),
 )

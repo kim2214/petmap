@@ -42,11 +42,12 @@ class FakePlaceRepository : PlaceRepository {
         query: String,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter> = emptySet(),
+        myPetKg: Double? = null,
     ): List<Place> =
         filter { p ->
             (query.isBlank() || p.name.contains(query, ignoreCase = true)) &&
                 (categories.isEmpty() || p.category in categories) &&
-                petFilters.all { it.matches(p) }
+                petFilters.all { it.matches(p, myPetKg) }
         }
 
     /** 설정하면 ensureSeeded 가 이 예외를 던진다 (에셋 DB 준비 실패 시뮬레이션) */
@@ -69,12 +70,13 @@ class FakePlaceRepository : PlaceRepository {
         radiusKm: Double,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         limit: Int,
     ): List<Place> {
         lastCategories = categories
         lastPetFilters = petFilters
         lastBoundsLimit = limit
-        return dataset.filterBy("", categories, petFilters).take(limit)
+        return dataset.filterBy("", categories, petFilters, myPetKg).take(limit)
     }
 
     override suspend fun getClusterCells(
@@ -83,6 +85,7 @@ class FakePlaceRepository : PlaceRepository {
         radiusKm: Double,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         gridDivisions: Int,
         limit: Int,
     ): List<GeoClusterCell> {
@@ -90,7 +93,7 @@ class FakePlaceRepository : PlaceRepository {
         lastPetFilters = petFilters
         lastClusterCellsLimit = limit
         // 소수 1자리 그리드로 묶어 셀별 개수 집계(테스트용 근사)
-        return dataset.filterBy("", categories, petFilters)
+        return dataset.filterBy("", categories, petFilters, myPetKg)
             .groupBy { Math.round(it.lat * 10) / 10.0 to Math.round(it.lng * 10) / 10.0 }
             .map { (key, members) ->
                 GeoClusterCell(
@@ -106,11 +109,12 @@ class FakePlaceRepository : PlaceRepository {
         cell: GeoClusterCell,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         limit: Int,
     ): List<Place> {
         lastCategories = categories
         lastPetFilters = petFilters
-        return dataset.filterBy("", categories, petFilters)
+        return dataset.filterBy("", categories, petFilters, myPetKg)
             .filter { it.lat in cell.minLat..cell.maxLat && it.lng in cell.minLng..cell.maxLng }
             .take(limit)
     }
@@ -123,6 +127,7 @@ class FakePlaceRepository : PlaceRepository {
         query: String,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         limit: Int,
     ): List<Place> {
         searchCount++
@@ -130,7 +135,7 @@ class FakePlaceRepository : PlaceRepository {
         lastCategories = categories
         lastSearchPetFilters = petFilters
         searchGate?.await()
-        return dataset.filterBy(query, categories, petFilters).take(limit)
+        return dataset.filterBy(query, categories, petFilters, myPetKg).take(limit)
     }
 
     override suspend fun searchNearby(

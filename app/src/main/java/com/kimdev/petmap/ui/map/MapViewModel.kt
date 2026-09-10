@@ -8,6 +8,7 @@ import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.common.DefaultDispatcher
 import com.kimdev.petmap.core.location.LocationProvider
 import com.kimdev.petmap.core.location.UserLocation
+import com.kimdev.petmap.data.local.PetProfileStore
 import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -45,6 +47,8 @@ data class MapUiState(
     val selectedCategories: Set<PlaceCategory> = emptySet(),
     /** 반려동물 동반 조건 (모든 크기/실내/실외). 여러 개면 AND, SQL 단계에서 걸린다 */
     val petFilters: Set<PetFilter> = emptySet(),
+    /** 설정에 등록한 내 반려견 체중(kg). null 이면 '내 아이 가능' 칩이 등록 다이얼로그를 먼저 띄운다 */
+    val myPetKg: Double? = null,
     val favoriteIds: Set<String> = emptySet(),
     val searchQuery: String = "",
     val searchResults: List<Place> = emptyList(),
@@ -88,6 +92,7 @@ sealed interface MapEvent {
 class MapViewModel @Inject constructor(
     private val repository: PlaceRepository,
     private val recentSearchStore: RecentSearchStore,
+    private val petProfileStore: PetProfileStore,
     private val locationProvider: LocationProvider,
     @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     private val savedStateHandle: SavedStateHandle,
@@ -98,6 +103,7 @@ class MapViewModel @Inject constructor(
         MapUiState(
             selectedCategories = SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]),
             petFilters = SavedFilters.namesToPetFilters(savedStateHandle[KEY_PET_FILTERS]),
+            myPetKg = petProfileStore.weightKg.value,
         )
     )
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
@@ -185,6 +191,16 @@ class MapViewModel @Inject constructor(
                 .onEach { savedStateHandle[KEY_PET_FILTERS] = SavedFilters.petFiltersToNames(it) }
                 .collect {}
         }
+        // 설정에서 체중이 바뀌면(등록 해제 포함) '내 아이' 필터가 켜진 경우 재조회한다
+        viewModelScope.launch {
+            petProfileStore.weightKg.drop(1).collect { kg ->
+                val wasOn = PetFilter.MY_PET in _uiState.value.petFilters
+                _uiState.update {
+                    it.copy(myPetKg = kg, petFilters = if (kg == null) it.petFilters - PetFilter.MY_PET else it.petFilters)
+                }
+                if (wasOn) fetch()
+            }
+        }
     }
 
     /**
@@ -257,6 +273,7 @@ class MapViewModel @Inject constructor(
                     query,
                     _uiState.value.selectedCategories,
                     _uiState.value.petFilters,
+                    myPetKg = _uiState.value.myPetKg,
                     limit = SEARCH_MARKERS_LIMIT + 1,
                 )
             }.onSuccess { found ->
@@ -407,6 +424,13 @@ class MapViewModel @Inject constructor(
         fetch()
     }
 
+    /** '내 아이 가능' 칩에서 체중을 등록/수정하면 저장과 함께 필터를 켠다 (설정 화면과 같은 저장소) */
+    fun setMyPetWeight(kg: Double) {
+        petProfileStore.setWeight(kg)
+        _uiState.update { it.copy(myPetKg = kg, petFilters = it.petFilters + PetFilter.MY_PET) }
+        fetch()
+    }
+
     /** 현재 카메라 위치 기준으로 DB 조회 후 클러스터링. canResearch 해제. */
     private fun fetch() {
         if (_uiState.value.isSeeding || _uiState.value.seedFailed) return
@@ -440,6 +464,7 @@ class MapViewModel @Inject constructor(
                 radiusKm = radiusForZoom(loadedZoom),
                 categories = _uiState.value.selectedCategories,
                 petFilters = _uiState.value.petFilters,
+                myPetKg = _uiState.value.myPetKg,
                 limit = EXACT_LIMIT,
             )
         }.onSuccess { loaded ->
@@ -484,6 +509,7 @@ class MapViewModel @Inject constructor(
                     cell = cell,
                     categories = _uiState.value.selectedCategories,
                     petFilters = _uiState.value.petFilters,
+                    myPetKg = _uiState.value.myPetKg,
                     // 호출부에서 개수가 적을 때만 펼치지만, 집계 이후 데이터가 달라졌을 때를 대비한 상한
                     limit = AGGREGATE_EXPAND_MAX + 1,
                 )
@@ -505,6 +531,7 @@ class MapViewModel @Inject constructor(
                 radiusKm = radiusForZoom(loadedZoom),
                 categories = _uiState.value.selectedCategories,
                 petFilters = _uiState.value.petFilters,
+                myPetKg = _uiState.value.myPetKg,
                 gridDivisions = GRID_DIVISIONS,
                 // 격자 수보다 작으면 어떤 셀이 버려지는지 정의되지 않아 지역이 통째로 비어 보인다.
                 limit = GRID_DIVISIONS * GRID_DIVISIONS,

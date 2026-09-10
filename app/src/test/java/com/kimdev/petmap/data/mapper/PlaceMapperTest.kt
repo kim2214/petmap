@@ -32,6 +32,7 @@ class PlaceMapperTest {
         fee = null,
         petFee = null,
         description = null,
+        maxPetKg = null,
     )
 
     @Test

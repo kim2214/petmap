@@ -29,8 +29,9 @@ com.kimdev.petmap
 │   │   ├── PlaceFts              # FTS4 유니그램 색인 생성/질의 변환
 │   │   ├── RecentSearchStore     # 최근 검색어 (SharedPreferences)
 │   │   ├── ThemeStore            # 라이트/다크/시스템 테마 (SharedPreferences)
+│   │   ├── PetProfileStore       # 내 반려견 체중 (SharedPreferences) → PetFilter.MY_PET 기준값
 │   │   ├── dao/    PlaceDao(뷰포트·그리드 집계·FTS 검색), FavoriteDao, MetaDao
-│   │   └── entity/ PlaceEntity(약 24,700행, 실내/실외 nullable), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
+│   │   └── entity/ PlaceEntity(약 24,700행, 실내/실외 nullable, maxPetKg), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
 │   ├── mapper/     Entity ↔ Domain 변환
 │   └── repository/ PlaceRepositoryImpl
 │
@@ -45,7 +46,7 @@ com.kimdev.petmap
     ├── detail/     DetailScreen·DetailViewModel (상세 + 미니맵 + 액션)
     ├── settings/   SettingsScreen·SettingsViewModel(테마), LicensesScreen(오픈소스 고지)
     ├── onboarding/ OnboardingScreen (최초 실행 + 설정에서 다시 보기)
-    ├── components/ BannerAd, CategoryFilterRow, CategoryVisuals, EmptyState,
+    ├── components/ BannerAd, CategoryFilterRow, CategoryVisuals, EmptyState, PetWeightDialog(체중 입력, 설정·칩 공용),
 │   │              TabScreenScaffold(목록·즐겨찾기 공통 골격), PetFilterChips, LocationPermission(ui/common)
     │               LocationSettingsDialog, PlaceCard, PlacePreviewSheet, SearchTextField
     ├── common/     SavedFilters (SavedStateHandle 필터 직렬화)
@@ -65,7 +66,7 @@ com.kimdev.petmap
 ## 데이터 흐름 (단방향)
 
 ```
-assets/petmap.db (프리빌트, v6·FTS·meta 동봉) ─ createFromAsset ─→ Room
+assets/petmap.db (프리빌트, v7·FTS·meta 동봉) ─ createFromAsset ─→ Room
                                                               │
 Room(places + favorites) ─→ PlaceRepositoryImpl ─→ ViewModel(StateFlow) ─→ Compose UI
 ```
@@ -104,6 +105,5 @@ naver.map.clientId=네이버클라우드_Maps_ClientID
 
 ## 다음 확장 포인트
 
-- 내 반려견 크기 프로필 기반 필터("10kg 이하" 등 크기 문자열 파싱)
 - 시/도 → 시/군/구 지역 브라우징 (도로명주소 접두어)
 - 새 장소 제보 진입점(설정·검색 0건 빈 상태)

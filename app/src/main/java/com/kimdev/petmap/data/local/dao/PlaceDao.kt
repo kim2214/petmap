@@ -23,7 +23,8 @@ interface PlaceDao {
      * 지도 뷰포트(위/경도 박스) 안의 장소. 중심에서 가까운 순으로 제한.
      * 카테고리 다중 필터: catCount 가 0 이면 전체, 아니면 category IN (cats).
      * (cats 는 빈 리스트일 때 SQL 오류가 나므로 항상 1개 이상 전달)
-     * 동반 조건(anySize/indoor/outdoor): 켜진 조건은 AND 로 걸리며 정보 없는 장소는 제외된다
+     * 동반 조건(anySize/indoor/outdoor/myPetKg): 켜진 조건은 AND 로 걸리며 정보 없는 장소는 제외된다.
+     * myPetKg(내 반려견 체중)는 null 이면 조건 없음, 아니면 maxPetKg >= 체중(maxPetKg NULL 은 제외)
      * ([com.kimdev.petmap.domain.model.PetFilter.matches] 와 같은 정책; sizeAll = PetFilter.SIZE_ALL).
      * 정렬: 경도 1도는 위도 1도보다 실제 거리가 짧으므로 lng 항에 cos²(lat)(=lngScaleSq)를 곱해 보정.
      */
@@ -36,6 +37,7 @@ interface PlaceDao {
           AND (:anySize = 0 OR allowedPetSize = :sizeAll)
           AND (:indoor = 0 OR indoorAllowed = 1)
           AND (:outdoor = 0 OR outdoorAllowed = 1)
+          AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
         ORDER BY ((lat - :centerLat) * (lat - :centerLat)
                   + (lng - :centerLng) * (lng - :centerLng) * :lngScaleSq) ASC
         LIMIT :limit
@@ -55,6 +57,7 @@ interface PlaceDao {
         indoor: Boolean,
         outdoor: Boolean,
         sizeAll: String,
+        myPetKg: Double?,
         limit: Int,
     ): List<PlaceEntity>
 
@@ -74,6 +77,7 @@ interface PlaceDao {
           AND (:anySize = 0 OR allowedPetSize = :sizeAll)
           AND (:indoor = 0 OR indoorAllowed = 1)
           AND (:outdoor = 0 OR outdoorAllowed = 1)
+          AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
         GROUP BY CAST((lat - :minLat) / :latStep AS INTEGER),
                  CAST((lng - :minLng) / :lngStep AS INTEGER)
         ORDER BY cnt DESC
@@ -93,6 +97,7 @@ interface PlaceDao {
         indoor: Boolean,
         outdoor: Boolean,
         sizeAll: String,
+        myPetKg: Double?,
         limit: Int,
     ): List<ClusterCell>
 
@@ -105,6 +110,7 @@ interface PlaceDao {
           AND (:anySize = 0 OR allowedPetSize = :sizeAll)
           AND (:indoor = 0 OR indoorAllowed = 1)
           AND (:outdoor = 0 OR outdoorAllowed = 1)
+          AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
         ORDER BY name ASC
         LIMIT :limit
         """
@@ -116,6 +122,7 @@ interface PlaceDao {
         indoor: Boolean,
         outdoor: Boolean,
         sizeAll: String,
+        myPetKg: Double?,
         limit: Int,
     ): List<PlaceEntity>
 

@@ -42,7 +42,17 @@ data class PetInfo(
     val indoorAllowed: Boolean?,
     /** 실외 동반 가능 여부. null = 정보 없음 */
     val outdoorAllowed: Boolean?,
+    /** 입장 가능 최대 체중(kg). 제한 없음은 [NO_LIMIT_KG], null = 정보 없음 */
+    val maxPetKg: Double? = null,
 ) {
+    /** [myWeightKg] 인 반려견이 들어갈 수 있나. 정보 없으면 false(잘못된 추정으로 헛걸음시키지 않는다) */
+    fun allowsWeight(myWeightKg: Double): Boolean = maxPetKg != null && maxPetKg >= myWeightKg
+
+    companion object {
+        /** build_db.py 가 "모두 가능"/"대형" 에 넣는 값 */
+        const val NO_LIMIT_KG = 999.0
+    }
+
     /** 동반 조건 정보가 하나도 없는 장소 (크기·제한·실내외 모두 미상) */
     val isUnknown: Boolean
         get() = allowedPetSize == null && restriction == null && indoorAllowed == null && outdoorAllowed == null

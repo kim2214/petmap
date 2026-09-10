@@ -50,6 +50,7 @@ import com.kimdev.petmap.ui.common.rememberLocationPermission
 import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.TabScreenScaffold
 import com.kimdev.petmap.ui.components.PetFilterChips
+import com.kimdev.petmap.ui.components.PetWeightDialog
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlaceCardSkeleton
 import com.kimdev.petmap.ui.components.PlaceListSkeleton
@@ -98,6 +99,8 @@ fun ListScreen(
     }
 
     var pendingDistanceSort by rememberSaveable { mutableStateOf(false) }
+    // '내 아이 가능' 칩을 체중 미등록 상태에서 눌렀을 때의 등록 다이얼로그
+    var showPetWeightDialog by rememberSaveable { mutableStateOf(false) }
 
     // "거리순" 칩에서 위치 권한을 바로 요청할 수 있게 한다 (지도 탭을 안 거쳐도 됨)
     val locationPermission = rememberLocationPermission(
@@ -193,7 +196,12 @@ fun ListScreen(
                         leadingIcon = leadingCheck(state.openNowOnly),
                     )
                     // 반려동물 동반 조건 (모든 크기/실내/실외) — 지도와 같은 칩
-                    PetFilterChips(selected = state.petFilters, onToggle = viewModel::togglePetFilter)
+                    PetFilterChips(
+                        selected = state.petFilters,
+                        onToggle = viewModel::togglePetFilter,
+                        myPetKg = state.myPetKg,
+                        onNeedWeight = { showPetWeightDialog = true },
+                    )
                 }
                 // 검색어·필터를 좁힌 효과를 가늠할 수 있게 결과 개수를 보여준다
                 if (!state.isLoading && state.places.isNotEmpty()) {
@@ -324,6 +332,17 @@ fun ListScreen(
                 }
             }
         }
+    }
+
+    if (showPetWeightDialog) {
+        PetWeightDialog(
+            current = state.myPetKg,
+            onSave = { kg ->
+                viewModel.setMyPetWeight(kg)
+                showPetWeightDialog = false
+            },
+            onDismiss = { showPetWeightDialog = false },
+        )
     }
 }
 

@@ -42,6 +42,8 @@ description: 공공데이터 CSV로 프리빌트 Room DB(app/src/main/assets/pet
      이 컬럼이 없는 데이터셋(예: 캠핑)은 에러로 거부된다.
    - 카테고리 원문 → enum 매핑은 `category_name()`이 단일 소스다. CSV의 카테고리 컬럼 값이
      새로 등장하면 이 매핑을 갱신할 것.
+   - `maxPetKg` 는 `parse_max_pet_kg()` 가 "입장 가능 동물 크기" 문구에서 뽑는다("10kg 미만" 9.99, "소형" 10, "중형" 25,
+     "모두 가능"/"대형" 999, 판단 불가 NULL). 규칙을 바꾸면 `python3 -m unittest tools/test_build_db.py` 로 확인.
    - 실내/실외 여부는 Y/N → 1/0, 그 외·컬럼 없음 → **NULL(정보 없음)**. 앱은 NULL 을 "불가"가 아니라
      미표시/안내로 다룬다. 제한사항이 "야외만/실외만"이면 실내 0·실외 1 로 정규화한다.
    - FTS 색인(`places_fts`)은 스크립트가 함께 생성해 동봉한다. `fts_index()`는 앱의

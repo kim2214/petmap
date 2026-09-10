@@ -83,6 +83,7 @@ import com.kimdev.petmap.domain.util.distanceMeters
 import com.kimdev.petmap.core.util.openNaverDirections
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.PetFilterChips
+import com.kimdev.petmap.ui.components.PetWeightDialog
 import androidx.compose.foundation.horizontalScroll
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.RecentSearchList
@@ -167,6 +168,8 @@ fun MapScreen(
     // 지도 유형 (기본/위성/지형). 공원·여행지 탐색 시 실제 지형 확인용.
     var mapType by rememberSaveable { mutableStateOf(MapType.Basic) }
     var showMapTypeMenu by remember { mutableStateOf(false) }
+    // '내 아이 가능' 칩을 체중 미등록 상태에서 눌렀을 때의 등록 다이얼로그
+    var showPetWeightDialog by rememberSaveable { mutableStateOf(false) }
     // 권한이 "이미 있음"이 아니라 "처음 확인/방금 허용"일 때만 Follow 를 켜기 위한 플래그
     var followInitialized by rememberSaveable { mutableStateOf(false) }
     val granted = locationPermission.granted
@@ -455,7 +458,12 @@ fun MapScreen(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            PetFilterChips(selected = state.petFilters, onToggle = viewModel::togglePetFilter)
+                            PetFilterChips(
+                                selected = state.petFilters,
+                                onToggle = viewModel::togglePetFilter,
+                                myPetKg = state.myPetKg,
+                                onNeedWeight = { showPetWeightDialog = true },
+                            )
                         }
                     }
                 }
@@ -673,6 +681,17 @@ fun MapScreen(
                 }
             }
         }
+    }
+
+    if (showPetWeightDialog) {
+        PetWeightDialog(
+            current = state.myPetKg,
+            onSave = { kg ->
+                viewModel.setMyPetWeight(kg)
+                showPetWeightDialog = false
+            },
+            onDismiss = { showPetWeightDialog = false },
+        )
     }
 }
 
