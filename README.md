@@ -3,7 +3,7 @@
 지도를 이용해 **반려동물과 함께 이용 가능한 카페·식당·시설**을 찾아주는 Android 앱.
 공공데이터(한국문화정보원 문화시설·액티비티, 식약처 반려동물 동반출입 음식점)를 정제한 약 24,700개 장소를 지도와 목록으로 보여줍니다.
 
-> 현재 상태: **스토어 배포 운영 중** (versionName 1.8 / versionCode 9) — AdMob 광고·UMP 동의·Crashlytics·인앱 리뷰 연동.
+> 현재 상태: **스토어 배포 운영 중** (versionName 1.9 / versionCode 10) — AdMob 광고·UMP 동의·Crashlytics·인앱 리뷰 연동.
 
 ## ✨ 주요 기능
 
