@@ -111,8 +111,9 @@ fun Context.openNaverDirections(place: Place) {
 private fun Context.petSummary(place: Place): String? {
     val parts = buildList {
         place.petInfo.allowedPetSize?.let { add(it) }
-        add(getString(if (place.petInfo.indoorAllowed) R.string.pet_indoor_allowed else R.string.pet_indoor_not_allowed))
-        add(getString(if (place.petInfo.outdoorAllowed) R.string.pet_outdoor_allowed else R.string.pet_outdoor_not_allowed))
+        // null(정보 없음)은 생략 — "불가"로 잘못 전달하지 않는다
+        place.petInfo.indoorAllowed?.let { add(getString(if (it) R.string.pet_indoor_allowed else R.string.pet_indoor_not_allowed)) }
+        place.petInfo.outdoorAllowed?.let { add(getString(if (it) R.string.pet_outdoor_allowed else R.string.pet_outdoor_not_allowed)) }
     }
     return parts.joinToString(" · ").ifBlank { null }
 }

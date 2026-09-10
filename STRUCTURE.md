@@ -30,7 +30,7 @@ com.kimdev.petmap
 │   │   ├── RecentSearchStore     # 최근 검색어 (SharedPreferences)
 │   │   ├── ThemeStore            # 라이트/다크/시스템 테마 (SharedPreferences)
 │   │   ├── dao/    PlaceDao(뷰포트·그리드 집계·FTS 검색), FavoriteDao, MetaDao
-│   │   └── entity/ PlaceEntity(22,127행), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
+│   │   └── entity/ PlaceEntity(약 24,700행, 실내/실외 nullable), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
 │   ├── mapper/     Entity ↔ Domain 변환
 │   └── repository/ PlaceRepositoryImpl
 │
@@ -65,7 +65,7 @@ com.kimdev.petmap
 ## 데이터 흐름 (단방향)
 
 ```
-assets/petmap.db (프리빌트, v5·FTS·meta 동봉) ─ createFromAsset ─→ Room
+assets/petmap.db (프리빌트, v6·FTS·meta 동봉) ─ createFromAsset ─→ Room
                                                               │
 Room(places + favorites) ─→ PlaceRepositoryImpl ─→ ViewModel(StateFlow) ─→ Compose UI
 ```
@@ -104,7 +104,6 @@ naver.map.clientId=네이버클라우드_Maps_ClientID
 
 ## 다음 확장 포인트
 
-- 목록 페이징 (현재 상한 200건) 및 지도 bounds 기반 페이징
-- 상세 화면 딥링크 (공유 → 앱 진입)
-- 즐겨찾기 백업 분리 (현재 Auto Backup 에서 장소 DB 와 함께 제외됨)
-- one-shot UI 이벤트를 상태에서 Channel/SharedFlow 로 분리
+- 내 반려견 크기 프로필 기반 필터("10kg 이하" 등 크기 문자열 파싱)
+- 시/도 → 시/군/구 지역 브라우징 (도로명주소 접두어)
+- 새 장소 제보 진입점(설정·검색 0건 빈 상태)

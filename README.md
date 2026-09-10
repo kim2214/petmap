@@ -1,9 +1,9 @@
 # 🐾 PetMap
 
 지도를 이용해 **반려동물과 함께 이용 가능한 카페·식당·시설**을 찾아주는 Android 앱.
-공공데이터(한국문화정보원)를 정제한 약 22,127개 장소를 지도와 목록으로 보여줍니다.
+공공데이터(한국문화정보원 문화시설·액티비티, 식약처 반려동물 동반출입 음식점)를 정제한 약 24,700개 장소를 지도와 목록으로 보여줍니다.
 
-> 현재 상태: **스토어 배포 운영 중** (versionName 1.4 / versionCode 5) — AdMob 광고·UMP 동의·Crashlytics·인앱 리뷰 연동.
+> 현재 상태: **스토어 배포 운영 중** (versionName 1.8 / versionCode 9) — AdMob 광고·UMP 동의·Crashlytics·인앱 리뷰 연동.
 
 ## ✨ 주요 기능
 
@@ -18,7 +18,7 @@
 
 ## 🛠️ 기술 스택
 
-- **빌드 툴체인**: AGP 9.x · Gradle 9.3.1 · Kotlin 2.3 · KSP 2.3 · Hilt 2.57 · Room 2.8 (정확한 버전은 `gradle/libs.versions.toml`)
+- **빌드 툴체인**: AGP 9.x · Gradle 9.6.1 · Kotlin 2.3 · KSP 2.3 · Hilt 2.60 · Room 2.8 (정확한 버전은 `gradle/libs.versions.toml`)
 - **언어/UI**: Kotlin, Jetpack Compose, Material3
 - **아키텍처**: 단일 Activity + Compose Navigation, MVVM + Repository, 계층 분리(`data` / `domain` / `ui`)
 - **DI**: Hilt
@@ -46,9 +46,9 @@ com.kimdev.petmap
 ## 🚀 시작하기
 
 ### 요구 사항
-- Android Studio (최신 버전 권장) — 빌드 툴체인 **AGP 9.x / Gradle 9.3.1**
+- Android Studio (최신 버전 권장) — 빌드 툴체인 **AGP 9.x / Gradle 9.6.1**
 - JDK 17+ (Gradle 실행용, 바이트코드는 Java 11 타깃)
-- minSdk 24 / targetSdk 36 / compileSdk 36
+- minSdk 24 / targetSdk 36 / compileSdk 37
 
 ### 1. 클론
 ```bash
@@ -114,7 +114,7 @@ Crashlytics·Analytics 가 연동돼 있으나, **본인 Firebase 프로젝트�
 
 API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 소스로** 사용한다.
 
-- `app/src/main/assets/petmap.db` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" + "문화 여가 활동 시설(액티비티)" 데이터셋을 정제해 넣은 SQLite DB(v5 — 주차·이용료·애견 추가요금·장소설명, `meta` 데이터 기준일 포함). `이름+좌표` 기준 중복 제거 후 **동반 가능(Y) 장소만 약 22,127개**를 수록한다(동반 불가 N 은 제외).
+- `app/src/main/assets/petmap.db` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" + "문화 여가 활동 시설(액티비티)" 데이터셋(+ 선택: 식약처 "반려동물 동반출입 음식점" 지오코딩 결과)을 정제해 넣은 SQLite DB(v6 — 주차·이용료·애견 추가요금·장소설명, `meta` 데이터 기준일 포함, 실내/실외 여부는 **nullable = 정보 없음**). `이름+좌표`(및 같은 이름 150m 이내) 기준 중복 제거 후 **동반 가능(Y) 장소만 약 24,700개**를 수록한다(동반 불가 N 은 제외). 식약처 음식점 약 2,640곳(식당 1,836·카페/제과 약 800)은 2026-03 시행 반려동물 동반출입 음식점 등록 업소로, 좌표는 네이버 Geocoding 결과이며 크기·실내외 조건은 정보 없음(null)으로 들어간다.
 - 첫 실행 시 Room `createFromAsset` 로 에셋 DB를 즉시 로드(파싱/시딩/색인 구축 없음).
 - 지도/목록/검색은 모두 **로컬 Room 쿼리** — 네트워크 경로 자체가 없다. 데이터 갱신은 아래 재생성 절차로만 이뤄진다.
 - **기존 설치의 데이터 갱신은 DB 버전 업으로 전달**된다: 마이그레이션 대신 Room 이 구버전 파일을 지우고 에셋을
@@ -139,14 +139,19 @@ API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 �
 ### 📦 데이터 갱신 절차
 데이터셋이 갱신되면 아래로 프리빌트 DB를 다시 만든다.
 
-1. [공공데이터포털](https://www.data.go.kr)에서 "전국 반려동물 동반 가능 문화시설"과
-   "전국 문화 여가 활동 시설(액티비티)" CSV를 새로 받는다.
-2. 빌드 스크립트 실행 → `assets/petmap.db` 재생성 (여러 CSV 를 순서대로, 먼저 준 파일이 중복 시 우선):
+1. [공공데이터포털](https://www.data.go.kr)에서 "전국 반려동물 동반 가능 문화시설"(15111389)과
+   "전국 문화 여가 활동 시설(액티비티)"(15111393) CSV를 새로 받는다.
+2. (선택) 식약처 반려동물 동반출입 음식점 목록을 지오코딩해 CSV 로 만든다 — 네이버 Geocoding(Client Secret) 또는
+   카카오 REST 키가 `local.properties`/환경변수에 있어야 한다:
    ```bash
-   python3 tools/build_db.py "<반려동물 CSV>" "<액티비티 CSV>"
+   python3 tools/fetch_restaurants.py            # → tools/data/restaurants.csv (좌표 캐시 재사용)
+   ```
+3. 빌드 스크립트 실행 → `assets/petmap.db` 재생성 (여러 CSV 를 순서대로, 먼저 준 파일이 중복 시 우선):
+   ```bash
+   python3 tools/build_db.py --data-date=YYYY-MM-DD "<반려동물 CSV>" "<액티비티 CSV>" [tools/data/restaurants.csv]
    # 출력: app/src/main/assets/petmap.db (고유 장소 N건)
    ```
-3. 앱을 다시 빌드/설치하면 새 데이터가 반영된다.
+4. `PetMapDatabase.VERSION` 을 올리고(`/rebuild-db` 참고) 앱을 다시 빌드/설치하면 새 데이터가 반영된다.
 
 > 스크립트는 앱의 Room 스키마(테이블·인덱스·`room_master_table` identity_hash·`user_version`)와 FTS 색인을 그대로 재현하므로 `createFromAsset` 가 그대로 로드한다.
 > **주의**: 엔티티(`PlaceEntity`/`FavoriteEntity`) 스키마를 바꾸면 identity_hash 가 달라진다. 기준값은 빌드가 갱신하는 `app/schemas/**/<version>.json` 의 `identityHash` 이며, `tools/build_db.py` 의 `ROOM_IDENTITY_HASH`(및 `DB_VERSION`)를 함께 반영해야 한다. 자세한 절차는 `/rebuild-db` 스킬 참고.

@@ -30,8 +30,10 @@ data class PlaceEntity(
     val homepage: String?,
     val allowedPetSize: String?,
     val restriction: String?,
-    val indoorAllowed: Boolean,
-    val outdoorAllowed: Boolean,
+    // v6: nullable. 원본에 실내/실외 컬럼이 없는 데이터셋(액티비티·식약처 음식점)은 null = 정보 없음.
+    // 이전엔 NOT NULL 0 이라 "동반 불가"로 표시되는 오류가 있었다(레저 996건).
+    val indoorAllowed: Boolean?,
+    val outdoorAllowed: Boolean?,
     // v4 추가 컬럼. 원본에 값이 없거나 노이즈("변동", 카테고리명과 동일한 설명 등)면
     // build_db.py 가 null 로 정제해 넣는다. 구버전 설치(마이그레이션 경로)는 전부 null.
     val parkingAvailable: Boolean?,

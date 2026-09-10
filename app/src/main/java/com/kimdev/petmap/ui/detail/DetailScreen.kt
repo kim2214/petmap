@@ -250,18 +250,32 @@ private fun DetailContent(
             place.description?.let { InfoRow(Icons.AutoMirrored.Filled.Notes, it, tint = accent) }
 
             SectionTitle(stringResource(R.string.section_pet_info))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                place.petInfo.allowedPetSize?.let { Pill(stringResource(R.string.pet_size_format, it), highlight = true) }
-                Pill(
-                    stringResource(if (place.petInfo.indoorAllowed) R.string.pet_indoor_allowed else R.string.pet_indoor_not_allowed),
-                    highlight = place.petInfo.indoorAllowed,
+            // 실내/실외는 null(정보 없음)이면 표시하지 않는다 — "불가"로 오해시키지 않기 위함.
+            // 동반 조건이 하나도 없으면 안내 한 줄로 대신한다(원본 데이터셋에 해당 컬럼이 없는 경우).
+            if (place.petInfo.isUnknown && place.petFee == null) {
+                Text(
+                    stringResource(R.string.pet_info_unknown),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Pill(
-                    stringResource(if (place.petInfo.outdoorAllowed) R.string.pet_outdoor_allowed else R.string.pet_outdoor_not_allowed),
-                    highlight = place.petInfo.outdoorAllowed,
-                )
-                place.petInfo.restriction?.let { Pill(it, highlight = false) }
-                place.petFee?.let { Pill(stringResource(R.string.pet_fee_format, it), highlight = false) }
+            } else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    place.petInfo.allowedPetSize?.let { Pill(stringResource(R.string.pet_size_format, it), highlight = true) }
+                    place.petInfo.indoorAllowed?.let { indoor ->
+                        Pill(
+                            stringResource(if (indoor) R.string.pet_indoor_allowed else R.string.pet_indoor_not_allowed),
+                            highlight = indoor,
+                        )
+                    }
+                    place.petInfo.outdoorAllowed?.let { outdoor ->
+                        Pill(
+                            stringResource(if (outdoor) R.string.pet_outdoor_allowed else R.string.pet_outdoor_not_allowed),
+                            highlight = outdoor,
+                        )
+                    }
+                    place.petInfo.restriction?.let { Pill(it, highlight = false) }
+                    place.petFee?.let { Pill(stringResource(R.string.pet_fee_format, it), highlight = false) }
+                }
             }
 
             // 즐겨찾기한 장소에만 메모를 남길 수 있다. 해제하면 favorites 행이 지워져 메모도 함께 사라진다

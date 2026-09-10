@@ -65,6 +65,7 @@
     <string name="pet_indoor_not_allowed">실내 불가</string>
     <string name="pet_outdoor_allowed">실외 가능</string>
     <string name="pet_outdoor_not_allowed">실외 불가</string>
+    <string name="pet_info_unknown">동반 조건 상세 정보가 없어요. 방문 전 업체에 확인해 주세요.</string>
     <string name="pet_size_format">🐾 %1$s</string>
 
     <!-- 온보딩 -->
@@ -184,7 +185,7 @@
     <string name="settings_email_subject">[펫맵] 문의</string>
     <string name="settings_section_data_source">데이터 출처</string>
     <string name="settings_data_source">한국문화정보원 공공데이터</string>
-    <string name="settings_data_source_desc">전국 반려동물 동반 가능 문화시설</string>
+    <string name="settings_data_source_desc">한국문화정보원 반려동물 동반 문화시설·액티비티, 식약처 반려동물 동반출입 음식점</string>
     <string name="settings_data_updated">데이터 갱신일</string>
     <string name="settings_data_updated_format">%1$s 기준 · %2$s곳 수록</string>
     <string name="settings_data_count_format">%1$s곳 수록</string>

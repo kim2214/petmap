@@ -92,8 +92,8 @@ fun PlacePreviewSheet(
         val outdoorLabel = stringResource(R.string.pet_outdoor_allowed)
         val petSummary = buildList {
             place.petInfo.allowedPetSize?.let { add(it) }
-            if (place.petInfo.indoorAllowed) add(indoorLabel)
-            if (place.petInfo.outdoorAllowed) add(outdoorLabel)
+            if (place.petInfo.indoorAllowed == true) add(indoorLabel)
+            if (place.petInfo.outdoorAllowed == true) add(outdoorLabel)
         }.joinToString(" · ")
         if (petSummary.isNotEmpty()) {
             Text(

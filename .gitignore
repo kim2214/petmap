@@ -30,3 +30,4 @@ keystore.properties
 google-services.json
 app/google-services*.json
 __pycache__/
+tools/data/

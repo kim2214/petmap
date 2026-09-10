@@ -18,6 +18,12 @@
   **반드시 있어야 하며, 값이 Y 인 행만 넣는다.** 컬럼이 없는 데이터셋(예: 캠핑)은
   동반 가능 여부를 판별할 수 없으므로 에러로 거부한다.
 - 전화번호/홈페이지는 데이터셋별 컬럼명 차이를 흡수한다(시설 전화번호, 웹사이트).
+- 실내/실외 여부("장소(실내) 여부"/"장소(실외)여부")는 Y→1, N→0, 그 외·컬럼 없음 → NULL(정보 없음).
+  v5 까지는 NOT NULL 0 이라 컬럼이 없는 데이터셋(액티비티)이 "동반 불가"로 표시됐다.
+  제한사항이 "야외만/실외만 동반 가능"이면 실내=0·실외=1 로 정규화한다(원본 34건이 실내 Y 로 모순).
+- 식약처 "반려동물 동반출입 음식점" 목록은 tools/fetch_restaurants.py 가 지오코딩해 같은 컬럼 형식의
+  CSV 로 만들어 준다. 좌표가 지오코딩 결과라 기본 데이터셋과 좌표가 조금 달라도 같은 가게일 수 있으므로,
+  **정규화한 이름이 같고 150m 안**이면 중복으로 보고 먼저 온 파일을 유지한다.
 
 버전 주의 (데이터 갱신 = 버전 업): 앱은 마이그레이션 없이 **DB 버전이 오르면 기존 파일을 지우고
 에셋을 재복사**한다(PetMapDatabase.VERSION / RECREATED_FROM, 즐겨찾기는 미러로 보존·복원).
@@ -38,12 +44,14 @@ androidTest 의 PetMapDatabaseAssetTest 가 실패한다.
 """
 import csv
 import datetime
+import math
 import os
+import re
 import sqlite3
 import sys
 
-ROOM_IDENTITY_HASH = "beb222eb3e74c5dd04067ecdc0d552f6"  # app/schemas/**/5.json 의 identityHash
-DB_VERSION = 5  # v5: meta 테이블(데이터 기준일). 앱 PetMapDatabase.VERSION 과 동일
+ROOM_IDENTITY_HASH = "569b4fd80162fae214d1c81784d21f2e"  # app/schemas/**/6.json 의 identityHash
+DB_VERSION = 6  # v6: indoorAllowed/outdoorAllowed nullable(정보 없음) + 식약처 음식점. 앱 PetMapDatabase.VERSION 과 동일
 
 # 앱이 읽는 meta 키 (MetaEntity.KEY_DATA_DATE)
 META_KEY_DATA_DATE = "data_date"
@@ -57,7 +65,7 @@ DDL = [
     "CREATE TABLE `places` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, "
     "`roadAddress` TEXT NOT NULL, `lotAddress` TEXT NOT NULL, `lat` REAL NOT NULL, `lng` REAL NOT NULL, "
     "`phone` TEXT, `operatingTime` TEXT, `closedDays` TEXT, `homepage` TEXT, `allowedPetSize` TEXT, "
-    "`restriction` TEXT, `indoorAllowed` INTEGER NOT NULL, `outdoorAllowed` INTEGER NOT NULL, "
+    "`restriction` TEXT, `indoorAllowed` INTEGER, `outdoorAllowed` INTEGER, "
     "`parkingAvailable` INTEGER, `fee` TEXT, `petFee` TEXT, `description` TEXT, PRIMARY KEY(`id`))",
     "CREATE INDEX `index_places_lat_lng` ON `places` (`lat`, `lng`)",
     "CREATE INDEX `index_places_category` ON `places` (`category`)",
@@ -86,7 +94,7 @@ def category_name(raw, raw_group=""):
     r = (raw or "").strip()
     exact = {
         "동물병원": "HOSPITAL", "동물약국": "PHARMACY", "반려동물용품": "SHOP", "미용": "GROOMING",
-        "카페": "CAFE", "식당": "RESTAURANT", "펜션": "ACCOMMODATION", "호텔": "ACCOMMODATION",
+        "카페": "CAFE", "식당": "RESTAURANT", "제과점": "CAFE", "펜션": "ACCOMMODATION", "호텔": "ACCOMMODATION",
         "박물관": "CULTURE", "미술관": "CULTURE", "문예회관": "CULTURE", "여행지": "TRAVEL", "위탁관리": "CARE",
     }
     if r in exact:
@@ -97,7 +105,7 @@ def category_name(raw, raw_group=""):
     if "약국" in r: return "PHARMACY"
     if "용품" in r: return "SHOP"
     if "미용" in r: return "GROOMING"
-    if "카페" in r: return "CAFE"
+    if "카페" in r or "제과" in r or "베이커리" in r: return "CAFE"
     if "식당" in r or "음식" in r: return "RESTAURANT"
     if "펜션" in r or "호텔" in r or "숙박" in r: return "ACCOMMODATION"
     if "박물" in r or "미술" in r or "문예" in r: return "CULTURE"
@@ -123,6 +131,29 @@ def build_fts(db):
         "INSERT INTO places_fts(docid, name, roadAddress) VALUES (?,?,?)",
         ((rid, fts_index(name), fts_index(road)) for rid, name, road in rows),
     )
+
+
+def yn(value):
+    """Y/N → 1/0, 그 외(빈칸·컬럼 없음) → None(정보 없음)."""
+    return {"Y": 1, "N": 0}.get((value or "").strip())
+
+
+OUTDOOR_ONLY_HINTS = ("야외만", "실외만")
+
+
+def normalize_name(name):
+    """중복 판정용 이름: 공백·괄호 내용·법인 표기·기호 제거, 소문자."""
+    n = re.sub(r"\(.*?\)", "", name)
+    n = re.sub(r"\(주\)|㈜|주식회사", "", n)
+    n = re.sub(r"[^0-9A-Za-z가-힣]", "", n)
+    return n.lower()
+
+
+def near(lat1, lng1, lat2, lng2, meters=150.0):
+    """대략적 평면 거리(한반도 위도에서 충분)."""
+    dlat = (lat1 - lat2) * 111_000.0
+    dlng = (lng1 - lng2) * 111_000.0 * math.cos(math.radians(lat1))
+    return math.hypot(dlat, dlng) <= meters
 
 
 # 데이터셋별로 이름이 다른 동반 가능 여부 컬럼 (하나는 반드시 존재해야 함)
@@ -176,6 +207,7 @@ def main():
         sys.exit(1)
 
     rows = {}  # id -> tuple (dedup: 첫 등장 유지 — 먼저 준 파일이 우선)
+    by_name = {}  # normalize_name -> [(lat, lng)] (좌표가 다른 같은 가게 판정용)
     for csv_path in csv_paths:
         file_rows = read_rows(csv_path)
         if not file_rows:
@@ -186,7 +218,7 @@ def main():
                 f"오류: {csv_path} 에 동반 가능 여부 컬럼({' / '.join(PET_ALLOWED_COLUMNS)})이 없음 — "
                 "동반 가능 장소만 담는 앱 취지상 이 데이터셋은 넣을 수 없다"
             )
-        added = filtered = 0
+        added = filtered = near_dups = 0
         for r in file_rows:
             if (r.get(pet_col) or "").strip() != "Y":
                 filtered += 1
@@ -203,6 +235,10 @@ def main():
             pid = f"{name}_{lat_s}_{lng_s}"
             if pid in rows:
                 continue
+            key = normalize_name(name)
+            if key and any(near(lat, lng, la, ln) for la, ln in by_name.get(key, ())):
+                near_dups += 1
+                continue
             road = meaningful(r.get("도로명주소")) or (r.get("지번주소") or "").strip()
             # 주차: Y/N → 1/0, 그 외(컬럼 없음 포함) → NULL
             parking_raw = (first_col(r, "주차 가능여부", "주차장 여부") or "").strip()
@@ -215,18 +251,25 @@ def main():
             desc = meaningful(r.get("기본 정보_장소설명"))
             if desc == (r.get("카테고리3") or "").strip():
                 desc = None
+            restriction = meaningful(r.get("반려동물 제한사항"))
+            indoor = yn(r.get("장소(실내) 여부"))
+            outdoor = yn(r.get("장소(실외)여부"))
+            if restriction and any(h in restriction for h in OUTDOOR_ONLY_HINTS):
+                indoor, outdoor = 0, 1
             rows[pid] = (
                 pid, name, category_name(r.get("카테고리3"), r.get("카테고리1")), road,
                 (r.get("지번주소") or "").strip(), lat, lng,
                 meaningful(first_col(r, "전화번호", "시설 전화번호")), meaningful(r.get("운영시간")),
                 meaningful(r.get("휴무일")), meaningful(first_col(r, "홈페이지", "웹사이트")),
-                meaningful(r.get("입장 가능 동물 크기")), meaningful(r.get("반려동물 제한사항")),
-                1 if (r.get("장소(실내) 여부") or "").strip() == "Y" else 0,
-                1 if (r.get("장소(실외)여부") or "").strip() == "Y" else 0,
+                meaningful(r.get("입장 가능 동물 크기")), restriction,
+                indoor, outdoor,
                 parking, fee, meaningful(r.get("애견 동반 추가 요금")), desc,
             )
+            if key:
+                by_name.setdefault(key, []).append((lat, lng))
             added += 1
-        print(f"  {os.path.basename(csv_path)}: 동반가능 Y 이외 제외 {filtered}건, 신규 반영 {added}건")
+        print(f"  {os.path.basename(csv_path)}: 동반가능 Y 이외 제외 {filtered}건, 신규 반영 {added}건, "
+              f"이름·150m 중복 제외 {near_dups}건")
 
     if os.path.exists(out_path):
         os.remove(out_path)

@@ -183,8 +183,8 @@ private fun PetBadges(place: Place) {
     val outdoorLabel = stringResource(R.string.pet_outdoor_allowed)
     val badges = buildList {
         paw?.let { add(it) }
-        if (place.petInfo.indoorAllowed) add(indoorLabel)
-        if (place.petInfo.outdoorAllowed) add(outdoorLabel)
+        if (place.petInfo.indoorAllowed == true) add(indoorLabel)
+        if (place.petInfo.outdoorAllowed == true) add(outdoorLabel)
     }.take(3)
     if (badges.isEmpty()) return
     FlowRow(

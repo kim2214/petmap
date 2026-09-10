@@ -12,8 +12,8 @@ fun PetMapDatabase.insertPlace(
     lat: Double = 37.5,
     lng: Double = 127.0,
     allowedPetSize: String? = null,
-    indoorAllowed: Boolean = false,
-    outdoorAllowed: Boolean = true,
+    indoorAllowed: Boolean? = false,
+    outdoorAllowed: Boolean? = true,
 ) {
     openHelper.writableDatabase.execSQL(
         "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -21,7 +21,7 @@ fun PetMapDatabase.insertPlace(
             id, name, category, roadAddress, "", lat, lng,
             // phone, operatingTime, closedDays, homepage, allowedPetSize, restriction, indoor, outdoor
             null, null, null, null, allowedPetSize, null,
-            if (indoorAllowed) 1 else 0, if (outdoorAllowed) 1 else 0,
+            indoorAllowed?.let { if (it) 1 else 0 }, outdoorAllowed?.let { if (it) 1 else 0 },
             // v4: parkingAvailable, fee, petFee, description
             null, null, null, null,
         ),

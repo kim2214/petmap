@@ -38,9 +38,15 @@ data class PetInfo(
     val allowedPetSize: String?,
     /** 동반 시 제한사항 */
     val restriction: String?,
-    val indoorAllowed: Boolean,
-    val outdoorAllowed: Boolean,
-)
+    /** 실내 동반 가능 여부. null = 정보 없음 (불가와 구분해서 표시해야 한다) */
+    val indoorAllowed: Boolean?,
+    /** 실외 동반 가능 여부. null = 정보 없음 */
+    val outdoorAllowed: Boolean?,
+) {
+    /** 동반 조건 정보가 하나도 없는 장소 (크기·제한·실내외 모두 미상) */
+    val isUnknown: Boolean
+        get() = allowedPetSize == null && restriction == null && indoorAllowed == null && outdoorAllowed == null
+}
 
 /**
  * 한국문화정보원 데이터셋 기준 카테고리.

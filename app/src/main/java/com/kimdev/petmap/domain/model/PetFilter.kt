@@ -17,8 +17,8 @@ enum class PetFilter {
 
     fun matches(place: Place): Boolean = when (this) {
         ANY_SIZE -> place.petInfo.allowedPetSize == SIZE_ALL
-        INDOOR -> place.petInfo.indoorAllowed
-        OUTDOOR -> place.petInfo.outdoorAllowed
+        INDOOR -> place.petInfo.indoorAllowed == true
+        OUTDOOR -> place.petInfo.outdoorAllowed == true
     }
 
     companion object {

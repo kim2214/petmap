@@ -34,15 +34,15 @@ python3 tools/verify_db.py          # 에셋 DB ↔ Room 스키마 동기화 오
 
 ## 데이터: 프리빌트 Room DB
 
-- 단일 소스는 `app/src/main/assets/petmap.db`(약 22,127개 고유 장소, v5 — 동반가능 Y 만 수록, 주차·요금·설명·`meta` 기준일 포함). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 경로 없음(원격 동기화 코드는 제거됨).
+- 단일 소스는 `app/src/main/assets/petmap.db`(약 24,700개 고유 장소, v6 — 동반가능 Y 만 수록, 주차·요금·설명·`meta` 기준일 포함, 실내/실외는 nullable = 정보 없음). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 경로 없음(원격 동기화 코드는 제거됨).
 - **데이터 갱신 전략 = DB 버전 업 → 파괴적 재생성.** 마이그레이션은 쓰지 않는다. `PetMapDatabase.VERSION`을 올리고 직전 버전을 `RECREATED_FROM`에 추가하면 Room이 기존 파일을 지우고 에셋을 재복사한다. 즐겨찾기는 `FavoriteBackup` 미러가 재생성 직전에 보존(`preserveLegacyDatabase`, `DatabaseModule`)하고 `ensureSeeded`가 복원한다. **장소 데이터만 바뀌어도 버전을 올려야 기존 설치에 전달된다.**
 - 검색은 FTS4 유니그램 색인(`data/local/PlaceFts.kt`). 색인은 에셋에 동봉되며(`build_db.py`의 `fts_index`가 `PlaceFts.index`와 동일 로직이어야 함).
-- **DB를 새 CSV로 재생성할 때는 `/rebuild-db` 스킬을 사용한다** (`tools/build_db.py`의 identity_hash/버전 주의사항이 얽혀 있음).
+- **DB를 새 CSV로 재생성할 때는 `/rebuild-db` 스킬을 사용한다** (`tools/build_db.py`의 identity_hash/버전 주의사항이 얽혀 있음). 원본 CSV 는 리포에 없다 — 공공데이터포털에서 받는다(다운로드 URL 은 스킬 참고). 식약처 "반려동물 동반출입 음식점"(약 2,700곳, 좌표 없음)은 `tools/fetch_restaurants.py`(네이버 Geocoding, `naver.map.clientSecret`)로 CSV 를 만들어 세 번째 입력으로 넘긴다. 좌표 캐시 `tools/data/`는 git 제외.
 - 엔티티(`PlaceEntity`/`FavoriteEntity`/`MetaEntity`) 스키마를 바꾸면 identity_hash가 달라진다. 기준값은 `app/schemas/**/<version>.json`의 `identityHash`이며 `tools/build_db.py`의 `ROOM_IDENTITY_HASH`를 함께 갱신해야 한다. 동기화가 어긋나면 androidTest `PetMapDatabaseAssetTest`가 실패한다. 재생성·즐겨찾기 보존 계약은 `LegacyDatabaseRecreateTest`.
 
 ## 비밀 키 (git 제외)
 
-- `local.properties`: `naver.map.clientId` (AdMob ID 는 비밀이 아니라 `app/build.gradle.kts`에 하드코딩).
+- `local.properties`: `naver.map.clientId` (AdMob ID 는 비밀이 아니라 `app/build.gradle.kts`에 하드코딩). 선택: `naver.map.clientSecret` 또는 `kakao.restApiKey` — 앱이 아니라 `tools/fetch_restaurants.py` 지오코딩 전용.
 - `keystore.properties`, `petmap-upload.jks`: 릴리스 서명.
 - `app/google-services.json`: 있으면 Firebase Crashlytics/Analytics 활성화, 없으면 앱은 정상 빌드(Firebase만 비활성).
 

@@ -12,7 +12,7 @@ import org.junit.Test
 class PlaceMapperTest {
 
     // ---- PlaceEntity.toDomain ----
-    private fun entity(category: String) = PlaceEntity(
+    private fun entity(category: String, indoor: Boolean? = true, outdoor: Boolean? = false) = PlaceEntity(
         id = "id1",
         name = "가게",
         category = category,
@@ -26,8 +26,8 @@ class PlaceMapperTest {
         homepage = null,
         allowedPetSize = null,
         restriction = null,
-        indoorAllowed = true,
-        outdoorAllowed = false,
+        indoorAllowed = indoor,
+        outdoorAllowed = outdoor,
         parkingAvailable = null,
         fee = null,
         petFee = null,
@@ -37,6 +37,14 @@ class PlaceMapperTest {
     @Test
     fun `entity toDomain parses valid category`() {
         assertEquals(PlaceCategory.RESTAURANT, entity("RESTAURANT").toDomain().category)
+    }
+
+    @Test
+    fun `entity toDomain keeps null indoor-outdoor as unknown, not false`() {
+        val info = entity("SPORTS", indoor = null, outdoor = null).toDomain().petInfo
+        assertEquals(null, info.indoorAllowed)
+        assertEquals(null, info.outdoorAllowed)
+        assertTrue(info.isUnknown)
     }
 
     @Test
@@ -68,6 +76,7 @@ class PlaceMapperTest {
 
         val back = fav.toDomain()
         assertEquals("즐겨찾기가게", back.name)
+        assertEquals(null, back.petInfo.indoorAllowed) // 스냅샷엔 동반 정보가 없다 — "불가"가 아니라 미상
         assertEquals(PlaceCategory.SHOP, back.category)
         assertEquals(37.1, back.lat, 0.0)
         assertEquals("", back.lotAddress) // 즐겨찾기는 최소 정보만 저장
