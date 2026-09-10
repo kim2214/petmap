@@ -9,6 +9,9 @@ import com.kimdev.petmap.data.local.entity.PlaceEntity
 /** [PlaceDao.getClusterCells] 결과: 그리드 셀의 대표 좌표(평균)와 장소 개수. */
 data class ClusterCell(val lat: Double, val lng: Double, val cnt: Int)
 
+/** [PlaceDao.getCoordsInRegion] 결과: 좌표만 (지역 범위 계산용 경량 로우) */
+data class LatLngRow(val lat: Double, val lng: Double)
+
 /** [PlaceDao.getRegionCounts] 결과: 주소 첫 토큰(시/도)·둘째 토큰(시/군/구 후보)별 장소 개수 */
 data class RegionRow(val sido: String, val token: String, val cnt: Int)
 
@@ -105,7 +108,7 @@ interface PlaceDao {
     ): List<ClusterCell>
 
     /**
-     * 검색어 없이 카테고리·동반 조건·지역만으로 이름순 탐색 (동반 조건 정책은 [getInBounds] 와 동일).
+     * 검색어 없이 카테고리·동반 조건·지역만으로 이름순(sortKey: 한글→영문→숫자, 법인 표기 제외) 탐색 (동반 조건 정책은 [getInBounds] 와 동일).
      * region 은 [com.kimdev.petmap.domain.model.Region.prefix] ("경기도 고양시 ") 또는 "" (전체).
      */
     @Query(
@@ -117,7 +120,7 @@ interface PlaceDao {
           AND (:outdoor = 0 OR outdoorAllowed = 1)
           AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
           AND (:region = '' OR roadAddress LIKE :region || '%')
-        ORDER BY name ASC
+        ORDER BY sortKey ASC
         LIMIT :limit
         """
     )
@@ -181,6 +184,10 @@ interface PlaceDao {
         """
     )
     suspend fun getRegionCounts(): List<RegionRow>
+
+    /** 지역(주소 접두어) 안 장소들의 좌표만. 지도에서 지역을 고르면 이 범위로 카메라를 맞춘다 */
+    @Query("SELECT lat, lng FROM places WHERE roadAddress LIKE :region || '%'")
+    suspend fun getCoordsInRegion(region: String): List<LatLngRow>
 
     /**
      * FTS 검색. places_fts 는 Migration(2,3) 이 만든 비-엔티티 FTS4 테이블이라

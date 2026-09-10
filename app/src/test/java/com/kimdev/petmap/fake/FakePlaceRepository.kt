@@ -2,6 +2,7 @@ package com.kimdev.petmap.fake
 
 import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.FavoriteSnapshot
+import com.kimdev.petmap.domain.model.GeoBounds
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
@@ -169,6 +170,15 @@ class FakePlaceRepository : PlaceRepository {
     override suspend fun getPlace(id: String): Place? = dataset.find { it.id == id }
 
     var regionCountsCalls = 0
+
+    override suspend fun getRegionBounds(region: Region): GeoBounds? {
+        val inRegion = dataset.filter { it.roadAddress.startsWith(region.prefix) }
+        if (inRegion.isEmpty()) return null
+        return GeoBounds(
+            minLat = inRegion.minOf { it.lat }, maxLat = inRegion.maxOf { it.lat },
+            minLng = inRegion.minOf { it.lng }, maxLng = inRegion.maxOf { it.lng },
+        )
+    }
 
     /** 실제 구현과 같은 규칙: 도로명주소 첫/둘째 토큰, 둘째가 시/군/구가 아니면 null 로 합친다 */
     override suspend fun getRegionCounts(): List<RegionCount> {

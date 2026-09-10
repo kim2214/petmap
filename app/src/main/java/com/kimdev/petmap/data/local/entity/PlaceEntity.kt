@@ -13,7 +13,7 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["lat", "lng"]),
         Index(value = ["category"]),
-        Index(value = ["name"]),
+        Index(value = ["sortKey"]),
     ],
 )
 data class PlaceEntity(
@@ -46,4 +46,9 @@ data class PlaceEntity(
      * "내 반려견" 필터가 SQL 에서 `maxPetKg >= :myPetKg` 로 쓴다.
      */
     val maxPetKg: Double?,
+    /**
+     * v9: 이름순 정렬 키(build_db.py sort_key). [버킷: 한글 0·영문 1·숫자 2·기타 3][법인 표기·앞 기호를 뗀 소문자 이름].
+     * `ORDER BY name` 은 UTF-8 바이트 순이라 "(주)…"·숫자·영문이 한글 앞에 몰렸다.
+     */
+    val sortKey: String,
 )

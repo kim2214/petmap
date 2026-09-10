@@ -31,7 +31,7 @@ com.kimdev.petmap
 │   │   ├── ThemeStore            # 라이트/다크/시스템 테마 (SharedPreferences)
 │   │   ├── PetProfileStore       # 내 반려견 체중 (SharedPreferences) → PetFilter.MY_PET 기준값
 │   │   ├── dao/    PlaceDao(뷰포트·그리드 집계·FTS 검색), FavoriteDao, MetaDao
-│   │   └── entity/ PlaceEntity(약 24,700행, 실내/실외 nullable, maxPetKg), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
+│   │   └── entity/ PlaceEntity(약 24,700행, 실내/실외 nullable, maxPetKg, sortKey), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
 │   ├── mapper/     Entity ↔ Domain 변환
 │   └── repository/ PlaceRepositoryImpl
 │
@@ -66,7 +66,7 @@ com.kimdev.petmap
 ## 데이터 흐름 (단방향)
 
 ```
-assets/petmap.db (프리빌트, v8·FTS·meta 동봉) ─ createFromAsset ─→ Room
+assets/petmap.db (프리빌트, v9·FTS·meta 동봉) ─ createFromAsset ─→ Room
                                                               │
 Room(places + favorites) ─→ PlaceRepositoryImpl ─→ ViewModel(StateFlow) ─→ Compose UI
 ```
@@ -105,5 +105,3 @@ naver.map.clientId=네이버클라우드_Maps_ClientID
 
 ## 다음 확장 포인트
 
-- 기본 목록(이름순)에서 "(주)" 상호가 맨 위에 몰림 → 정렬 키 정규화 검토
-- 지역 선택을 지도 화면에도(카메라 이동) 확장

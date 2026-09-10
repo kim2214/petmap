@@ -15,9 +15,11 @@ fun PetMapDatabase.insertPlace(
     indoorAllowed: Boolean? = false,
     outdoorAllowed: Boolean? = true,
     maxPetKg: Double? = null,
+    /** 기본은 이름 그대로 — 정렬 버킷을 검증하는 테스트만 명시한다 */
+    sortKey: String = name,
 ) {
     openHelper.writableDatabase.execSQL(
-        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         arrayOf<Any?>(
             id, name, category, roadAddress, "", lat, lng,
             // phone, operatingTime, closedDays, homepage, allowedPetSize, restriction, indoor, outdoor
@@ -25,8 +27,8 @@ fun PetMapDatabase.insertPlace(
             indoorAllowed?.let { if (it) 1 else 0 }, outdoorAllowed?.let { if (it) 1 else 0 },
             // v4: parkingAvailable, fee, petFee, description
             null, null, null, null,
-            // v7: maxPetKg
-            maxPetKg,
+            // v7: maxPetKg / v9: sortKey
+            maxPetKg, sortKey,
         ),
     )
 }

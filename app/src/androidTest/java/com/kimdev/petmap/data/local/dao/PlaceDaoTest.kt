@@ -136,6 +136,18 @@ class PlaceDaoTest {
     }
 
     @Test
+    fun browse_ordersBySortKeyNotRawName() = runBlocking {
+        // build_db.sort_key 가 만든 키를 그대로 넣는다: 한글 0 → 영문 1 → 숫자 2, 법인 표기 제외
+        db.insertPlace("corp", name = "세녹코리아", sortKey = "0세녹코리아")
+        db.insertPlace("num", name = "1004 약국", sortKey = "21004 약국")
+        db.insertPlace("latin", name = "Always on", sortKey = "1always on")
+        db.insertPlace("ga", name = "가온카페", sortKey = "0가온카페")
+
+        val all = dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
+        assertEquals(listOf("ga", "corp", "latin", "num"), all.map { it.id })
+    }
+
+    @Test
     fun browse_regionPrefix_andRegionCounts() = runBlocking {
         db.insertPlace("g1", roadAddress = "경기도 고양시 덕양구 동세로 19")
         db.insertPlace("g2", roadAddress = "경기도 고양시청로 1") // "고양시 " 접두어와 섞이면 안 된다
@@ -149,6 +161,9 @@ class PlaceDaoTest {
         assertEquals(setOf("g1", "g2", "s1", "sj"), browse(""))
         assertEquals(setOf("g1", "g2"), browse("경기도 "))
         assertEquals(setOf("g1"), browse("경기도 고양시 "))
+
+        val coords = dao.getCoordsInRegion("경기도 고양시 ")
+        assertEquals(1, coords.size)
 
         val rows = dao.getRegionCounts()
         assertEquals(1, rows.first { it.sido == "경기도" && it.token == "고양시" }.cnt)

@@ -3,6 +3,8 @@ package com.kimdev.petmap.ui.map
 import com.kimdev.petmap.core.common.Constants
 import androidx.lifecycle.SavedStateHandle
 import com.kimdev.petmap.domain.model.PetFilter
+import com.kimdev.petmap.domain.model.Region
+import com.kimdev.petmap.domain.model.GeoBounds
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.ui.navigation.Routes
 import com.kimdev.petmap.fake.FakeLocationProvider
@@ -35,6 +37,32 @@ class MapViewModelTest {
 
     private fun viewModel(savedState: SavedStateHandle = SavedStateHandle()): MapViewModel =
         MapViewModel(repo, FakeRecentSearchStore(), petProfileStore, FakeLocationProvider(), mainDispatcherRule.testDispatcher, savedState)
+
+    @Test
+    fun `지역을 고르면 그 지역 장소 범위로 FitRegion 을 보내고 없으면 RegionEmpty`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(
+            testPlace("g1", roadAddress = "경기도 고양시 덕양구 1", lat = 37.60, lng = 126.80),
+            testPlace("g2", roadAddress = "경기도 고양시 일산서구 2", lat = 37.70, lng = 126.90),
+            testPlace("s1", roadAddress = "서울특별시 강남구 3", lat = 37.50, lng = 127.05),
+        )
+        val vm = viewModel()
+        advanceUntilIdle()
+        val received = mutableListOf<MapEvent>()
+        val job = launch { vm.events.toList(received) }
+
+        vm.selectRegion(Region("경기도", "고양시"))
+        advanceUntilIdle()
+        val fit = received.filterIsInstance<MapEvent.FitRegion>().single()
+        assertEquals(GeoBounds(37.60, 37.70, 126.80, 126.90), fit.bounds)
+
+        vm.selectRegion(Region("제주특별자치도"))
+        advanceUntilIdle()
+        assertEquals(Region("제주특별자치도"), received.filterIsInstance<MapEvent.RegionEmpty>().single().region)
+
+        vm.loadRegionCounts(); advanceUntilIdle()
+        assertEquals(setOf("경기도", "서울특별시"), vm.uiState.value.regionCounts.map { it.sido }.toSet())
+        job.cancel()
+    }
 
     @Test
     fun `초기화 후 시딩 완료되고 클러스터가 채워진다`() = runTest(mainDispatcherRule.testDispatcher) {

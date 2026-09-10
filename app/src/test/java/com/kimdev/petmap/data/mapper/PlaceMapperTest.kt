@@ -33,6 +33,7 @@ class PlaceMapperTest {
         petFee = null,
         description = null,
         maxPetKg = null,
+        sortKey = "0가게",
     )
 
     @Test

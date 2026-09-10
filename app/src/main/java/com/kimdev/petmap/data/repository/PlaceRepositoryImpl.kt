@@ -14,6 +14,7 @@ import com.kimdev.petmap.data.mapper.toDomain
 import com.kimdev.petmap.data.mapper.toFavoriteEntity
 import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.FavoriteSnapshot
+import com.kimdev.petmap.domain.model.GeoBounds
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
@@ -35,6 +36,9 @@ import kotlin.math.floor
 import kotlin.math.max
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TRIM_MIN_SAMPLES = 50
+private const val TRIM_RATIO = 0.02
 
 @Singleton
 class PlaceRepositoryImpl @Inject constructor(
@@ -344,7 +348,7 @@ class PlaceRepositoryImpl @Inject constructor(
                 " ORDER BY CASE" +
                     " WHEN places.name LIKE ? ESCAPE '\\' THEN 0" +
                     " WHEN places.name LIKE ? ESCAPE '\\' THEN 1" +
-                    " ELSE 2 END ASC, places.name ASC"
+                    " ELSE 2 END ASC, places.sortKey ASC"
             )
             args.add("$escaped%")
             args.add("%$escaped%")
@@ -367,6 +371,19 @@ class PlaceRepositoryImpl @Inject constructor(
             .map { (key, group) -> RegionCount(key.first, key.second, group.sumOf { it.cnt }) }
             .filter { it.sido.isNotBlank() }
         return merged.also { regionCountsCache = it }
+    }
+
+    override suspend fun getRegionBounds(region: Region): GeoBounds? {
+        val coords = placeDao.getCoordsInRegion(region.prefix)
+        if (coords.isEmpty()) return null
+        val lats = coords.map { it.lat }.sorted()
+        val lngs = coords.map { it.lng }.sorted()
+        // 표본이 적으면 자르지 않는다(시/군/구 단위 수십 곳에서 2% 는 0~1개)
+        val trim = if (coords.size >= TRIM_MIN_SAMPLES) (coords.size * TRIM_RATIO).toInt() else 0
+        return GeoBounds(
+            minLat = lats[trim], maxLat = lats[lats.lastIndex - trim],
+            minLng = lngs[trim], maxLng = lngs[lngs.lastIndex - trim],
+        )
     }
 
     override suspend fun getPlace(id: String): Place? = placeDao.getById(id)?.toDomain()

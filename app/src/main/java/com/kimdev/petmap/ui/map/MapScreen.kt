@@ -75,6 +75,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.Place
+import com.kimdev.petmap.ui.components.RegionSheet
 import com.kimdev.petmap.R
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.domain.model.GeoClusterCell
@@ -170,6 +173,8 @@ fun MapScreen(
     var showMapTypeMenu by remember { mutableStateOf(false) }
     // '내 아이 가능' 칩을 체중 미등록 상태에서 눌렀을 때의 등록 다이얼로그
     var showPetWeightDialog by rememberSaveable { mutableStateOf(false) }
+    // 지역 선택 시트(시/도 → 시/군/구). 선택하면 카메라가 그 범위로 이동한다
+    var showRegionSheet by rememberSaveable { mutableStateOf(false) }
     // 권한이 "이미 있음"이 아니라 "처음 확인/방금 허용"일 때만 Follow 를 켜기 위한 플래그
     var followInitialized by rememberSaveable { mutableStateOf(false) }
     val granted = locationPermission.granted
@@ -223,6 +228,25 @@ fun MapScreen(
                     previewPlace = event.place
                 }
                 is MapEvent.ExpandCluster -> clusterList = event.places
+                is MapEvent.FitRegion -> scope.launch {
+                    val b = event.bounds
+                    val update = if (b.isPoint) {
+                        CameraUpdate.scrollAndZoomTo(LatLng(b.centerLat, b.centerLng), MapViewModel.FOCUS_ZOOM)
+                    } else {
+                        CameraUpdate.fitBounds(
+                            LatLngBounds(LatLng(b.minLat, b.minLng), LatLng(b.maxLat, b.maxLng)),
+                            FIT_BOUNDS_PADDING_PX,
+                        )
+                    }
+                    trackingMode = LocationTrackingMode.NoFollow
+                    cameraPositionState.animate(update, CameraAnimation.Fly)
+                    // 도착한 뷰포트로 곧바로 재조회 — 같은 줌 버킷 안의 이동은 자동 재조회되지 않기 때문
+                    val pos = cameraPositionState.position
+                    viewModel.researchHere(pos.target.latitude, pos.target.longitude, pos.zoom)
+                }
+                is MapEvent.RegionEmpty -> scope.launch {
+                    snackbarHostState.showSnackbar(resources.getString(R.string.map_region_empty_format, event.region.shortLabel))
+                }
                 is MapEvent.FitPlaces -> {
                     val bounds = LatLngBounds.Builder().apply {
                         event.places.forEach { include(LatLng(it.lat, it.lng)) }
@@ -458,6 +482,16 @@ fun MapScreen(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
+                            // 지역으로 이동(여행 계획용). 필터가 아니라 카메라 이동이라 선택 상태를 유지하지 않는다
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    viewModel.loadRegionCounts()
+                                    showRegionSheet = true
+                                },
+                                label = { Text(stringResource(R.string.filter_region)) },
+                                leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) },
+                            )
                             PetFilterChips(
                                 selected = state.petFilters,
                                 onToggle = viewModel::togglePetFilter,
@@ -691,6 +725,18 @@ fun MapScreen(
                 showPetWeightDialog = false
             },
             onDismiss = { showPetWeightDialog = false },
+        )
+    }
+
+    if (showRegionSheet) {
+        RegionSheet(
+            current = null,
+            counts = state.regionCounts,
+            onSelect = { region ->
+                showRegionSheet = false
+                if (region != null) viewModel.selectRegion(region)
+            },
+            onDismiss = { showRegionSheet = false },
         )
     }
 }

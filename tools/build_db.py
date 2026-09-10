@@ -23,6 +23,8 @@
   제한사항이 "야외만/실외만 동반 가능"이면 실내=0·실외=1 로 정규화한다(원본 34건이 실내 Y 로 모순).
 - 시/도 명칭은 SIDO_RENAMES 로 현행 이름에 맞춘다(강원도 → 강원특별자치도, 전라북도 → 전북특별자치도,
   전라남도·광주광역시 → 전남광주통합특별시). 앱의 지역 브라우징이 주소 첫 토큰으로 시/도를 묶기 때문.
+- 상호의 법인 표기("(주)", "주식회사" 등 앞/뒤)는 clean_name() 이 표시명에서 뗀다. sortKey 는 sort_key() —
+  한글 → 영문 → 숫자 → 기타 버킷 뒤에 정규화 이름을 붙여 목록 이름순이 "(주)…"·숫자로 시작하지 않게 한다.
 - maxPetKg: "입장 가능 동물 크기" 문구를 parse_max_pet_kg() 로 숫자화한다("10kg 미만" → 9.99, "소형" → 10,
   "모두 가능"/"대형" → 999, 판단 불가 → NULL). 앱의 "내 아이 가능" 필터가 SQL 로 비교한다.
 - 식약처 "반려동물 동반출입 음식점" 목록은 tools/fetch_restaurants.py 가 지오코딩해 같은 컬럼 형식의
@@ -54,8 +56,8 @@ import re
 import sqlite3
 import sys
 
-ROOM_IDENTITY_HASH = "1f4861412b56fabf6ac29d6bfae1f85d"  # app/schemas/**/8.json 의 identityHash (v7 과 동일 — 스키마 무변경)
-DB_VERSION = 8  # v8: 시/도 명칭 정규화(지역 브라우징). v7: maxPetKg. v6: 실내/실외 nullable + 식약처 음식점. 앱 PetMapDatabase.VERSION 과 동일
+ROOM_IDENTITY_HASH = "f73e8da48ecee6b464710547abbab63e"  # app/schemas/**/9.json 의 identityHash
+DB_VERSION = 9  # v9: sortKey(이름순 정렬 키) + 법인 표기 제거. v8: 시/도 정규화. v7: maxPetKg. v6: 실내/실외 nullable. 앱 PetMapDatabase.VERSION 과 동일
 
 # 앱이 읽는 meta 키 (MetaEntity.KEY_DATA_DATE)
 META_KEY_DATA_DATE = "data_date"
@@ -70,10 +72,10 @@ DDL = [
     "`roadAddress` TEXT NOT NULL, `lotAddress` TEXT NOT NULL, `lat` REAL NOT NULL, `lng` REAL NOT NULL, "
     "`phone` TEXT, `operatingTime` TEXT, `closedDays` TEXT, `homepage` TEXT, `allowedPetSize` TEXT, "
     "`restriction` TEXT, `indoorAllowed` INTEGER, `outdoorAllowed` INTEGER, "
-    "`parkingAvailable` INTEGER, `fee` TEXT, `petFee` TEXT, `description` TEXT, `maxPetKg` REAL, PRIMARY KEY(`id`))",
+    "`parkingAvailable` INTEGER, `fee` TEXT, `petFee` TEXT, `description` TEXT, `maxPetKg` REAL, `sortKey` TEXT NOT NULL, PRIMARY KEY(`id`))",
     "CREATE INDEX `index_places_lat_lng` ON `places` (`lat`, `lng`)",
     "CREATE INDEX `index_places_category` ON `places` (`category`)",
-    "CREATE INDEX `index_places_name` ON `places` (`name`)",
+    "CREATE INDEX `index_places_sortKey` ON `places` (`sortKey`)",
     "CREATE TABLE `meta` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))",
 ]
 
@@ -170,6 +172,29 @@ def parse_max_pet_kg(text):
     if "소형" in t:
         return SMALL_KG
     return None
+
+
+# 상호 앞뒤의 법인 표기. 표시명에서 떼고(가독성), 정렬 키에서도 제외한다("(주) 세녹코리아"가 맨 위로 몰리지 않게).
+_CORP_RE = re.compile(r"^(?:\(주\)|㈜|\(유\)|\(사\)|\(재\)|주식회사|유한회사|사단법인|재단법인)\s*|\s*(?:\(주\)|㈜|\(유\)|주식회사|유한회사)$")
+
+
+def clean_name(name):
+    """상호에서 법인 표기(앞/뒤)를 제거한다. 결과가 비면 원문 유지."""
+    n = (name or "").strip()
+    cleaned = _CORP_RE.sub("", n).strip()
+    return cleaned or n
+
+
+def sort_key(name):
+    """
+    이름순 정렬 키: [버킷][정규화 이름]. 버킷은 한글 0 → 영문 1 → 숫자 2 → 기타 3 (한국 사용자가 한글 상호를 먼저 기대).
+    법인 표기·앞쪽 기호를 떼고 소문자화한다. SQLite BINARY 정렬(UTF-8 바이트) 기준으로 같은 버킷 안에서는 가나다/abc 순.
+    """
+    n = clean_name(name).lower()
+    n = re.sub(r"^[^0-9a-z가-힣]+", "", n) or n
+    ch = n[:1]
+    bucket = "0" if "가" <= ch <= "힣" else "1" if ch.isascii() and ch.isalpha() else "2" if ch.isdigit() else "3"
+    return bucket + n
 
 
 # 시/도 명칭 정규화: 원본(2022~2025 작성)은 옛 이름, 지오코더(2026)는 현행 이름을 쓴다.
@@ -282,7 +307,7 @@ def main():
             if (r.get(pet_col) or "").strip() != "Y":
                 filtered += 1
                 continue
-            name = (r.get("시설명") or "").strip()
+            name = clean_name(r.get("시설명"))
             lat_s = (r.get("위도") or "").strip()
             lng_s = (r.get("경도") or "").strip()
             if not name or not lat_s or not lng_s:
@@ -325,7 +350,7 @@ def main():
                 pet_size, restriction,
                 indoor, outdoor,
                 parking, fee, meaningful(r.get("애견 동반 추가 요금")), desc,
-                parse_max_pet_kg(pet_size),
+                parse_max_pet_kg(pet_size), sort_key(name),
             )
             if key:
                 by_name.setdefault(key, []).append((lat, lng))
@@ -342,7 +367,7 @@ def main():
     db.execute("INSERT INTO android_metadata VALUES ('ko_KR')")
     db.execute("INSERT INTO room_master_table (id, identity_hash) VALUES (42, ?)", (ROOM_IDENTITY_HASH,))
     db.executemany(
-        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows.values()
+        "INSERT INTO places VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows.values()
     )
     build_fts(db)
     db.executemany(

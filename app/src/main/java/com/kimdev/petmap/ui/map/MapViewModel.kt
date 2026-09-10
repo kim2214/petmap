@@ -13,7 +13,10 @@ import com.kimdev.petmap.data.local.RecentSearchStore
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.domain.model.GeoBounds
 import com.kimdev.petmap.domain.model.PlaceCategory
+import com.kimdev.petmap.domain.model.Region
+import com.kimdev.petmap.domain.model.RegionCount
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.ui.common.SavedFilters
 import com.kimdev.petmap.ui.navigation.Routes
@@ -49,6 +52,8 @@ data class MapUiState(
     val petFilters: Set<PetFilter> = emptySet(),
     /** 설정에 등록한 내 반려견 체중(kg). null 이면 '내 아이 가능' 칩이 등록 다이얼로그를 먼저 띄운다 */
     val myPetKg: Double? = null,
+    /** 지역 선택 시트용 개수. 시트를 처음 열 때 채워진다(비어 있으면 로딩 중) */
+    val regionCounts: List<RegionCount> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
     val searchQuery: String = "",
     val searchResults: List<Place> = emptyList(),
@@ -85,6 +90,10 @@ sealed interface MapEvent {
     data class ExpandCluster(val places: List<Place>) : MapEvent
     /** 검색 결과 전체가 보이도록 카메라를 결과 범위에 맞춤 */
     data class FitPlaces(val places: List<Place>) : MapEvent
+    /** 지역 선택: 그 지역 장소 범위로 카메라를 맞추고, 도착 후 재조회한다 */
+    data class FitRegion(val region: Region, val bounds: GeoBounds) : MapEvent
+    /** 지역 선택했지만 장소가 없음 */
+    data class RegionEmpty(val region: Region) : MapEvent
 }
 
 @OptIn(FlowPreview::class)
@@ -391,6 +400,40 @@ class MapViewModel @Inject constructor(
         clusterJob = viewModelScope.launch {
             val clusters = withContext(defaultDispatcher) { clusterPlaces(snapshot, zoom) }
             _uiState.update { it.copy(clusters = clusters, canResearch = stale) }
+        }
+    }
+
+    /** 지역 선택 시트를 열 때 호출 — 개수는 설치 동안 불변이라 한 번만 가져온다 */
+    fun loadRegionCounts() {
+        if (_uiState.value.regionCounts.isNotEmpty()) return
+        viewModelScope.launch {
+            runCatching { repository.getRegionCounts() }
+                .onSuccess { counts -> _uiState.update { it.copy(regionCounts = counts) } }
+                .onFailure { e ->
+                    if (e is CancellationException) throw e
+                    Log.w(TAG, "getRegionCounts failed: ${e.message}")
+                }
+        }
+    }
+
+    /**
+     * 지역 선택: 지도는 뷰포트 조회라 필터를 거는 대신 그 지역 장소 범위로 카메라를 옮긴다.
+     * 검색 마커 모드였다면 해제한다(고정 결과 집합 위에서 지역 이동은 뜻이 없다).
+     */
+    fun selectRegion(region: Region) {
+        viewModelScope.launch {
+            val bounds = runCatching { repository.getRegionBounds(region) }
+                .onFailure { e ->
+                    if (e is CancellationException) throw e
+                    Log.w(TAG, "getRegionBounds failed: ${e.message}")
+                }
+                .getOrNull()
+            if (bounds == null) {
+                _events.send(MapEvent.RegionEmpty(region))
+                return@launch
+            }
+            if (_uiState.value.searchMarkers != null) clearSearch()
+            _events.send(MapEvent.FitRegion(region, bounds))
         }
     }
 

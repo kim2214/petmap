@@ -52,6 +52,25 @@ class NormalizeSidoTest(unittest.TestCase):
         self.assertEqual(b.normalize_sido(None), "")
 
 
+class NameSortTest(unittest.TestCase):
+    def test_clean_name(self):
+        self.assertEqual(b.clean_name("(주) 세녹코리아"), "세녹코리아")
+        self.assertEqual(b.clean_name("(주)커피빈코리아 몽촌토성역점"), "커피빈코리아 몽촌토성역점")
+        self.assertEqual(b.clean_name("주식회사 더홈카페 1"), "더홈카페 1")
+        self.assertEqual(b.clean_name("㈜엠게임"), "엠게임")
+        self.assertEqual(b.clean_name("멍더쿠 (주)"), "멍더쿠")
+        self.assertEqual(b.clean_name("1004 약국"), "1004 약국")
+        self.assertEqual(b.clean_name("(주)"), "(주)")  # 비면 원문 유지
+
+    def test_sort_key_buckets(self):
+        keys = sorted(map(b.sort_key, ["1004 약국", "38 COFFEE", "(주) 세녹코리아", "가온카페", "Always on", "生고기", "？물음표"]))
+        self.assertEqual(
+            # 앞쪽 기호·한자 등 비(한글/영문/숫자) 글자는 떼고 판정한다("？물음표" → 물음표, "生고기" → 고기)
+            ["0가온카페", "0고기", "0물음표", "0세녹코리아", "1always on", "21004 약국", "238 coffee"],
+            keys,
+        )
+
+
 class HelpersTest(unittest.TestCase):
     def test_yn(self):
         self.assertEqual(b.yn("Y"), 1)

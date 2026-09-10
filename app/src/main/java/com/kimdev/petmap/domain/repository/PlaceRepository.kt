@@ -2,6 +2,7 @@ package com.kimdev.petmap.domain.repository
 
 import com.kimdev.petmap.domain.model.DataInfo
 import com.kimdev.petmap.domain.model.FavoriteSnapshot
+import com.kimdev.petmap.domain.model.GeoBounds
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
@@ -101,6 +102,12 @@ interface PlaceRepository {
      * sigungu = null 한 행으로 합쳐진다. 장소 데이터는 설치 동안 불변이므로 첫 호출 결과를 캐시한다.
      */
     suspend fun getRegionCounts(): List<RegionCount>
+
+    /**
+     * 지역 안 장소들이 들어가는 위/경도 범위 (지도 카메라 맞춤용). 장소가 없으면 null.
+     * 지오코딩 오차로 튄 좌표가 범위를 전국으로 벌리지 않게, 표본이 충분하면 양 끝 2% 를 잘라낸다.
+     */
+    suspend fun getRegionBounds(region: Region): GeoBounds?
 
     suspend fun getPlace(id: String): Place?
 
