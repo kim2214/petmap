@@ -3,6 +3,7 @@ package com.kimdev.petmap.ui.list
 import androidx.lifecycle.SavedStateHandle
 import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.domain.model.PetFilter
+import com.kimdev.petmap.domain.model.Region
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.fake.FakeLocationProvider
 import com.kimdev.petmap.fake.FakePlaceRepository
@@ -200,6 +201,39 @@ class ListViewModelTest {
 
         assertEquals(400, repo.lastSearchLimit)
         assertEquals(listOf("open"), vm.uiState.value.places.map { it.id })
+    }
+
+    @Test
+    fun `지역을 고르면 그 지역만 조회되고 SavedStateHandle 에 보존된다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(
+            testPlace("goyang", roadAddress = "경기도 고양시 덕양구 동세로 19"),
+            testPlace("suwon", roadAddress = "경기도 수원시 팔달구 1"),
+            testPlace("seoul", roadAddress = "서울특별시 강남구 2"),
+        )
+        val savedState = SavedStateHandle()
+        val vm = viewModel(savedState = savedState)
+        advanceUntilIdle()
+        assertEquals(3, vm.uiState.value.places.size)
+
+        vm.setRegion(Region("경기도", "고양시"))
+        advanceUntilIdle()
+        assertEquals(listOf("goyang"), vm.uiState.value.places.map { it.id })
+        assertEquals(Region("경기도", "고양시"), repo.lastRegion)
+
+        vm.setRegion(Region("경기도"))
+        advanceUntilIdle()
+        assertEquals(setOf("goyang", "suwon"), vm.uiState.value.places.map { it.id }.toSet())
+
+        // 프로세스 사망 후 복원
+        val restored = viewModel(savedState = savedState)
+        advanceUntilIdle()
+        assertEquals(Region("경기도"), restored.uiState.value.region)
+
+        // 개수는 한 번만 조회한다
+        vm.loadRegionCounts(); advanceUntilIdle()
+        vm.loadRegionCounts(); advanceUntilIdle()
+        assertEquals(1, repo.regionCountsCalls)
+        assertEquals(2, vm.uiState.value.regionCounts.count { it.sido == "경기도" })
     }
 
     @Test

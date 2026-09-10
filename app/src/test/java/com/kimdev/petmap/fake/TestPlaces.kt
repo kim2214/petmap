@@ -8,6 +8,7 @@ import com.kimdev.petmap.domain.model.PlaceCategory
 fun testPlace(
     id: String,
     name: String = id,
+    roadAddress: String = "도로명 $id",
     category: PlaceCategory = PlaceCategory.ETC,
     lat: Double = 37.5,
     lng: Double = 127.0,
@@ -21,7 +22,7 @@ fun testPlace(
     id = id,
     name = name,
     category = category,
-    roadAddress = "도로명 $id",
+    roadAddress = roadAddress,
     lotAddress = "지번 $id",
     lat = lat,
     lng = lng,

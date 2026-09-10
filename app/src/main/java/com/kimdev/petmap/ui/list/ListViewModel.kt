@@ -13,6 +13,8 @@ import com.kimdev.petmap.data.repository.withFavorites
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
+import com.kimdev.petmap.domain.model.Region
+import com.kimdev.petmap.domain.model.RegionCount
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.OpeningHours
 import com.kimdev.petmap.domain.util.distanceMeters
@@ -51,6 +53,10 @@ data class ListUiState(
     val petFilters: Set<PetFilter> = emptySet(),
     /** 설정에 등록한 내 반려견 체중(kg). null 이면 '내 아이 가능' 칩이 등록 다이얼로그를 먼저 띄운다 */
     val myPetKg: Double? = null,
+    /** 지역 브라우징: 시/도(·시/군/구). null 이면 전국 */
+    val region: Region? = null,
+    /** 지역 선택 시트용 개수. 시트를 처음 열 때 채워진다(비어 있으면 로딩 중) */
+    val regionCounts: List<RegionCount> = emptyList(),
     val hasLocation: Boolean = false,
     val recentSearches: List<String> = emptyList(),
     /** 조회 실패 여부. true 면 "결과 없음"이 아니라 에러 상태로 표시한다. */
@@ -81,6 +87,7 @@ private data class SearchKey(
     val openNowOnly: Boolean,
     val petFilters: Set<PetFilter>,
     val myPetKg: Double?,
+    val region: Region?,
 )
 
 @OptIn(FlowPreview::class)
@@ -103,6 +110,7 @@ class ListViewModel @Inject constructor(
             openNowOnly = savedStateHandle[KEY_OPEN_NOW_ONLY] ?: false,
             petFilters = SavedFilters.namesToPetFilters(savedStateHandle[KEY_PET_FILTERS]),
             myPetKg = petProfileStore.weightKg.value,
+            region = savedStateHandle.get<String>(KEY_REGION_SIDO)?.let { Region(it, savedStateHandle[KEY_REGION_SIGUNGU]) },
         )
     )
     val uiState: StateFlow<ListUiState> = _uiState.asStateFlow()
@@ -123,7 +131,7 @@ class ListViewModel @Inject constructor(
         // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
         viewModelScope.launch {
             _uiState
-                .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly, it.petFilters, it.myPetKg) }
+                .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly, it.petFilters, it.myPetKg, it.region) }
                 .distinctUntilChanged()
                 .onEach { persist(it) }
                 .debounce(250)
@@ -167,9 +175,9 @@ class ListViewModel @Inject constructor(
         runCatching {
             val fetched = if (key.sortByDistance && loc != null) {
                 // 거리순은 "주변" 탐색 의도 → 반경 밖은 제외 (0건이면 화면이 거리순 해제를 안내)
-                repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, NEARBY_RADIUS_KM, fetchLimit)
+                repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, NEARBY_RADIUS_KM, key.region, fetchLimit)
             } else {
-                val results = repository.search(key.query, key.categories, limit = fetchLimit)
+                val results = repository.search(key.query, key.categories, region = key.region, limit = fetchLimit)
                 // 위치를 알면 거리순 정렬을 켜지 않아도 카드에 거리를 표시한다
                 if (loc == null) results
                 else results.map { it.copy(distanceMeters = distanceMeters(loc.lat, loc.lng, it.lat, it.lng)) }
@@ -248,7 +256,7 @@ class ListViewModel @Inject constructor(
         loadMoreJob?.cancel()
         loadMoreJob = viewModelScope.launch {
             runSearch(
-                SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters, s.myPetKg),
+                SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters, s.myPetKg, s.region),
                 loadingMore = true,
             )
         }
@@ -260,7 +268,7 @@ class ListViewModel @Inject constructor(
     private fun refreshSearch() {
         val s = _uiState.value
         viewModelScope.launch {
-            runSearch(SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters, s.myPetKg))
+            runSearch(SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters, s.myPetKg, s.region))
         }
     }
 
@@ -332,6 +340,22 @@ class ListViewModel @Inject constructor(
         it.copy(selectedCategories = emptySet(), petFilters = emptySet())
     }
 
+    /** 지역 브라우징 선택/해제(null). SearchKey 에 포함돼 자동 재조회된다 */
+    fun setRegion(region: Region?) = _uiState.update { it.copy(region = region) }
+
+    /** 지역 선택 시트를 열 때 호출 — 개수는 설치 동안 불변이라 한 번만 가져온다 */
+    fun loadRegionCounts() {
+        if (_uiState.value.regionCounts.isNotEmpty()) return
+        viewModelScope.launch {
+            runCatching { repository.getRegionCounts() }
+                .onSuccess { counts -> _uiState.update { it.copy(regionCounts = counts) } }
+                .onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w(TAG, "getRegionCounts failed: ${e.message}")
+                }
+        }
+    }
+
     fun toggleFavorite(place: Place) {
         viewModelScope.launch { repository.toggleFavorite(place) }
     }
@@ -343,6 +367,8 @@ class ListViewModel @Inject constructor(
         savedStateHandle[KEY_SORT_BY_DISTANCE] = key.sortByDistance
         savedStateHandle[KEY_OPEN_NOW_ONLY] = key.openNowOnly
         savedStateHandle[KEY_PET_FILTERS] = SavedFilters.petFiltersToNames(key.petFilters)
+        savedStateHandle[KEY_REGION_SIDO] = key.region?.sido
+        savedStateHandle[KEY_REGION_SIGUNGU] = key.region?.sigungu
     }
 
     companion object {
@@ -357,6 +383,8 @@ class ListViewModel @Inject constructor(
         private const val KEY_SORT_BY_DISTANCE = "list_sort_by_distance"
         private const val KEY_OPEN_NOW_ONLY = "list_open_now_only"
         private const val KEY_PET_FILTERS = "list_pet_filters"
+        private const val KEY_REGION_SIDO = "list_region_sido"
+        private const val KEY_REGION_SIGUNGU = "list_region_sigungu"
 
         /**
          * 거리순 정렬 반경(km). 전국 데이터를 거리순으로 나열하면 상한(200건) 안에서도 수십 km

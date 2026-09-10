@@ -21,6 +21,8 @@
 - 실내/실외 여부("장소(실내) 여부"/"장소(실외)여부")는 Y→1, N→0, 그 외·컬럼 없음 → NULL(정보 없음).
   v5 까지는 NOT NULL 0 이라 컬럼이 없는 데이터셋(액티비티)이 "동반 불가"로 표시됐다.
   제한사항이 "야외만/실외만 동반 가능"이면 실내=0·실외=1 로 정규화한다(원본 34건이 실내 Y 로 모순).
+- 시/도 명칭은 SIDO_RENAMES 로 현행 이름에 맞춘다(강원도 → 강원특별자치도, 전라북도 → 전북특별자치도,
+  전라남도·광주광역시 → 전남광주통합특별시). 앱의 지역 브라우징이 주소 첫 토큰으로 시/도를 묶기 때문.
 - maxPetKg: "입장 가능 동물 크기" 문구를 parse_max_pet_kg() 로 숫자화한다("10kg 미만" → 9.99, "소형" → 10,
   "모두 가능"/"대형" → 999, 판단 불가 → NULL). 앱의 "내 아이 가능" 필터가 SQL 로 비교한다.
 - 식약처 "반려동물 동반출입 음식점" 목록은 tools/fetch_restaurants.py 가 지오코딩해 같은 컬럼 형식의
@@ -52,8 +54,8 @@ import re
 import sqlite3
 import sys
 
-ROOM_IDENTITY_HASH = "1f4861412b56fabf6ac29d6bfae1f85d"  # app/schemas/**/7.json 의 identityHash
-DB_VERSION = 7  # v7: maxPetKg(입장 가능 최대 체중 숫자화). v6: 실내/실외 nullable + 식약처 음식점. 앱 PetMapDatabase.VERSION 과 동일
+ROOM_IDENTITY_HASH = "1f4861412b56fabf6ac29d6bfae1f85d"  # app/schemas/**/8.json 의 identityHash (v7 과 동일 — 스키마 무변경)
+DB_VERSION = 8  # v8: 시/도 명칭 정규화(지역 브라우징). v7: maxPetKg. v6: 실내/실외 nullable + 식약처 음식점. 앱 PetMapDatabase.VERSION 과 동일
 
 # 앱이 읽는 meta 키 (MetaEntity.KEY_DATA_DATE)
 META_KEY_DATA_DATE = "data_date"
@@ -170,6 +172,26 @@ def parse_max_pet_kg(text):
     return None
 
 
+# 시/도 명칭 정규화: 원본(2022~2025 작성)은 옛 이름, 지오코더(2026)는 현행 이름을 쓴다.
+# 지역 브라우징이 주소 앞 토큰으로 시/도를 묶으므로 한 가지 표기로 맞춘다(현행 공식 명칭 기준).
+SIDO_RENAMES = {
+    "강원도": "강원특별자치도",
+    "전라북도": "전북특별자치도",
+    "전라남도": "전남광주통합특별시",
+    "광주광역시": "전남광주통합특별시",
+}
+
+
+def normalize_sido(address):
+    """주소 첫 토큰(시/도)이 옛 이름이면 현행 이름으로 바꾼다. 그 외는 그대로."""
+    a = (address or "").strip()
+    if not a:
+        return a
+    head, sep, rest = a.partition(" ")
+    new = SIDO_RENAMES.get(head)
+    return f"{new}{sep}{rest}" if new else a
+
+
 def yn(value):
     """Y/N → 1/0, 그 외(빈칸·컬럼 없음) → None(정보 없음)."""
     return {"Y": 1, "N": 0}.get((value or "").strip())
@@ -276,7 +298,8 @@ def main():
             if key and any(near(lat, lng, la, ln) for la, ln in by_name.get(key, ())):
                 near_dups += 1
                 continue
-            road = meaningful(r.get("도로명주소")) or (r.get("지번주소") or "").strip()
+            road = normalize_sido(meaningful(r.get("도로명주소")) or (r.get("지번주소") or "").strip())
+            lot = normalize_sido((r.get("지번주소") or "").strip())
             # 주차: Y/N → 1/0, 그 외(컬럼 없음 포함) → NULL
             parking_raw = (first_col(r, "주차 가능여부", "주차장 여부") or "").strip()
             parking = {"Y": 1, "N": 0}.get(parking_raw)
@@ -296,7 +319,7 @@ def main():
                 indoor, outdoor = 0, 1
             rows[pid] = (
                 pid, name, category_name(r.get("카테고리3"), r.get("카테고리1")), road,
-                (r.get("지번주소") or "").strip(), lat, lng,
+                lot, lat, lng,
                 meaningful(first_col(r, "전화번호", "시설 전화번호")), meaningful(r.get("운영시간")),
                 meaningful(r.get("휴무일")), meaningful(first_col(r, "홈페이지", "웹사이트")),
                 pet_size, restriction,

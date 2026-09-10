@@ -34,7 +34,7 @@ python3 tools/verify_db.py          # 에셋 DB ↔ Room 스키마 동기화 오
 
 ## 데이터: 프리빌트 Room DB
 
-- 단일 소스는 `app/src/main/assets/petmap.db`(약 24,700개 고유 장소, v7 — 동반가능 Y 만 수록, 주차·요금·설명·`meta` 기준일 포함, 실내/실외는 nullable = 정보 없음, `maxPetKg` 는 크기 문구를 숫자화한 입장 가능 최대 체중). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 경로 없음(원격 동기화 코드는 제거됨).
+- 단일 소스는 `app/src/main/assets/petmap.db`(약 24,700개 고유 장소, v8 — 동반가능 Y 만 수록, 시/도 명칭 현행화(강원특별자치도·전북특별자치도·전남광주통합특별시), 주차·요금·설명·`meta` 기준일 포함, 실내/실외는 nullable = 정보 없음, `maxPetKg` 는 크기 문구를 숫자화한 입장 가능 최대 체중). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 경로 없음(원격 동기화 코드는 제거됨).
 - **데이터 갱신 전략 = DB 버전 업 → 파괴적 재생성.** 마이그레이션은 쓰지 않는다. `PetMapDatabase.VERSION`을 올리고 직전 버전을 `RECREATED_FROM`에 추가하면 Room이 기존 파일을 지우고 에셋을 재복사한다. 즐겨찾기는 `FavoriteBackup` 미러가 재생성 직전에 보존(`preserveLegacyDatabase`, `DatabaseModule`)하고 `ensureSeeded`가 복원한다. **장소 데이터만 바뀌어도 버전을 올려야 기존 설치에 전달된다.**
 - 검색은 FTS4 유니그램 색인(`data/local/PlaceFts.kt`). 색인은 에셋에 동봉되며(`build_db.py`의 `fts_index`가 `PlaceFts.index`와 동일 로직이어야 함).
 - **DB를 새 CSV로 재생성할 때는 `/rebuild-db` 스킬을 사용한다** (`tools/build_db.py`의 identity_hash/버전 주의사항이 얽혀 있음). 원본 CSV 는 리포에 없다 — 공공데이터포털에서 받는다(다운로드 URL 은 스킬 참고). 식약처 "반려동물 동반출입 음식점"(약 2,700곳, 좌표 없음)은 `tools/fetch_restaurants.py`(네이버 Geocoding, `naver.map.clientSecret`)로 CSV 를 만들어 세 번째 입력으로 넘긴다. 좌표 캐시 `tools/data/`는 git 제외.

@@ -9,6 +9,9 @@ import com.kimdev.petmap.data.local.entity.PlaceEntity
 /** [PlaceDao.getClusterCells] 결과: 그리드 셀의 대표 좌표(평균)와 장소 개수. */
 data class ClusterCell(val lat: Double, val lng: Double, val cnt: Int)
 
+/** [PlaceDao.getRegionCounts] 결과: 주소 첫 토큰(시/도)·둘째 토큰(시/군/구 후보)별 장소 개수 */
+data class RegionRow(val sido: String, val token: String, val cnt: Int)
+
 @Dao
 interface PlaceDao {
 
@@ -101,8 +104,10 @@ interface PlaceDao {
         limit: Int,
     ): List<ClusterCell>
 
-    /** 검색어 없이 카테고리 필터만 (이름순) */
-    /** 검색어 없이 카테고리·동반 조건만으로 이름순 탐색 (동반 조건 정책은 [getInBounds] 와 동일) */
+    /**
+     * 검색어 없이 카테고리·동반 조건·지역만으로 이름순 탐색 (동반 조건 정책은 [getInBounds] 와 동일).
+     * region 은 [com.kimdev.petmap.domain.model.Region.prefix] ("경기도 고양시 ") 또는 "" (전체).
+     */
     @Query(
         """
         SELECT * FROM places
@@ -111,6 +116,7 @@ interface PlaceDao {
           AND (:indoor = 0 OR indoorAllowed = 1)
           AND (:outdoor = 0 OR outdoorAllowed = 1)
           AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
+          AND (:region = '' OR roadAddress LIKE :region || '%')
         ORDER BY name ASC
         LIMIT :limit
         """
@@ -123,6 +129,7 @@ interface PlaceDao {
         outdoor: Boolean,
         sizeAll: String,
         myPetKg: Double?,
+        region: String,
         limit: Int,
     ): List<PlaceEntity>
 
@@ -136,6 +143,7 @@ interface PlaceDao {
         WHERE (:catCount = 0 OR category IN (:cats))
           AND lat BETWEEN :minLat AND :maxLat
           AND lng BETWEEN :minLng AND :maxLng
+          AND (:region = '' OR roadAddress LIKE :region || '%')
         ORDER BY ((lat - :lat) * (lat - :lat)
                   + (lng - :lng) * (lng - :lng) * :lngScaleSq) ASC
         LIMIT :limit
@@ -151,8 +159,28 @@ interface PlaceDao {
         maxLat: Double,
         minLng: Double,
         maxLng: Double,
+        region: String,
         limit: Int,
     ): List<PlaceEntity>
+
+    /**
+     * 지역 브라우징용 집계: 도로명주소의 첫 토큰(시/도)과 둘째 토큰별 장소 개수.
+     * 둘째 토큰이 시/군/구가 아닌 경우(세종의 읍·면·도로명)는 호출 측이 합친다.
+     * 2.4만 행 문자열 함수 스캔이라 수십 ms — 저장소가 결과를 캐시한다.
+     */
+    @Query(
+        """
+        SELECT sido, token, COUNT(*) AS cnt FROM (
+            SELECT substr(roadAddress, 1, instr(roadAddress, ' ') - 1) AS sido,
+                   substr(substr(roadAddress, instr(roadAddress, ' ') + 1), 1,
+                          instr(substr(roadAddress, instr(roadAddress, ' ') + 1), ' ') - 1) AS token
+            FROM places
+            WHERE instr(roadAddress, ' ') > 0
+        )
+        GROUP BY sido, token
+        """
+    )
+    suspend fun getRegionCounts(): List<RegionRow>
 
     /**
      * FTS 검색. places_fts 는 Migration(2,3) 이 만든 비-엔티티 FTS4 테이블이라

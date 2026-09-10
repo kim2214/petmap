@@ -6,6 +6,8 @@ import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
+import com.kimdev.petmap.domain.model.Region
+import com.kimdev.petmap.domain.model.RegionCount
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -65,7 +67,8 @@ interface PlaceRepository {
 
     /**
      * 이름/주소 검색 + 카테고리 다중 필터 (관련도·이름순). petFilters 는 SQL 에서 AND 로 걸린다.
-     * - 검색어가 비면 카테고리·동반 조건만으로 전체를 이름순 탐색한다(목록 화면 브라우징).
+     * - 검색어가 비면 카테고리·동반 조건·지역만으로 전체를 이름순 탐색한다(목록 화면 브라우징).
+     * - region 을 주면 도로명주소가 그 시/도(·시/군/구)로 시작하는 장소만.
      * - 검색어가 있는데 색인 가능한 글자가 하나도 없으면(이모지·구두점만) **빈 목록** — 전체 폴백은
      *   가나다순 앞 N 건을 "검색 결과"로 보이게 해 오해를 낳는다.
      */
@@ -74,6 +77,7 @@ interface PlaceRepository {
         categories: Set<PlaceCategory> = emptySet(),
         petFilters: Set<PetFilter> = emptySet(),
         myPetKg: Double? = null,
+        region: Region? = null,
         limit: Int = 200,
     ): List<Place>
 
@@ -88,8 +92,15 @@ interface PlaceRepository {
         userLat: Double,
         userLng: Double,
         radiusKm: Double? = null,
+        region: Region? = null,
         limit: Int = 200,
     ): List<Place>
+
+    /**
+     * 지역 브라우징용 시/도·시/군/구별 장소 개수. 시/군/구로 볼 수 없는 토큰(세종의 읍·면 등)은
+     * sigungu = null 한 행으로 합쳐진다. 장소 데이터는 설치 동안 불변이므로 첫 호출 결과를 캐시한다.
+     */
+    suspend fun getRegionCounts(): List<RegionCount>
 
     suspend fun getPlace(id: String): Place?
 

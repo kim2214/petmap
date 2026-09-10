@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.AdUnits
+import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
@@ -170,7 +171,14 @@ fun SettingsScreen(
 
         SectionTitle(stringResource(R.string.settings_section_contact))
         val emailSubject = stringResource(R.string.settings_email_subject)
+        val reportSubject = stringResource(R.string.report_place_subject)
+        val reportBody = stringResource(R.string.report_place_body_format, "")
         SettingsCard {
+            SettingRow(
+                Icons.Filled.AddLocationAlt,
+                stringResource(R.string.settings_report_place),
+                subtitle = stringResource(R.string.settings_report_place_desc),
+            ) { context.sendEmail(CONTACT_EMAIL, subject = reportSubject, body = reportBody) }
             SettingRow(Icons.Filled.Email, stringResource(R.string.settings_email), subtitle = CONTACT_EMAIL) {
                 context.sendEmail(CONTACT_EMAIL, subject = emailSubject)
             }

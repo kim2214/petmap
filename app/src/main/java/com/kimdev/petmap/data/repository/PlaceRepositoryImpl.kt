@@ -18,6 +18,8 @@ import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
+import com.kimdev.petmap.domain.model.Region
+import com.kimdev.petmap.domain.model.RegionCount
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.distanceMeters
 import kotlinx.coroutines.CoroutineDispatcher
@@ -222,6 +224,7 @@ class PlaceRepositoryImpl @Inject constructor(
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
         myPetKg: Double?,
+        region: Region?,
         limit: Int,
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
@@ -230,7 +233,7 @@ class PlaceRepositoryImpl @Inject constructor(
             match != null -> placeDao.searchByFts(
                 ftsQuery(
                     match, query, cats, catCount, userLat = null, userLng = null, petFilters = petFilters,
-                    myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg), limit = limit,
+                    myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg), region = region, limit = limit,
                 ),
             )
             // 검색어는 있는데 색인할 글자가 없다("🐶", "…") → 결과 없음. 전체 폴백은 오해를 낳는다.
@@ -242,6 +245,7 @@ class PlaceRepositoryImpl @Inject constructor(
                 outdoor = PetFilter.OUTDOOR in petFilters,
                 sizeAll = PetFilter.SIZE_ALL,
                 myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
+                region = region?.prefix ?: "",
                 limit = limit,
             )
         }
@@ -254,6 +258,7 @@ class PlaceRepositoryImpl @Inject constructor(
         userLat: Double,
         userLng: Double,
         radiusKm: Double?,
+        region: Region?,
         limit: Int,
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
@@ -262,10 +267,11 @@ class PlaceRepositoryImpl @Inject constructor(
         val rows = if (match == null) {
             placeDao.browseByDistance(
                 cats, catCount, userLat, userLng, lngScaleSq(userLat),
-                minLat = box[0], maxLat = box[1], minLng = box[2], maxLng = box[3], limit = limit,
+                minLat = box[0], maxLat = box[1], minLng = box[2], maxLng = box[3],
+                region = region?.prefix ?: "", limit = limit,
             )
         } else {
-            placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat, userLng, box, limit = limit))
+            placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat, userLng, box, region = region, limit = limit))
         }
         // SQL 정렬은 근사(cos 보정)로 top-N 을 뽑고, 표시 순서는 정확한 거리로 다시 정렬한다.
         return rows.map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
@@ -287,6 +293,7 @@ class PlaceRepositoryImpl @Inject constructor(
         box: DoubleArray? = null,
         petFilters: Set<PetFilter> = emptySet(),
         myPetKg: Double? = null,
+        region: Region? = null,
         limit: Int,
     ): SupportSQLiteQuery {
         val args = mutableListOf<Any>(match)
@@ -317,6 +324,10 @@ class PlaceRepositoryImpl @Inject constructor(
             sql.append(" AND places.maxPetKg >= ?")
             args.add(myPetKg)
         }
+        if (region != null) {
+            sql.append(" AND places.roadAddress LIKE ?")
+            args.add(region.prefix + "%")
+        }
         if (userLat != null && userLng != null) {
             sql.append(
                 " ORDER BY ((places.lat - ?) * (places.lat - ?) + " +
@@ -341,6 +352,21 @@ class PlaceRepositoryImpl @Inject constructor(
         sql.append(" LIMIT ?")
         args.add(limit)
         return SimpleSQLiteQuery(sql.toString(), args.toTypedArray())
+    }
+
+
+    @Volatile
+    private var regionCountsCache: List<RegionCount>? = null
+
+    override suspend fun getRegionCounts(): List<RegionCount> {
+        regionCountsCache?.let { return it }
+        val rows = placeDao.getRegionCounts()
+        // 시/군/구가 아닌 둘째 토큰(세종의 읍·면·도로명 등)은 시/도 아래 "기타" 한 행으로 합친다
+        val merged = rows
+            .groupBy { it.sido to (it.token.takeIf { t -> Region.isSigunguToken(t) }) }
+            .map { (key, group) -> RegionCount(key.first, key.second, group.sumOf { it.cnt }) }
+            .filter { it.sido.isNotBlank() }
+        return merged.also { regionCountsCache = it }
     }
 
     override suspend fun getPlace(id: String): Place? = placeDao.getById(id)?.toDomain()

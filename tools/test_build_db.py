@@ -38,6 +38,20 @@ class ParseMaxPetKgTest(unittest.TestCase):
             self.assertIsNone(b.parse_max_pet_kg(t), t)
 
 
+class NormalizeSidoTest(unittest.TestCase):
+    def test_renames_only_leading_token(self):
+        self.assertEqual(b.normalize_sido("강원도 강릉시 가작로 275"), "강원특별자치도 강릉시 가작로 275")
+        self.assertEqual(b.normalize_sido("전라북도 전주시 덕진구 추탄로 50"), "전북특별자치도 전주시 덕진구 추탄로 50")
+        self.assertEqual(b.normalize_sido("광주광역시 북구 대천로 119-2"), "전남광주통합특별시 북구 대천로 119-2")
+        self.assertEqual(b.normalize_sido("전라남도 여수시 무선로 179"), "전남광주통합특별시 여수시 무선로 179")
+
+    def test_keeps_current_names_and_blank(self):
+        self.assertEqual(b.normalize_sido("강원특별자치도 속초시 중앙로 1"), "강원특별자치도 속초시 중앙로 1")
+        self.assertEqual(b.normalize_sido("서울특별시 강남구 테헤란로 1"), "서울특별시 강남구 테헤란로 1")
+        self.assertEqual(b.normalize_sido(""), "")
+        self.assertEqual(b.normalize_sido(None), "")
+
+
 class HelpersTest(unittest.TestCase):
     def test_yn(self):
         self.assertEqual(b.yn("Y"), 1)

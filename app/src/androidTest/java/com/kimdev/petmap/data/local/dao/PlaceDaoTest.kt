@@ -136,6 +136,28 @@ class PlaceDaoTest {
     }
 
     @Test
+    fun browse_regionPrefix_andRegionCounts() = runBlocking {
+        db.insertPlace("g1", roadAddress = "경기도 고양시 덕양구 동세로 19")
+        db.insertPlace("g2", roadAddress = "경기도 고양시청로 1") // "고양시 " 접두어와 섞이면 안 된다
+        db.insertPlace("s1", roadAddress = "서울특별시 강남구 테헤란로 1")
+        db.insertPlace("sj", roadAddress = "세종특별자치시 조치원읍 1")
+
+        fun browse(region: String) = runBlocking {
+            dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = region, limit = 10)
+                .map { it.id }.toSet()
+        }
+        assertEquals(setOf("g1", "g2", "s1", "sj"), browse(""))
+        assertEquals(setOf("g1", "g2"), browse("경기도 "))
+        assertEquals(setOf("g1"), browse("경기도 고양시 "))
+
+        val rows = dao.getRegionCounts()
+        assertEquals(1, rows.first { it.sido == "경기도" && it.token == "고양시" }.cnt)
+        assertEquals(1, rows.first { it.sido == "경기도" && it.token == "고양시청로" }.cnt)
+        assertEquals(1, rows.first { it.sido == "서울특별시" && it.token == "강남구" }.cnt)
+        assertEquals("조치원읍", rows.first { it.sido == "세종특별자치시" }.token)
+    }
+
+    @Test
     fun getClusterCells_aggregatesPerGridCell() = runBlocking {
         // 2×2 격자 (latStep=lngStep=0.5): 좌하 셀에 2개, 우상 셀에 1개
         db.insertPlace("a", lat = 37.1, lng = 127.1)
@@ -162,10 +184,10 @@ class PlaceDaoTest {
         db.insertPlace("c2", name = "가온카페", category = "CAFE")
         db.insertPlace("h1", name = "나눔병원", category = "HOSPITAL")
 
-        val all = dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, limit = 10)
+        val all = dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
         assertEquals(listOf("가온카페", "나눔병원", "다정카페"), all.map { it.name })
 
-        val cafes = dao.browse(listOf("CAFE"), 1, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, limit = 10)
+        val cafes = dao.browse(listOf("CAFE"), 1, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
         assertEquals(listOf("가온카페", "다정카페"), cafes.map { it.name })
     }
 
@@ -177,7 +199,7 @@ class PlaceDaoTest {
         val result = dao.browseByDistance(
             cats = allCats.first, catCount = allCats.second,
             lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
-            minLat = -90.0, maxLat = 90.0, minLng = -180.0, maxLng = 180.0, limit = 10,
+            minLat = -90.0, maxLat = 90.0, minLng = -180.0, maxLng = 180.0, region = "", limit = 10,
         )
         assertEquals(listOf("near", "far"), result.map { it.id })
 
@@ -185,7 +207,7 @@ class PlaceDaoTest {
         val boxed = dao.browseByDistance(
             cats = allCats.first, catCount = allCats.second,
             lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
-            minLat = 37.3, maxLat = 37.7, minLng = 126.8, maxLng = 127.2, limit = 10,
+            minLat = 37.3, maxLat = 37.7, minLng = 126.8, maxLng = 127.2, region = "", limit = 10,
         )
         assertEquals(listOf("near"), boxed.map { it.id })
     }

@@ -6,6 +6,8 @@ import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.PetFilter
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
+import com.kimdev.petmap.domain.model.Region
+import com.kimdev.petmap.domain.model.RegionCount
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.domain.util.distanceMeters
 import kotlinx.coroutines.CompletableDeferred
@@ -43,11 +45,13 @@ class FakePlaceRepository : PlaceRepository {
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter> = emptySet(),
         myPetKg: Double? = null,
+        region: Region? = null,
     ): List<Place> =
         filter { p ->
             (query.isBlank() || p.name.contains(query, ignoreCase = true)) &&
                 (categories.isEmpty() || p.category in categories) &&
-                petFilters.all { it.matches(p, myPetKg) }
+                petFilters.all { it.matches(p, myPetKg) } &&
+                (region == null || p.roadAddress.startsWith(region.prefix))
         }
 
     /** 설정하면 ensureSeeded 가 이 예외를 던진다 (에셋 DB 준비 실패 시뮬레이션) */
@@ -122,20 +126,23 @@ class FakePlaceRepository : PlaceRepository {
     /** 설정하면 search 가 완료될 때까지 suspend 한다 (진행 중 취소 시나리오 재현용) */
     var searchGate: CompletableDeferred<Unit>? = null
     var lastSearchPetFilters: Set<PetFilter>? = null
+    var lastRegion: Region? = null
 
     override suspend fun search(
         query: String,
         categories: Set<PlaceCategory>,
         petFilters: Set<PetFilter>,
         myPetKg: Double?,
+        region: Region?,
         limit: Int,
     ): List<Place> {
         searchCount++
+        lastRegion = region
         lastSearchLimit = limit
         lastCategories = categories
         lastSearchPetFilters = petFilters
         searchGate?.await()
-        return dataset.filterBy(query, categories, petFilters, myPetKg).take(limit)
+        return dataset.filterBy(query, categories, petFilters, myPetKg, region).take(limit)
     }
 
     override suspend fun searchNearby(
@@ -144,13 +151,15 @@ class FakePlaceRepository : PlaceRepository {
         userLat: Double,
         userLng: Double,
         radiusKm: Double?,
+        region: Region?,
         limit: Int,
     ): List<Place> {
         searchNearbyCount++
         lastSearchNearbyLimit = limit
         lastSearchNearbyRadiusKm = radiusKm
         lastCategories = categories
-        return dataset.filterBy(query, categories)
+        lastRegion = region
+        return dataset.filterBy(query, categories, region = region)
             .map { it.copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
             .filter { radiusKm == null || (it.distanceMeters ?: 0.0) <= radiusKm * 1000 }
             .sortedBy { it.distanceMeters }
@@ -158,6 +167,18 @@ class FakePlaceRepository : PlaceRepository {
     }
 
     override suspend fun getPlace(id: String): Place? = dataset.find { it.id == id }
+
+    var regionCountsCalls = 0
+
+    /** 실제 구현과 같은 규칙: 도로명주소 첫/둘째 토큰, 둘째가 시/군/구가 아니면 null 로 합친다 */
+    override suspend fun getRegionCounts(): List<RegionCount> {
+        regionCountsCalls++
+        return dataset
+            .map { it.roadAddress.split(" ") }
+            .filter { it.size >= 2 }
+            .groupBy { it[0] to it[1].takeIf(Region::isSigunguToken) }
+            .map { (key, group) -> RegionCount(key.first, key.second, group.size) }
+    }
 
     override fun observeFavorites(): Flow<List<Place>> =
         favorites.map { ids -> dataset.filter { it.id in ids } }

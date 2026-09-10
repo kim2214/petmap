@@ -42,6 +42,11 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.TextButton
+import com.kimdev.petmap.core.common.Constants
+import com.kimdev.petmap.core.util.sendEmail
 import com.kimdev.petmap.R
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,6 +56,7 @@ import com.kimdev.petmap.ui.components.EmptyState
 import com.kimdev.petmap.ui.components.TabScreenScaffold
 import com.kimdev.petmap.ui.components.PetFilterChips
 import com.kimdev.petmap.ui.components.PetWeightDialog
+import com.kimdev.petmap.ui.components.RegionSheet
 import com.kimdev.petmap.ui.components.PlaceCard
 import com.kimdev.petmap.ui.components.PlaceCardSkeleton
 import com.kimdev.petmap.ui.components.PlaceListSkeleton
@@ -101,6 +107,7 @@ fun ListScreen(
     var pendingDistanceSort by rememberSaveable { mutableStateOf(false) }
     // '내 아이 가능' 칩을 체중 미등록 상태에서 눌렀을 때의 등록 다이얼로그
     var showPetWeightDialog by rememberSaveable { mutableStateOf(false) }
+    var showRegionSheet by rememberSaveable { mutableStateOf(false) }
 
     // "거리순" 칩에서 위치 권한을 바로 요청할 수 있게 한다 (지도 탭을 안 거쳐도 됨)
     val locationPermission = rememberLocationPermission(
@@ -172,6 +179,16 @@ fun ListScreen(
                         .weight(1f)
                         .horizontalScroll(rememberScrollState()),
                 ) {
+                    // 지역 브라우징(시/도 → 시/군/구). 여행 계획처럼 내 위치와 무관한 탐색용
+                    FilterChip(
+                        selected = state.region != null,
+                        onClick = {
+                            viewModel.loadRegionCounts()
+                            showRegionSheet = true
+                        },
+                        label = { Text(state.region?.shortLabel ?: stringResource(R.string.filter_region)) },
+                        leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) },
+                    )
                     FilterChip(
                         selected = state.sortByDistance,
                         onClick = {
@@ -256,6 +273,8 @@ fun ListScreen(
 
             state.places.isEmpty() -> {
                 val hasFilters = state.selectedCategories.isNotEmpty() || state.petFilters.isNotEmpty()
+                val reportBody = stringResource(R.string.report_place_body_format, state.query)
+                val reportSubject = stringResource(R.string.report_place_subject)
                 val (title, desc) = when {
                     // 거리순 반경(주변 N km) 밖만 남은 경우 — 다른 필터보다 먼저 안내한다
                     state.sortByDistance ->
@@ -263,6 +282,7 @@ fun ListScreen(
                             stringResource(R.string.empty_nearby_desc)
                     state.openNowOnly -> stringResource(R.string.empty_open_now_title) to stringResource(R.string.empty_open_now_desc)
                     state.query.isNotBlank() -> stringResource(R.string.empty_search_title_format, state.query) to stringResource(R.string.empty_search_desc)
+                    state.region != null -> stringResource(R.string.empty_region_title_format, state.region?.shortLabel ?: "") to stringResource(R.string.empty_region_desc)
                     hasFilters -> stringResource(R.string.empty_filter_title) to stringResource(R.string.empty_filter_desc)
                     else -> stringResource(R.string.empty_none_title) to null
                 }
@@ -275,7 +295,18 @@ fun ListScreen(
                         { Button(onClick = { viewModel.setOpenNowOnly(false) }) { Text(stringResource(R.string.action_open_now_off)) } }
                     }
                     state.query.isNotBlank() -> {
-                        { Button(onClick = { viewModel.onQueryChange("") }) { Text(stringResource(R.string.action_clear_search)) } }
+                        {
+                            // 검색해도 없는 곳이면 데이터 공백일 수 있다 → 제보 동선을 바로 준다
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Button(onClick = { viewModel.onQueryChange("") }) { Text(stringResource(R.string.action_clear_search)) }
+                                TextButton(onClick = { context.sendEmail(Constants.CONTACT_EMAIL, reportSubject, reportBody) }) {
+                                    Text(stringResource(R.string.action_report_place))
+                                }
+                            }
+                        }
+                    }
+                    state.region != null -> {
+                        { Button(onClick = { viewModel.setRegion(null) }) { Text(stringResource(R.string.action_region_off)) } }
                     }
                     hasFilters -> {
                         { Button(onClick = { viewModel.clearFilters() }) { Text(stringResource(R.string.action_reset_filter)) } }
@@ -332,6 +363,18 @@ fun ListScreen(
                 }
             }
         }
+    }
+
+    if (showRegionSheet) {
+        RegionSheet(
+            current = state.region,
+            counts = state.regionCounts,
+            onSelect = { region ->
+                viewModel.setRegion(region)
+                showRegionSheet = false
+            },
+            onDismiss = { showRegionSheet = false },
+        )
     }
 
     if (showPetWeightDialog) {

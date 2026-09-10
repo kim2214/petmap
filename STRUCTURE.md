@@ -18,7 +18,7 @@ com.kimdev.petmap
 │   └── util/      IntentActions (전화·공유·네이버 길찾기·홈페이지 열기)
 │
 ├── domain/                       # 순수 비즈니스 (안드로이드 의존성 없음)
-│   ├── model/      Place·PetInfo·PlaceCategory, GeoClusterCell(저줌 집계 셀)
+│   ├── model/      Place·PetInfo·PlaceCategory·PetFilter, Region/RegionCount(지역 브라우징), GeoClusterCell(저줌 집계 셀)
 │   ├── repository/ PlaceRepository (인터페이스)
 │   └── util/       Geo(거리 계산·포맷), OpeningHours(운영시간 파싱 → 영업중 판정)
 │
@@ -46,7 +46,7 @@ com.kimdev.petmap
     ├── detail/     DetailScreen·DetailViewModel (상세 + 미니맵 + 액션)
     ├── settings/   SettingsScreen·SettingsViewModel(테마), LicensesScreen(오픈소스 고지)
     ├── onboarding/ OnboardingScreen (최초 실행 + 설정에서 다시 보기)
-    ├── components/ BannerAd, CategoryFilterRow, CategoryVisuals, EmptyState, PetWeightDialog(체중 입력, 설정·칩 공용),
+    ├── components/ BannerAd, CategoryFilterRow, CategoryVisuals, EmptyState, PetWeightDialog(체중 입력, 설정·칩 공용), RegionSheet(시/도→시/군/구 선택),
 │   │              TabScreenScaffold(목록·즐겨찾기 공통 골격), PetFilterChips, LocationPermission(ui/common)
     │               LocationSettingsDialog, PlaceCard, PlacePreviewSheet, SearchTextField
     ├── common/     SavedFilters (SavedStateHandle 필터 직렬화)
@@ -66,7 +66,7 @@ com.kimdev.petmap
 ## 데이터 흐름 (단방향)
 
 ```
-assets/petmap.db (프리빌트, v7·FTS·meta 동봉) ─ createFromAsset ─→ Room
+assets/petmap.db (프리빌트, v8·FTS·meta 동봉) ─ createFromAsset ─→ Room
                                                               │
 Room(places + favorites) ─→ PlaceRepositoryImpl ─→ ViewModel(StateFlow) ─→ Compose UI
 ```
@@ -105,5 +105,5 @@ naver.map.clientId=네이버클라우드_Maps_ClientID
 
 ## 다음 확장 포인트
 
-- 시/도 → 시/군/구 지역 브라우징 (도로명주소 접두어)
-- 새 장소 제보 진입점(설정·검색 0건 빈 상태)
+- 기본 목록(이름순)에서 "(주)" 상호가 맨 위에 몰림 → 정렬 키 정규화 검토
+- 지역 선택을 지도 화면에도(카메라 이동) 확장
