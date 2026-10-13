@@ -486,7 +486,6 @@ fun MapScreen(
                             FilterChip(
                                 selected = false,
                                 onClick = {
-                                    viewModel.loadRegionCounts()
                                     showRegionSheet = true
                                 },
                                 label = { Text(stringResource(R.string.filter_region)) },
@@ -732,6 +731,8 @@ fun MapScreen(
         RegionSheet(
             current = null,
             counts = state.regionCounts,
+            isError = state.regionCountsError,
+            onLoad = viewModel::loadRegionCounts,
             onSelect = { region ->
                 showRegionSheet = false
                 if (region != null) viewModel.selectRegion(region)

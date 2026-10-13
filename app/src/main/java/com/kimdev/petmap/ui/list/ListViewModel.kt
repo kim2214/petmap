@@ -57,6 +57,8 @@ data class ListUiState(
     val region: Region? = null,
     /** 지역 선택 시트용 개수. 시트를 처음 열 때 채워진다(비어 있으면 로딩 중) */
     val regionCounts: List<RegionCount> = emptyList(),
+    /** 지역 개수 조회 실패 — 시트가 무한 로딩 대신 재시도를 보인다 */
+    val regionCountsError: Boolean = false,
     val hasLocation: Boolean = false,
     val recentSearches: List<String> = emptyList(),
     /** 조회 실패 여부. true 면 "결과 없음"이 아니라 에러 상태로 표시한다. */
@@ -169,31 +171,34 @@ class ListViewModel @Inject constructor(
             else it.copy(isLoading = true, isError = false)
         }
         val loc = userLocation
-        // 조회 후 필터(영업중·동반 조건)가 켜지면 걸러진 뒤에도 페이지가 채워지도록 더 넉넉히 가져온다
-        val fetchLimit = if (key.openNowOnly || key.petFilters.isNotEmpty()) pageLimit * 2 else pageLimit
+        // 영업중 필터는 조회 후 걸러지므로, 걸러진 뒤에도 페이지가 채워지도록 더 넉넉히 가져온다.
+        // 동반 조건은 SQL 에서 LIMIT 전에 걸린다 — 잘라낸 뒤 거르면 조건에 맞는 장소가 상한 밖으로 밀려 유실된다.
+        val fetchLimit = if (key.openNowOnly) pageLimit * 2 else pageLimit
 
         runCatching {
             val fetched = if (key.sortByDistance && loc != null) {
                 // 거리순은 "주변" 탐색 의도 → 반경 밖은 제외 (0건이면 화면이 거리순 해제를 안내)
-                repository.searchNearby(key.query, key.categories, loc.lat, loc.lng, NEARBY_RADIUS_KM, key.region, fetchLimit)
+                repository.searchNearby(
+                    key.query, key.categories, loc.lat, loc.lng, NEARBY_RADIUS_KM,
+                    petFilters = key.petFilters, myPetKg = key.myPetKg, region = key.region, limit = fetchLimit,
+                )
             } else {
-                val results = repository.search(key.query, key.categories, region = key.region, limit = fetchLimit)
+                val results = repository.search(
+                    key.query, key.categories, petFilters = key.petFilters, myPetKg = key.myPetKg,
+                    region = key.region, limit = fetchLimit,
+                )
                 // 위치를 알면 거리순 정렬을 켜지 않아도 카드에 거리를 표시한다
                 if (loc == null) results
                 else results.map { it.copy(distanceMeters = distanceMeters(loc.lat, loc.lng, it.lat, it.lng)) }
             }
-            // 동반 조건 필터: 단순 필드 비교라 메인에서 걸러도 충분히 싸다
-            val petFiltered =
-                if (key.petFilters.isEmpty()) fetched
-                else fetched.filter { place -> key.petFilters.all { it.matches(place, key.myPetKg) } }
             val visible = if (key.openNowOnly) {
                 val now = LocalDateTime.now()
                 // 운영시간 파싱(정규식)은 CPU 작업이라 백그라운드에서 처리
                 withContext(defaultDispatcher) {
-                    petFiltered.filter { OpeningHours.isOpenNow(it.operatingTime, it.closedDays, now) == true }
+                    fetched.filter { OpeningHours.isOpenNow(it.operatingTime, it.closedDays, now) == true }
                 }
             } else {
-                petFiltered
+                fetched
             }
             // 한도를 꽉 채워 돌아왔다면 DB 에 더 남아 있을 수 있다(필터 후 개수가 아니라 조회 개수로 판단)
             FetchResult(visible.take(pageLimit), hasMore = fetched.size >= fetchLimit)
@@ -343,15 +348,22 @@ class ListViewModel @Inject constructor(
     /** 지역 브라우징 선택/해제(null). SearchKey 에 포함돼 자동 재조회된다 */
     fun setRegion(region: Region?) = _uiState.update { it.copy(region = region) }
 
-    /** 지역 선택 시트를 열 때 호출 — 개수는 설치 동안 불변이라 한 번만 가져온다 */
+    private var regionCountsJob: Job? = null
+
+    /**
+     * 지역 선택 시트가 열려 있는 동안 호출 — 개수는 설치 동안 불변이라 한 번만 가져온다.
+     * 시트는 rememberSaveable 이라 프로세스 복원 후에도 다시 열리므로 화면이 열림 상태를 키로 호출한다.
+     */
     fun loadRegionCounts() {
-        if (_uiState.value.regionCounts.isNotEmpty()) return
-        viewModelScope.launch {
+        if (_uiState.value.regionCounts.isNotEmpty() || regionCountsJob?.isActive == true) return
+        _uiState.update { it.copy(regionCountsError = false) }
+        regionCountsJob = viewModelScope.launch {
             runCatching { repository.getRegionCounts() }
                 .onSuccess { counts -> _uiState.update { it.copy(regionCounts = counts) } }
                 .onFailure { e ->
                     if (e is kotlinx.coroutines.CancellationException) throw e
                     Log.w(TAG, "getRegionCounts failed: ${e.message}")
+                    _uiState.update { it.copy(regionCountsError = true) }
                 }
         }
     }

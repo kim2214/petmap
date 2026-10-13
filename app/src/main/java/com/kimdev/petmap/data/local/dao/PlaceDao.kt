@@ -137,7 +137,7 @@ interface PlaceDao {
     ): List<PlaceEntity>
 
     /**
-     * 검색어 없이 카테고리 필터만, 지정 좌표에서 가까운 순 (lng 항에 cos²(lat) 보정).
+     * 검색어 없이 카테고리·동반 조건 필터로, 지정 좌표에서 가까운 순 (lng 항에 cos²(lat) 보정).
      * min/max 박스로 반경을 제한한다(제한 없으면 전 세계 범위를 넘긴다).
      */
     @Query(
@@ -146,6 +146,10 @@ interface PlaceDao {
         WHERE (:catCount = 0 OR category IN (:cats))
           AND lat BETWEEN :minLat AND :maxLat
           AND lng BETWEEN :minLng AND :maxLng
+          AND (:anySize = 0 OR allowedPetSize = :sizeAll)
+          AND (:indoor = 0 OR indoorAllowed = 1)
+          AND (:outdoor = 0 OR outdoorAllowed = 1)
+          AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
           AND (:region = '' OR roadAddress LIKE :region || '%')
         ORDER BY ((lat - :lat) * (lat - :lat)
                   + (lng - :lng) * (lng - :lng) * :lngScaleSq) ASC
@@ -162,6 +166,11 @@ interface PlaceDao {
         maxLat: Double,
         minLng: Double,
         maxLng: Double,
+        anySize: Boolean,
+        indoor: Boolean,
+        outdoor: Boolean,
+        sizeAll: String,
+        myPetKg: Double?,
         region: String,
         limit: Int,
     ): List<PlaceEntity>

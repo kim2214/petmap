@@ -214,7 +214,8 @@ class PlaceDaoTest {
         val result = dao.browseByDistance(
             cats = allCats.first, catCount = allCats.second,
             lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
-            minLat = -90.0, maxLat = 90.0, minLng = -180.0, maxLng = 180.0, region = "", limit = 10,
+            minLat = -90.0, maxLat = 90.0, minLng = -180.0, maxLng = 180.0, 
+            anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10,
         )
         assertEquals(listOf("near", "far"), result.map { it.id })
 
@@ -222,9 +223,26 @@ class PlaceDaoTest {
         val boxed = dao.browseByDistance(
             cats = allCats.first, catCount = allCats.second,
             lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
-            minLat = 37.3, maxLat = 37.7, minLng = 126.8, maxLng = 127.2, region = "", limit = 10,
+            minLat = 37.3, maxLat = 37.7, minLng = 126.8, maxLng = 127.2, 
+            anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10,
         )
         assertEquals(listOf("near"), boxed.map { it.id })
+    }
+
+    @Test
+    fun browseByDistance_appliesPetFiltersBeforeLimit() = runBlocking {
+        db.insertPlace("near-indoor-no", lat = 37.51, lng = 127.0, indoorAllowed = false, maxPetKg = 30.0)
+        db.insertPlace("mid-indoor-light", lat = 37.52, lng = 127.0, indoorAllowed = true, maxPetKg = 5.0)
+        db.insertPlace("far-indoor-heavy", lat = 37.9, lng = 127.0, indoorAllowed = true, maxPetKg = 30.0)
+
+        // limit 1 이어도 가까운 비해당 장소에 자리를 뺏기지 않는다
+        val result = dao.browseByDistance(
+            cats = allCats.first, catCount = allCats.second,
+            lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
+            minLat = -90.0, maxLat = 90.0, minLng = -180.0, maxLng = 180.0,
+            anySize = false, indoor = true, outdoor = false, sizeAll = "", myPetKg = 10.0, region = "", limit = 1,
+        )
+        assertEquals(listOf("far-indoor-heavy"), result.map { it.id })
     }
 
     @Test

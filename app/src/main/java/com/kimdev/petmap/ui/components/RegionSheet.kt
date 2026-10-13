@@ -1,6 +1,6 @@
 package com.kimdev.petmap.ui.components
 
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,6 +26,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -42,22 +45,28 @@ import com.kimdev.petmap.domain.model.RegionCount
 /**
  * 지역 선택 바텀시트: 시/도 칩 → 시/군/구 목록(가나다순, 개수 표시) 2단계.
  * 시/군/구 단계가 없는 시/도(세종)는 시/도를 누르면 바로 선택된다.
- * [counts] 가 비어 있으면 로딩 표시.
+ * [counts] 가 비어 있으면 로딩 표시, [isError] 면 재시도 버튼.
+ * 시트가 처음 구성될 때 [onLoad] 를 부른다 — 프로세스 복원으로 시트가 다시 열려도 개수를 채우기 위함.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun RegionSheet(
     current: Region?,
     counts: List<RegionCount>,
+    isError: Boolean,
+    onLoad: () -> Unit,
     onSelect: (Region?) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    LaunchedEffect(Unit) { onLoad() }
     // 현재 선택된 시/도가 있으면 그 시/군/구 단계부터 보여준다
     var sido by rememberSaveable { mutableStateOf(current?.sido) }
     val bySido = counts.groupBy { it.sido }
     val sidoOrder = Region.SIDO_ORDER.filter { it in bySido } + bySido.keys.filter { it !in Region.SIDO_ORDER }.sorted()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
+        // 시/군/구 단계의 뒤로가기는 시트를 닫지 않고 시/도 단계로 돌아간다
+        BackHandler(enabled = sido != null) { sido = null }
         Column(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
@@ -85,6 +94,20 @@ fun RegionSheet(
             Spacer(Modifier.height(8.dp))
 
             when {
+                counts.isEmpty() && isError -> Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        stringResource(R.string.region_load_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = onLoad) { Text(stringResource(R.string.action_retry)) }
+                }
+
                 counts.isEmpty() -> Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -147,7 +170,8 @@ private fun RegionRowItem(label: String, count: Int, selected: Boolean, onClick:
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            // 선택 상태를 색으로만 구분하면 TalkBack 이 읽지 못한다 → 라디오 의미 부여
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

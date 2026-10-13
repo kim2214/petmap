@@ -262,20 +262,33 @@ class PlaceRepositoryImpl @Inject constructor(
         userLat: Double,
         userLng: Double,
         radiusKm: Double?,
+        petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         region: Region?,
         limit: Int,
     ): List<Place> {
         val (cats, catCount) = catsOf(categories)
         val match = PlaceFts.match(query)
         val box = radiusKm?.let { boundingBox(userLat, userLng, it) } ?: WORLD_BOX
+        val weight = PetFilter.effectiveWeight(petFilters, myPetKg)
         val rows = if (match == null) {
             placeDao.browseByDistance(
                 cats, catCount, userLat, userLng, lngScaleSq(userLat),
                 minLat = box[0], maxLat = box[1], minLng = box[2], maxLng = box[3],
+                anySize = PetFilter.ANY_SIZE in petFilters,
+                indoor = PetFilter.INDOOR in petFilters,
+                outdoor = PetFilter.OUTDOOR in petFilters,
+                sizeAll = PetFilter.SIZE_ALL,
+                myPetKg = weight,
                 region = region?.prefix ?: "", limit = limit,
             )
         } else {
-            placeDao.searchByFts(ftsQuery(match, query, cats, catCount, userLat, userLng, box, region = region, limit = limit))
+            placeDao.searchByFts(
+                ftsQuery(
+                    match, query, cats, catCount, userLat, userLng, box,
+                    petFilters = petFilters, myPetKg = weight, region = region, limit = limit,
+                ),
+            )
         }
         // SQL 정렬은 근사(cos 보정)로 top-N 을 뽑고, 표시 순서는 정확한 거리로 다시 정렬한다.
         return rows.map { it.toDomain().copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
@@ -376,14 +389,17 @@ class PlaceRepositoryImpl @Inject constructor(
     override suspend fun getRegionBounds(region: Region): GeoBounds? {
         val coords = placeDao.getCoordsInRegion(region.prefix)
         if (coords.isEmpty()) return null
-        val lats = coords.map { it.lat }.sorted()
-        val lngs = coords.map { it.lng }.sorted()
-        // 표본이 적으면 자르지 않는다(시/군/구 단위 수십 곳에서 2% 는 0~1개)
-        val trim = if (coords.size >= TRIM_MIN_SAMPLES) (coords.size * TRIM_RATIO).toInt() else 0
-        return GeoBounds(
-            minLat = lats[trim], maxLat = lats[lats.lastIndex - trim],
-            minLng = lngs[trim], maxLng = lngs[lngs.lastIndex - trim],
-        )
+        // 경기도처럼 수천 곳인 시/도는 정렬 2회가 수 ms — 호출 측(Main)을 막지 않게 IO 에서
+        return withContext(ioDispatcher) {
+            val lats = coords.map { it.lat }.sorted()
+            val lngs = coords.map { it.lng }.sorted()
+            // 표본이 적으면 자르지 않는다(시/군/구 단위 수십 곳에서 2% 는 0~1개)
+            val trim = if (coords.size >= TRIM_MIN_SAMPLES) (coords.size * TRIM_RATIO).toInt() else 0
+            GeoBounds(
+                minLat = lats[trim], maxLat = lats[lats.lastIndex - trim],
+                minLng = lngs[trim], maxLng = lngs[lngs.lastIndex - trim],
+            )
+        }
     }
 
     override suspend fun getPlace(id: String): Place? = placeDao.getById(id)?.toDomain()

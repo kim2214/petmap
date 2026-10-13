@@ -127,6 +127,9 @@ class FakePlaceRepository : PlaceRepository {
     /** 설정하면 search 가 완료될 때까지 suspend 한다 (진행 중 취소 시나리오 재현용) */
     var searchGate: CompletableDeferred<Unit>? = null
     var lastSearchPetFilters: Set<PetFilter>? = null
+    var lastSearchMyPetKg: Double? = null
+    var lastSearchNearbyPetFilters: Set<PetFilter>? = null
+    var lastSearchNearbyMyPetKg: Double? = null
     var lastRegion: Region? = null
 
     override suspend fun search(
@@ -142,6 +145,7 @@ class FakePlaceRepository : PlaceRepository {
         lastSearchLimit = limit
         lastCategories = categories
         lastSearchPetFilters = petFilters
+        lastSearchMyPetKg = myPetKg
         searchGate?.await()
         return dataset.filterBy(query, categories, petFilters, myPetKg, region).take(limit)
     }
@@ -152,15 +156,20 @@ class FakePlaceRepository : PlaceRepository {
         userLat: Double,
         userLng: Double,
         radiusKm: Double?,
+        petFilters: Set<PetFilter>,
+        myPetKg: Double?,
         region: Region?,
         limit: Int,
     ): List<Place> {
         searchNearbyCount++
+        lastSearchNearbyPetFilters = petFilters
+        lastSearchNearbyMyPetKg = myPetKg
         lastSearchNearbyLimit = limit
         lastSearchNearbyRadiusKm = radiusKm
         lastCategories = categories
         lastRegion = region
-        return dataset.filterBy(query, categories, region = region)
+        // 실제 구현처럼 동반 조건은 limit 전에 건다
+        return dataset.filterBy(query, categories, petFilters, myPetKg, region)
             .map { it.copy(distanceMeters = distanceMeters(userLat, userLng, it.lat, it.lng)) }
             .filter { radiusKm == null || (it.distanceMeters ?: 0.0) <= radiusKm * 1000 }
             .sortedBy { it.distanceMeters }
@@ -170,6 +179,9 @@ class FakePlaceRepository : PlaceRepository {
     override suspend fun getPlace(id: String): Place? = dataset.find { it.id == id }
 
     var regionCountsCalls = 0
+
+    /** 설정하면 getRegionCounts 가 이 예외를 던진다 */
+    var regionCountsFailure: Throwable? = null
 
     override suspend fun getRegionBounds(region: Region): GeoBounds? {
         val inRegion = dataset.filter { it.roadAddress.startsWith(region.prefix) }
@@ -183,6 +195,7 @@ class FakePlaceRepository : PlaceRepository {
     /** 실제 구현과 같은 규칙: 도로명주소 첫/둘째 토큰, 둘째가 시/군/구가 아니면 null 로 합친다 */
     override suspend fun getRegionCounts(): List<RegionCount> {
         regionCountsCalls++
+        regionCountsFailure?.let { throw it }
         return dataset
             .map { it.roadAddress.split(" ") }
             .filter { it.size >= 2 }

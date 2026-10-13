@@ -274,13 +274,68 @@ class ListViewModelTest {
 
         vm.togglePetFilter(PetFilter.INDOOR)
         advanceUntilIdle()
-        assertEquals(400, repo.lastSearchLimit) // 조회 후 필터라 넉넉히 가져온다
+        assertEquals(200, repo.lastSearchLimit) // SQL 에서 거르므로 넉넉히 가져올 필요 없다
+        assertEquals(setOf(PetFilter.INDOOR), repo.lastSearchPetFilters)
         assertEquals(listOf("both", "indoorOnly"), vm.uiState.value.places.map { it.id })
 
         vm.togglePetFilter(PetFilter.ANY_SIZE) // 실내 AND 모든 크기
         advanceUntilIdle()
         assertEquals(listOf("both"), vm.uiState.value.places.map { it.id })
     }
+
+    @Test
+    fun `동반 조건은 저장소에 넘겨 limit 전에 걸린다 - 희소 조건이 상한 밖으로 밀려 유실되지 않는다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            // 이름순 앞 450곳은 정보 없음, 맨 뒤 한 곳만 실외 가능 — 잘라낸 뒤 거르면 0건이 된다
+            repo.dataset = List(450) { testPlace("p%03d".format(it)) } +
+                testPlace("z-outdoor", outdoorAllowed = true, maxPetKg = 30.0)
+            petProfileStore.setWeight(20.0)
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            vm.togglePetFilter(PetFilter.OUTDOOR)
+            vm.togglePetFilter(PetFilter.MY_PET)
+            advanceUntilIdle()
+
+            assertEquals(setOf(PetFilter.OUTDOOR, PetFilter.MY_PET), repo.lastSearchPetFilters)
+            assertEquals(20.0, repo.lastSearchMyPetKg)
+            assertEquals(listOf("z-outdoor"), vm.uiState.value.places.map { it.id })
+        }
+
+    @Test
+    fun `거리순에서도 동반 조건과 체중을 searchNearby 에 넘긴다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(
+            testPlace("ok", indoorAllowed = true),
+            testPlace("noInfo"),
+        )
+        val vm = viewModel(location = UserLocation(37.5, 127.0))
+        advanceUntilIdle()
+
+        vm.setSortByDistance(true)
+        vm.togglePetFilter(PetFilter.INDOOR)
+        advanceUntilIdle()
+
+        assertEquals(setOf(PetFilter.INDOOR), repo.lastSearchNearbyPetFilters)
+        assertEquals(listOf("ok"), vm.uiState.value.places.map { it.id })
+    }
+
+    @Test
+    fun `지역 개수 조회 실패는 regionCountsError 로 드러나고 다시 부르면 복구된다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("goyang", roadAddress = "경기도 고양시 덕양구 동세로 19"))
+            repo.regionCountsFailure = IllegalStateException("db closed")
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            vm.loadRegionCounts(); advanceUntilIdle()
+            assertTrue(vm.uiState.value.regionCountsError)
+            assertTrue(vm.uiState.value.regionCounts.isEmpty())
+
+            repo.regionCountsFailure = null
+            vm.loadRegionCounts(); advanceUntilIdle()
+            assertFalse(vm.uiState.value.regionCountsError)
+            assertEquals(1, vm.uiState.value.regionCounts.size)
+        }
 
     @Test
     fun `동반 조건 필터가 저장되어 새 인스턴스에서 복원된다`() = runTest(mainDispatcherRule.testDispatcher) {

@@ -87,7 +87,10 @@ fun ListScreen(
     // 조건이 "바뀐" 게 아니므로 보던 위치를 유지한다.
     LaunchedEffect(Unit) {
         snapshotFlow {
-            listOf(state.query, state.selectedCategories, state.sortByDistance, state.openNowOnly, state.petFilters)
+            listOf(
+                state.query, state.selectedCategories, state.sortByDistance, state.openNowOnly,
+                state.petFilters, state.myPetKg, state.region,
+            )
         }
             .distinctUntilChanged()
             .drop(1)
@@ -183,7 +186,6 @@ fun ListScreen(
                     FilterChip(
                         selected = state.region != null,
                         onClick = {
-                            viewModel.loadRegionCounts()
                             showRegionSheet = true
                         },
                         label = { Text(state.region?.shortLabel ?: stringResource(R.string.filter_region)) },
@@ -329,7 +331,9 @@ fun ListScreen(
                         last >= state.places.size - LOAD_MORE_THRESHOLD
                     }
                 }
-                LaunchedEffect(shouldLoadMore) {
+                // 개수도 키에 둔다: 결과가 화면보다 짧으면 shouldLoadMore 가 true 로 머물러
+                // 다음 페이지가 붙어도 효과가 다시 돌지 않고 멈춘다.
+                LaunchedEffect(shouldLoadMore, state.places.size) {
                     if (shouldLoadMore) viewModel.loadMore()
                 }
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -369,6 +373,8 @@ fun ListScreen(
         RegionSheet(
             current = state.region,
             counts = state.regionCounts,
+            isError = state.regionCountsError,
+            onLoad = viewModel::loadRegionCounts,
             onSelect = { region ->
                 viewModel.setRegion(region)
                 showRegionSheet = false

@@ -32,7 +32,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PetMap">
 
-        <!-- AdMob 앱 ID (local.properties 의 admob.appId 에서 주입). 없으면 앱 시작 시 크래시함. -->
+        <!-- AdMob 앱 ID (app/build.gradle.kts 의 빌드 타입별 manifestPlaceholders 에서 주입 — 디버그는 테스트 ID). 없으면 앱 시작 시 크래시함. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="${admobAppId}" />

@@ -54,6 +54,8 @@ data class MapUiState(
     val myPetKg: Double? = null,
     /** 지역 선택 시트용 개수. 시트를 처음 열 때 채워진다(비어 있으면 로딩 중) */
     val regionCounts: List<RegionCount> = emptyList(),
+    /** 지역 개수 조회 실패 — 시트가 무한 로딩 대신 재시도를 보인다 */
+    val regionCountsError: Boolean = false,
     val favoriteIds: Set<String> = emptySet(),
     val searchQuery: String = "",
     val searchResults: List<Place> = emptyList(),
@@ -403,15 +405,22 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    /** 지역 선택 시트를 열 때 호출 — 개수는 설치 동안 불변이라 한 번만 가져온다 */
+    private var regionCountsJob: Job? = null
+
+    /**
+     * 지역 선택 시트가 열려 있는 동안 호출 — 개수는 설치 동안 불변이라 한 번만 가져온다.
+     * 시트는 rememberSaveable 이라 프로세스 복원 후에도 다시 열리므로 화면이 열림 상태를 키로 호출한다.
+     */
     fun loadRegionCounts() {
-        if (_uiState.value.regionCounts.isNotEmpty()) return
-        viewModelScope.launch {
+        if (_uiState.value.regionCounts.isNotEmpty() || regionCountsJob?.isActive == true) return
+        _uiState.update { it.copy(regionCountsError = false) }
+        regionCountsJob = viewModelScope.launch {
             runCatching { repository.getRegionCounts() }
                 .onSuccess { counts -> _uiState.update { it.copy(regionCounts = counts) } }
                 .onFailure { e ->
                     if (e is CancellationException) throw e
                     Log.w(TAG, "getRegionCounts failed: ${e.message}")
+                    _uiState.update { it.copy(regionCountsError = true) }
                 }
         }
     }
