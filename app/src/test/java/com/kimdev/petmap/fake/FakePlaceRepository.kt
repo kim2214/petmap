@@ -178,6 +178,9 @@ class FakePlaceRepository : PlaceRepository {
 
     override suspend fun getPlace(id: String): Place? = dataset.find { it.id == id }
 
+    override suspend fun getPlaces(ids: List<String>): List<Place> =
+        ids.mapNotNull { id -> dataset.find { it.id == id } }
+
     var regionCountsCalls = 0
 
     /** 설정하면 getRegionCounts 가 이 예외를 던진다 */

@@ -217,4 +217,14 @@ class PlaceRepositoryImplTest {
         assertEquals(PlaceCategory.ETC, repo.getPlace("p2")?.category)
         assertNull(repo.getPlace("없는id"))
     }
+
+    @Test
+    fun getPlaces_keepsRequestedOrder_andSkipsMissing() = runBlocking {
+        db.insertPlace("p1")
+        db.insertPlace("p2")
+        db.insertPlace("p3")
+
+        assertEquals(listOf("p3", "p1"), repo.getPlaces(listOf("p3", "없는id", "p1")).map { it.id })
+        assertEquals(emptyList<String>(), repo.getPlaces(emptyList()).map { it.id })
+    }
 }

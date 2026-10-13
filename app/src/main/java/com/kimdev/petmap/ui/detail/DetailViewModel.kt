@@ -3,6 +3,7 @@ package com.kimdev.petmap.ui.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kimdev.petmap.data.local.RecentPlaceStore
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.ui.navigation.Routes
@@ -22,6 +23,7 @@ data class DetailUiState(
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val repository: PlaceRepository,
+    private val recentPlaceStore: RecentPlaceStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -36,6 +38,8 @@ class DetailViewModel @Inject constructor(
             val place = runCatching { repository.getPlace(placeId) }.getOrNull()
             _uiState.update { it.copy(isLoading = false, place = place) }
             if (place == null) return@launch
+            // 실제로 열린 장소만 "최근 본"에 남긴다(없는 ID 딥링크 등은 제외)
+            recentPlaceStore.add(placeId)
             // 즐겨찾기 구독은 장소 로드 뒤에 시작해야 한다. 별도 코루틴으로 돌리면 첫 emit 이
             // place==null 시점에 도착해 유실되고, 이미 즐겨찾기한 장소가 빈 하트로 표시된다.
             // observeFavorites: 하트 상태에 더해 이 장소에 남긴 메모까지 함께 반영한다.

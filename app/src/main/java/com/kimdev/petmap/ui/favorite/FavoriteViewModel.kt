@@ -1,17 +1,22 @@
 package com.kimdev.petmap.ui.favorite
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kimdev.petmap.data.local.RecentPlaceStore
 import com.kimdev.petmap.domain.model.FavoriteSnapshot
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -28,9 +33,16 @@ data class FavoriteUiState(
     val isLoading: Boolean = true,
 )
 
+data class RecentUiState(
+    /** 최근 본 순서(최신 우선). 하트 상태는 즐겨찾기와 동기화된다 */
+    val places: List<Place> = emptyList(),
+    val isLoading: Boolean = true,
+)
+
 @HiltViewModel
 class FavoriteViewModel @Inject constructor(
     private val repository: PlaceRepository,
+    private val recentPlaceStore: RecentPlaceStore,
 ) : ViewModel() {
 
     private val selectedCategories = MutableStateFlow<Set<PlaceCategory>>(emptySet())
@@ -58,6 +70,39 @@ class FavoriteViewModel @Inject constructor(
             initialValue = FavoriteUiState(),
         )
 
+    /**
+     * 최근 본 장소. ID 목록이 바뀔 때만 DB 를 조회하고(최대 30건 IN 조회), 하트는 즐겨찾기 ID 로 덧입힌다.
+     * 조회 실패(에셋 DB 준비 실패 등)는 빈 목록으로 — 즐겨찾기 탭 전체를 에러로 만들 일은 아니다.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val recentState: StateFlow<RecentUiState> =
+        combine(
+            recentPlaceStore.recent.mapLatest { ids ->
+                try {
+                    repository.getPlaces(ids)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "recent places load failed: ${e.message}")
+                    emptyList()
+                }
+            },
+            repository.observeFavoriteIds(),
+        ) { places, favoriteIds ->
+            RecentUiState(places = places.map { it.copy(isFavorite = it.id in favoriteIds) }, isLoading = false)
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = RecentUiState(),
+        )
+
+    /** 최근 본 장소에서 하트 — 즐겨찾기 목록과 달리 카드가 사라지지 않으므로 단순 토글 */
+    fun toggleFavorite(place: Place) {
+        viewModelScope.launch { repository.toggleFavorite(place) }
+    }
+
+    fun clearRecent() = recentPlaceStore.clear()
+
     fun onQueryChange(q: String) {
         query.value = q
     }
@@ -80,5 +125,9 @@ class FavoriteViewModel @Inject constructor(
     /** 실행취소: 메모·추가 시각까지 삭제 직전 상태로 되살린다 */
     fun restoreFavorite(snapshot: FavoriteSnapshot) {
         viewModelScope.launch { repository.restoreFavorite(snapshot) }
+    }
+
+    private companion object {
+        const val TAG = "FavoriteViewModel"
     }
 }

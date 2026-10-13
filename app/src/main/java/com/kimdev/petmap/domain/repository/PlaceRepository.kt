@@ -113,6 +113,9 @@ interface PlaceRepository {
 
     suspend fun getPlace(id: String): Place?
 
+    /** 여러 장소를 [ids] 순서 그대로 (없는 ID 는 빠진다 — 데이터 갱신으로 사라진 최근 본 장소 등) */
+    suspend fun getPlaces(ids: List<String>): List<Place>
+
     fun observeFavorites(): Flow<List<Place>>
     fun observeFavoriteIds(): Flow<Set<String>>
 

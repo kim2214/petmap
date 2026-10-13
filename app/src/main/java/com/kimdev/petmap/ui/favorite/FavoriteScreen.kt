@@ -3,23 +3,33 @@ package com.kimdev.petmap.ui.favorite
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -31,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.R
+import com.kimdev.petmap.data.local.RecentPlaceStore
 import com.kimdev.petmap.domain.model.Place
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -50,13 +61,18 @@ fun FavoriteScreen(
     viewModel: FavoriteViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val recent by viewModel.recentState.collectAsStateWithLifecycle()
+    // 즐겨찾기 / 최근 본 전환. 두 목록은 스크롤 위치를 따로 기억한다
+    var showRecent by rememberSaveable { mutableStateOf(false) }
+    var confirmClearRecent by rememberSaveable { mutableStateOf(false) }
+    val recentListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
 
     // 하단 탭 "즐겨찾기" 재선택 → 맨 위로
     LaunchedEffect(Unit) {
-        reselects.collect { listState.animateScrollToItem(0) }
+        reselects.collect { (if (showRecent) recentListState else listState).animateScrollToItem(0) }
     }
     // 설정 변경(언어 등)에 따라 갱신되는 리소스 접근 (Context 경유는 lint 에러)
     val resources = LocalResources.current
@@ -79,10 +95,14 @@ fun FavoriteScreen(
 
     TabScreenScaffold(
         title = stringResource(R.string.nav_favorite),
-        listState = listState,
+        listState = if (showRecent) recentListState else listState,
         snackbarHostState = snackbarHostState,
         titleTrailing = {
-        if (state.favorites.isNotEmpty()) {
+        if (showRecent) {
+            if (recent.places.isNotEmpty()) {
+                TextButton(onClick = { confirmClearRecent = true }) { Text(stringResource(R.string.action_clear)) }
+            }
+        } else if (state.favorites.isNotEmpty()) {
             Text(
                 stringResource(R.string.favorite_count_format, state.favorites.size),
                 style = MaterialTheme.typography.bodyMedium,
@@ -91,8 +111,22 @@ fun FavoriteScreen(
         }
         },
         header = {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                listOf(false to R.string.saved_tab_favorite, true to R.string.saved_tab_recent)
+                    .forEachIndexed { index, (recentTab, label) ->
+                        SegmentedButton(
+                            selected = showRecent == recentTab,
+                            onClick = { showRecent = recentTab },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
+                        ) { Text(stringResource(label)) }
+                    }
+            }
             // 즐겨찾기가 쌓이면 검색·카테고리로 좁혀 볼 수 있게 한다 (하나도 없을 땐 숨김)
-            if (state.totalCount > 0) {
+            if (!showRecent && state.totalCount > 0) {
                 SearchTextField(
                     value = state.query,
                     onValueChange = viewModel::onQueryChange,
@@ -108,6 +142,16 @@ fun FavoriteScreen(
             }
         },
     ) {
+        if (showRecent) {
+            RecentContent(
+                state = recent,
+                listState = recentListState,
+                onPlaceClick = onPlaceClick,
+                onToggleFavorite = viewModel::toggleFavorite,
+                onExplore = onExplore,
+            )
+            return@TabScreenScaffold
+        }
         when {
             // 첫 로드 중엔 스켈레톤 (빈 상태 문구가 잘못 깜빡이는 것 방지)
             state.isLoading -> PlaceListSkeleton(modifier = Modifier.fillMaxSize(), count = 4)
@@ -147,6 +191,59 @@ fun FavoriteScreen(
                         modifier = Modifier.animateItem(),
                     )
                 }
+            }
+        }
+    }
+
+    if (confirmClearRecent) {
+        AlertDialog(
+            onDismissRequest = { confirmClearRecent = false },
+            title = { Text(stringResource(R.string.recent_clear_title)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.clearRecent()
+                    confirmClearRecent = false
+                }) { Text(stringResource(R.string.action_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearRecent = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+}
+
+/** "최근 본" 목록: 최신 우선, 하트는 즐겨찾기 토글(카드는 그대로 남는다) */
+@Composable
+private fun RecentContent(
+    state: RecentUiState,
+    listState: LazyListState,
+    onPlaceClick: (String) -> Unit,
+    onToggleFavorite: (Place) -> Unit,
+    onExplore: () -> Unit,
+) {
+    when {
+        state.isLoading -> PlaceListSkeleton(modifier = Modifier.fillMaxSize(), count = 4)
+
+        state.places.isEmpty() -> EmptyState(
+            icon = Icons.Filled.History,
+            title = stringResource(R.string.recent_empty_title),
+            description = stringResource(R.string.recent_empty_desc, RecentPlaceStore.MAX),
+            action = {
+                FilledTonalButton(onClick = onExplore) {
+                    Icon(Icons.Filled.Explore, contentDescription = null)
+                    Text(stringResource(R.string.favorite_explore), modifier = Modifier.padding(start = 6.dp))
+                }
+            },
+        )
+
+        else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            items(state.places, key = { it.id }) { place ->
+                PlaceCard(
+                    place = place,
+                    onClick = { onPlaceClick(place.id) },
+                    onToggleFavorite = { onToggleFavorite(place) },
+                    modifier = Modifier.animateItem(),
+                )
             }
         }
     }

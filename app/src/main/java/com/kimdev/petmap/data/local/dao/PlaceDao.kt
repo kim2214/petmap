@@ -25,6 +25,10 @@ interface PlaceDao {
     @Query("SELECT * FROM places WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): PlaceEntity?
 
+    /** 여러 장소 (순서 보장 없음 — 호출 측이 정렬). ids 는 SQLite 변수 한도(999) 아래로 넘긴다 */
+    @Query("SELECT * FROM places WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<String>): List<PlaceEntity>
+
     /**
      * 지도 뷰포트(위/경도 박스) 안의 장소. 중심에서 가까운 순으로 제한.
      * 카테고리 다중 필터: catCount 가 0 이면 전체, 아니면 category IN (cats).

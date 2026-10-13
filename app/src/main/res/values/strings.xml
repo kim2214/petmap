@@ -162,6 +162,11 @@
     <string name="favorite_filter_empty_title">조건에 맞는 즐겨찾기가 없어요</string>
     <string name="favorite_filter_empty_desc">다른 카테고리를 선택하거나 필터를 초기화해 보세요.</string>
     <string name="favorite_removed_format">\'%1$s\' 즐겨찾기에서 제거했어요</string>
+    <string name="saved_tab_favorite">즐겨찾기</string>
+    <string name="saved_tab_recent">최근 본</string>
+    <string name="recent_empty_title">아직 본 장소가 없어요</string>
+    <string name="recent_empty_desc">장소 상세를 열어 보면\n최근 %1$d곳까지 여기에 남아요.</string>
+    <string name="recent_clear_title">최근 본 장소를 모두 지울까요?</string>
 
     <!-- 상세 화면 -->
     <string name="detail_title_fallback">상세</string>

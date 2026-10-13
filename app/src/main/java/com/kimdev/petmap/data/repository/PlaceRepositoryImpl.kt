@@ -410,6 +410,12 @@ class PlaceRepositoryImpl @Inject constructor(
 
     override suspend fun getPlace(id: String): Place? = placeDao.getById(id)?.toDomain()
 
+    override suspend fun getPlaces(ids: List<String>): List<Place> {
+        if (ids.isEmpty()) return emptyList()
+        val byId = placeDao.getByIds(ids).associateBy { it.id }
+        return ids.mapNotNull { byId[it]?.toDomain() }
+    }
+
     override fun observeFavorites(): Flow<List<Place>> =
         favoriteDao.observeAll().map { list -> list.map { it.toDomain() } }
 
