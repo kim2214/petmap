@@ -20,10 +20,12 @@ val PetFilter.labelRes: Int
         PetFilter.INDOOR -> R.string.pet_indoor_allowed
         PetFilter.OUTDOOR -> R.string.pet_outdoor_allowed
         PetFilter.MY_PET -> R.string.filter_my_pet
+        PetFilter.LARGE_DOG -> R.string.filter_large_dog
+        PetFilter.PARKING -> R.string.filter_parking
     }
 
 /**
- * 반려동물 동반 조건 칩 묶음 (내 아이 가능 / 모든 크기 / 실내 가능 / 실외 가능). 여러 개 켜면 AND.
+ * 반려동물 동반 조건 칩 묶음 (내 아이 가능 / 대형견 가능 / 모든 크기 / 실내 가능 / 실외 가능 / 주차 가능). 여러 개 켜면 AND.
  * 목록·지도가 같은 칩을 쓴다. 호출 측 Row 안에 놓는다(스크롤·간격은 호출 측이 정한다).
  *
  * "내 아이 가능"은 체중([myPetKg])이 등록돼 있어야 뜻이 있다 — 미등록 상태에서 누르면 토글 대신
@@ -37,8 +39,8 @@ fun PetFilterChips(
     onNeedWeight: () -> Unit = {},
     chipModifier: Modifier = Modifier,
 ) {
-    // 개인화 칩을 맨 앞에 — 등록해 두면 가장 자주 쓰는 조건이다
-    val order = listOf(PetFilter.MY_PET, PetFilter.ANY_SIZE, PetFilter.INDOOR, PetFilter.OUTDOOR)
+    // 개인화 칩을 맨 앞에 — 등록해 두면 가장 자주 쓰는 조건이다. 대형견은 체중 미등록 보호자의 빠른 조건이라 그다음.
+    val order = PetFilter.CHIP_ORDER
     order.forEach { filter ->
         val isOn = filter in selected
         val label = if (filter == PetFilter.MY_PET && myPetKg != null) {

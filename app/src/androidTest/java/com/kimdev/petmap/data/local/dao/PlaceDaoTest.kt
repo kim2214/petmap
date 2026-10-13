@@ -51,7 +51,7 @@ class PlaceDaoTest {
         val result = dao.getInBounds(
             minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
             centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
-            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
+            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
         )
         assertEquals(listOf("center", "far"), result.map { it.id })
     }
@@ -66,7 +66,7 @@ class PlaceDaoTest {
         val result = dao.getInBounds(
             minLat = 36.0, maxLat = 39.0, minLng = 126.0, maxLng = 129.0,
             centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
-            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
+            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
         )
         assertEquals(listOf("lngOff", "latOff"), result.map { it.id })
     }
@@ -80,14 +80,14 @@ class PlaceDaoTest {
         val cafes = dao.getInBounds(
             minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
             centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
-            cats = listOf("CAFE"), catCount = 1, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
+            cats = listOf("CAFE"), catCount = 1, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
         )
         assertEquals(listOf("cafeNear", "cafeFar"), cafes.map { it.id })
 
         val limited = dao.getInBounds(
             minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
             centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
-            cats = listOf("CAFE"), catCount = 1, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 1,
+            cats = listOf("CAFE"), catCount = 1, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 1,
         )
         assertEquals(listOf("cafeNear"), limited.map { it.id })
     }
@@ -103,7 +103,7 @@ class PlaceDaoTest {
                 minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
                 centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
                 cats = allCats.first, catCount = allCats.second,
-                anySize = anySize, indoor = indoor, outdoor = outdoor, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
+                anySize = anySize, indoor = indoor, outdoor = outdoor, parking = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
             ).map { it.id }.toSet()
         }
         assertEquals(setOf("allIndoor", "smallIndoor", "unknownSize"), query(false, false, false))
@@ -125,7 +125,7 @@ class PlaceDaoTest {
                 minLat = 36.5, maxLat = 38.5, minLng = 126.0, maxLng = 128.0,
                 centerLat = 37.5, centerLng = 127.0, lngScaleSq = 0.63,
                 cats = allCats.first, catCount = allCats.second,
-                anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = kg, limit = 10,
+                anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = kg, limit = 10,
             ).map { it.id }.toSet()
         }
         // null = 조건 없음
@@ -136,6 +136,25 @@ class PlaceDaoTest {
     }
 
     @Test
+    fun browse_parkingAndLargeDogFilters() = runBlocking {
+        db.insertPlace("parkLarge", parkingAvailable = true, maxPetKg = 999.0)
+        db.insertPlace("parkMedium", parkingAvailable = true, maxPetKg = 25.0)
+        db.insertPlace("noParkLarge", parkingAvailable = false, maxPetKg = 29.99)
+        db.insertPlace("unknown")
+
+        fun query(parking: Boolean, filters: Set<PetFilter>) = runBlocking {
+            dao.browse(
+                allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, parking = parking,
+                sizeAll = PetFilter.SIZE_ALL, myPetKg = PetFilter.effectiveWeight(filters, null), region = "", limit = 10,
+            ).map { it.id }.toSet()
+        }
+        assertEquals(setOf("parkLarge", "parkMedium"), query(parking = true, emptySet()))
+        // 대형견: 중형(25kg) 상한은 제외, "30kg 미만"(29.99)은 포함
+        assertEquals(setOf("parkLarge", "noParkLarge"), query(parking = false, setOf(PetFilter.LARGE_DOG)))
+        assertEquals(setOf("parkLarge"), query(parking = true, setOf(PetFilter.LARGE_DOG)))
+    }
+
+    @Test
     fun browse_ordersBySortKeyNotRawName() = runBlocking {
         // build_db.sort_key 가 만든 키를 그대로 넣는다: 한글 0 → 영문 1 → 숫자 2, 법인 표기 제외
         db.insertPlace("corp", name = "세녹코리아", sortKey = "0세녹코리아")
@@ -143,7 +162,7 @@ class PlaceDaoTest {
         db.insertPlace("latin", name = "Always on", sortKey = "1always on")
         db.insertPlace("ga", name = "가온카페", sortKey = "0가온카페")
 
-        val all = dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
+        val all = dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
         assertEquals(listOf("ga", "corp", "latin", "num"), all.map { it.id })
     }
 
@@ -155,7 +174,7 @@ class PlaceDaoTest {
         db.insertPlace("sj", roadAddress = "세종특별자치시 조치원읍 1")
 
         fun browse(region: String) = runBlocking {
-            dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = region, limit = 10)
+            dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = "", myPetKg = null, region = region, limit = 10)
                 .map { it.id }.toSet()
         }
         assertEquals(setOf("g1", "g2", "s1", "sj"), browse(""))
@@ -182,7 +201,7 @@ class PlaceDaoTest {
         val cells = dao.getClusterCells(
             minLat = 37.0, maxLat = 38.0, minLng = 127.0, maxLng = 128.0,
             latStep = 0.5, lngStep = 0.5,
-            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
+            cats = allCats.first, catCount = allCats.second, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = PetFilter.SIZE_ALL, myPetKg = null, limit = 10,
         ).sortedBy { it.cnt }
 
         assertEquals(2, cells.size)
@@ -199,10 +218,10 @@ class PlaceDaoTest {
         db.insertPlace("c2", name = "가온카페", category = "CAFE")
         db.insertPlace("h1", name = "나눔병원", category = "HOSPITAL")
 
-        val all = dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
+        val all = dao.browse(allCats.first, allCats.second, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
         assertEquals(listOf("가온카페", "나눔병원", "다정카페"), all.map { it.name })
 
-        val cafes = dao.browse(listOf("CAFE"), 1, anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
+        val cafes = dao.browse(listOf("CAFE"), 1, anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = "", myPetKg = null, region = "", limit = 10)
         assertEquals(listOf("가온카페", "다정카페"), cafes.map { it.name })
     }
 
@@ -215,7 +234,7 @@ class PlaceDaoTest {
             cats = allCats.first, catCount = allCats.second,
             lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
             minLat = -90.0, maxLat = 90.0, minLng = -180.0, maxLng = 180.0, 
-            anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10,
+            anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = "", myPetKg = null, region = "", limit = 10,
         )
         assertEquals(listOf("near", "far"), result.map { it.id })
 
@@ -224,7 +243,7 @@ class PlaceDaoTest {
             cats = allCats.first, catCount = allCats.second,
             lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
             minLat = 37.3, maxLat = 37.7, minLng = 126.8, maxLng = 127.2, 
-            anySize = false, indoor = false, outdoor = false, sizeAll = "", myPetKg = null, region = "", limit = 10,
+            anySize = false, indoor = false, outdoor = false, parking = false, sizeAll = "", myPetKg = null, region = "", limit = 10,
         )
         assertEquals(listOf("near"), boxed.map { it.id })
     }
@@ -240,7 +259,7 @@ class PlaceDaoTest {
             cats = allCats.first, catCount = allCats.second,
             lat = 37.5, lng = 127.0, lngScaleSq = 0.63,
             minLat = -90.0, maxLat = 90.0, minLng = -180.0, maxLng = 180.0,
-            anySize = false, indoor = true, outdoor = false, sizeAll = "", myPetKg = 10.0, region = "", limit = 1,
+            anySize = false, indoor = true, outdoor = false, parking = false, sizeAll = "", myPetKg = 10.0, region = "", limit = 1,
         )
         assertEquals(listOf("far-indoor-heavy"), result.map { it.id })
     }

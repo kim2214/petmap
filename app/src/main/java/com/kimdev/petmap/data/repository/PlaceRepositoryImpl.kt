@@ -139,6 +139,7 @@ class PlaceRepositoryImpl @Inject constructor(
             anySize = PetFilter.ANY_SIZE in petFilters,
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
+            parking = PetFilter.PARKING in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
             myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
@@ -177,6 +178,7 @@ class PlaceRepositoryImpl @Inject constructor(
             anySize = PetFilter.ANY_SIZE in petFilters,
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
+            parking = PetFilter.PARKING in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
             myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
@@ -217,6 +219,7 @@ class PlaceRepositoryImpl @Inject constructor(
             anySize = PetFilter.ANY_SIZE in petFilters,
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
+            parking = PetFilter.PARKING in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
             myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
@@ -247,6 +250,7 @@ class PlaceRepositoryImpl @Inject constructor(
                 anySize = PetFilter.ANY_SIZE in petFilters,
                 indoor = PetFilter.INDOOR in petFilters,
                 outdoor = PetFilter.OUTDOOR in petFilters,
+                parking = PetFilter.PARKING in petFilters,
                 sizeAll = PetFilter.SIZE_ALL,
                 myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
                 region = region?.prefix ?: "",
@@ -278,6 +282,7 @@ class PlaceRepositoryImpl @Inject constructor(
                 anySize = PetFilter.ANY_SIZE in petFilters,
                 indoor = PetFilter.INDOOR in petFilters,
                 outdoor = PetFilter.OUTDOOR in petFilters,
+                parking = PetFilter.PARKING in petFilters,
                 sizeAll = PetFilter.SIZE_ALL,
                 myPetKg = weight,
                 region = region?.prefix ?: "", limit = limit,
@@ -337,6 +342,7 @@ class PlaceRepositoryImpl @Inject constructor(
         }
         if (PetFilter.INDOOR in petFilters) sql.append(" AND places.indoorAllowed = 1")
         if (PetFilter.OUTDOOR in petFilters) sql.append(" AND places.outdoorAllowed = 1")
+        if (PetFilter.PARKING in petFilters) sql.append(" AND places.parkingAvailable = 1")
         if (myPetKg != null) {
             sql.append(" AND places.maxPetKg >= ?")
             args.add(myPetKg)

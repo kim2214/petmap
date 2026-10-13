@@ -19,7 +19,16 @@ enum class PetFilter {
      * 내 반려견(설정에 저장한 체중)이 들어갈 수 있는 곳 — `maxPetKg >= 체중`.
      * 체중이 등록되지 않았으면(myWeightKg == null) 조건 없음으로 취급한다(UI 가 등록을 먼저 유도한다).
      */
-    MY_PET;
+    MY_PET,
+
+    /**
+     * 대형견 가능 — 중형 상한(25kg)을 넘는 개도 들어갈 수 있는 곳(`maxPetKg > 25`, "모두 가능"·"대형"·"30kg 미만" 등).
+     * 체중 등록 없이 쓰는 빠른 조건이라 SQL 에선 [effectiveWeight] 로 체중 하한에 합쳐진다.
+     */
+    LARGE_DOG,
+
+    /** 주차 가능 (원본 데이터 "주차 가능여부" = Y) */
+    PARKING;
 
     /**
      * 클라이언트 측 판정(조회 후 후처리·테스트 페이크). SQL 판정(PlaceDao)과 같은 정책이어야 한다.
@@ -30,14 +39,31 @@ enum class PetFilter {
         INDOOR -> place.petInfo.indoorAllowed == true
         OUTDOOR -> place.petInfo.outdoorAllowed == true
         MY_PET -> myWeightKg == null || place.petInfo.allowsWeight(myWeightKg)
+        LARGE_DOG -> place.petInfo.allowsWeight(LARGE_DOG_MIN_KG)
+        PARKING -> place.parkingAvailable == true
     }
 
     companion object {
         /** 원본 데이터셋에서 크기 제한 없음을 뜻하는 값 (전체의 약 82%). DAO 의 SQL 필터도 이 값을 쓴다 */
         const val SIZE_ALL = "모두 가능"
 
-        /** [MY_PET] 이 켜져 있고 체중이 등록돼 있을 때만 SQL 에 바인딩할 체중, 아니면 null(조건 없음) */
+        /**
+         * 대형견 판정 하한. build_db.py 가 "중형"을 25kg 로 숫자화하므로 그보다 무거운 개가 들어갈 수 있어야 한다
+         * ("N kg 미만" → N-0.01 과 같은 0.01 단위 관례).
+         */
+        const val LARGE_DOG_MIN_KG = 25.01
+
+        /** 칩 표시 순서 (목록·지도 공용) */
+        val CHIP_ORDER = listOf(MY_PET, LARGE_DOG, ANY_SIZE, INDOOR, OUTDOOR, PARKING)
+
+        /**
+         * SQL 의 `maxPetKg >= ?` 에 바인딩할 체중 하한, 조건이 없으면 null.
+         * [MY_PET](체중 등록 시)과 [LARGE_DOG] 가 함께 켜지면 더 엄격한(큰) 값 하나로 합친다.
+         */
         fun effectiveWeight(filters: Set<PetFilter>, myWeightKg: Double?): Double? =
-            if (MY_PET in filters) myWeightKg else null
+            listOfNotNull(
+                myWeightKg?.takeIf { MY_PET in filters },
+                LARGE_DOG_MIN_KG.takeIf { LARGE_DOG in filters },
+            ).maxOrNull()
     }
 }

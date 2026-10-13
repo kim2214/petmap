@@ -43,6 +43,37 @@ class PetFilterTest {
     }
 
     @Test
+    fun `대형견 필터는 중형 상한(25kg)을 넘는 곳만 통과한다`() {
+        assertTrue(PetFilter.LARGE_DOG.matches(testPlace("all", maxPetKg = PetInfo.NO_LIMIT_KG)))
+        assertTrue(PetFilter.LARGE_DOG.matches(testPlace("under30", maxPetKg = 29.99)))
+        assertFalse(PetFilter.LARGE_DOG.matches(testPlace("medium", maxPetKg = 25.0)))
+        assertFalse(PetFilter.LARGE_DOG.matches(testPlace("unknown")))
+    }
+
+    @Test
+    fun `주차 필터는 주차 가능만 통과하고 정보 없음은 제외한다`() {
+        assertTrue(PetFilter.PARKING.matches(testPlace("y", parkingAvailable = true)))
+        assertFalse(PetFilter.PARKING.matches(testPlace("n", parkingAvailable = false)))
+        assertFalse(PetFilter.PARKING.matches(testPlace("unknown")))
+    }
+
+    @Test
+    fun `effectiveWeight 는 내 아이와 대형견 중 더 엄격한 하한을 쓴다`() {
+        val large = PetFilter.LARGE_DOG_MIN_KG
+        assertEquals(large, PetFilter.effectiveWeight(setOf(PetFilter.LARGE_DOG), null))
+        assertEquals(large, PetFilter.effectiveWeight(setOf(PetFilter.LARGE_DOG, PetFilter.MY_PET), 5.0))
+        assertEquals(30.0, PetFilter.effectiveWeight(setOf(PetFilter.LARGE_DOG, PetFilter.MY_PET), 30.0))
+        // 체중 미등록이어도 대형견 조건은 걸린다
+        assertEquals(large, PetFilter.effectiveWeight(setOf(PetFilter.LARGE_DOG, PetFilter.MY_PET), null))
+    }
+
+    @Test
+    fun `칩 순서는 모든 필터를 한 번씩 담는다`() {
+        assertEquals(PetFilter.entries.toSet(), PetFilter.CHIP_ORDER.toSet())
+        assertEquals(PetFilter.entries.size, PetFilter.CHIP_ORDER.size)
+    }
+
+    @Test
     fun `동반 조건이 전부 미상이면 isUnknown`() {
         assertTrue(PetInfo(null, null, null, null).isUnknown)
         assertFalse(PetInfo(null, null, indoorAllowed = false, outdoorAllowed = null).isUnknown)
