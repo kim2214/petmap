@@ -2,6 +2,7 @@ package com.kimdev.petmap.ui.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,11 +36,14 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -92,7 +96,9 @@ import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.copyToClipboard
 import com.kimdev.petmap.core.util.dialPhone
 import com.kimdev.petmap.core.util.sendEmail
+import com.kimdev.petmap.core.util.ReviewProvider
 import com.kimdev.petmap.core.util.openNaverDirections
+import com.kimdev.petmap.core.util.openPlaceReviews
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sharePlace
 import com.kimdev.petmap.domain.model.Place
@@ -425,10 +431,11 @@ private fun Header(place: Place) {
     }
 }
 
-/** 길찾기/전화/공유/지도 컴팩트 액션 행. 세로 버튼 4개를 대체한다. */
+/** 길찾기/전화/리뷰/공유/지도 컴팩트 액션 행. */
 @Composable
 private fun QuickActions(place: Place, onShowOnMap: () -> Unit) {
     val context = LocalContext.current
+    var showReviewSheet by rememberSaveable { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -439,8 +446,52 @@ private fun QuickActions(place: Place, onShowOnMap: () -> Unit) {
         place.phone?.let { phone ->
             QuickAction(Icons.Filled.Phone, stringResource(R.string.action_phone)) { context.dialPhone(phone) }
         }
+        // 자체 리뷰가 없으므로 리뷰·사진이 쌓인 외부 지도 서비스의 장소 검색으로 넘긴다
+        QuickAction(Icons.Filled.RateReview, stringResource(R.string.action_reviews)) { showReviewSheet = true }
         QuickAction(Icons.Filled.Share, stringResource(R.string.action_share)) { context.sharePlace(place) }
         QuickAction(Icons.Filled.Map, stringResource(R.string.nav_map)) { onShowOnMap() }
+    }
+    if (showReviewSheet) {
+        ReviewProviderSheet(
+            onPick = { provider ->
+                showReviewSheet = false
+                context.openPlaceReviews(place, provider)
+            },
+            onDismiss = { showReviewSheet = false },
+        )
+    }
+}
+
+/** 리뷰를 볼 지도 서비스 선택 시트 (네이버 지도 / 카카오맵) */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReviewProviderSheet(onPick: (ReviewProvider) -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
+            Text(
+                stringResource(R.string.review_sheet_title),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .semantics { heading() },
+            )
+            Text(
+                stringResource(R.string.review_sheet_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            )
+            listOf(
+                ReviewProvider.NAVER to R.string.review_naver,
+                ReviewProvider.KAKAO to R.string.review_kakao,
+            ).forEach { (provider, label) ->
+                ListItem(
+                    headlineContent = { Text(stringResource(label)) },
+                    leadingContent = { Icon(Icons.Filled.Map, contentDescription = null) },
+                    modifier = Modifier.clickable(role = Role.Button) { onPick(provider) },
+                )
+            }
+        }
     }
 }
 

@@ -107,6 +107,44 @@ fun Context.openNaverDirections(place: Place) {
     }
 }
 
+/** 리뷰·사진을 볼 외부 지도 서비스 (자체 리뷰가 없으므로 장소 검색으로 넘긴다) */
+enum class ReviewProvider { NAVER, KAKAO }
+
+/**
+ * 리뷰 검색어: 도로명주소 앞 두 토큰(시/도 시/군/구) + 상호.
+ * 상호만 넘기면 체인점·동명 업소가 섞여 다른 지점의 리뷰를 보게 되므로 지역으로 좁힌다.
+ */
+fun reviewSearchQuery(place: Place): String {
+    val area = place.roadAddress.trim().split(Regex("\\s+")).take(2).joinToString(" ")
+    return listOf(area, place.name.trim()).filter { it.isNotBlank() }.joinToString(" ")
+}
+
+/**
+ * 네이버 지도/카카오맵에서 장소 검색 결과 열기 — 리뷰·사진은 그쪽 장소 페이지에서 본다.
+ * 앱이 설치돼 있으면 앱 딥링크, 없으면 모바일 웹으로 폴백한다(API 30+ 패키지 가시성 선언 없이
+ * startActivity 실패로 미설치를 판정한다).
+ */
+fun Context.openPlaceReviews(place: Place, provider: ReviewProvider) {
+    val q = Uri.encode(reviewSearchQuery(place))
+    val (deepLink, appPackage, webUrl) = when (provider) {
+        ReviewProvider.NAVER -> Triple(
+            "nmap://search?query=$q&appname=$packageName",
+            "com.nhn.android.nmap",
+            "https://m.map.naver.com/search2/search.naver?query=$q",
+        )
+        ReviewProvider.KAKAO -> Triple(
+            "kakaomap://search?q=$q",
+            "net.daum.android.map",
+            "https://m.map.kakao.com/actions/searchView?q=$q",
+        )
+    }
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, deepLink.toUri()).setPackage(appPackage))
+    } catch (e: ActivityNotFoundException) {
+        safeStart(Intent(Intent.ACTION_VIEW, webUrl.toUri()))
+    }
+}
+
 /** 공유 문구용 반려동물 정보 요약 (예: "소형견 · 실내 가능 · 실외 불가") */
 private fun Context.petSummary(place: Place): String? {
     val parts = buildList {

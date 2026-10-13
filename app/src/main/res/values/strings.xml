@@ -26,6 +26,11 @@
     <string name="action_directions">길찾기</string>
     <string name="action_detail">상세 보기</string>
     <string name="action_share">공유</string>
+    <string name="action_reviews">리뷰</string>
+    <string name="review_sheet_title">리뷰·사진 보기</string>
+    <string name="review_sheet_desc">지도 서비스에서 이 장소를 검색해요. 앱이 없으면 웹으로 열려요.</string>
+    <string name="review_naver">네이버 지도</string>
+    <string name="review_kakao">카카오맵</string>
     <string name="action_phone">전화</string>
     <string name="action_undo">실행취소</string>
     <string name="action_reset_filter">필터 초기화</string>
