@@ -25,6 +25,8 @@ hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
 
 room = "2.8.4"
+# 원격 데이터 갱신 주기 작업 (play-services-ads 가 이미 끌어오는 버전과 맞춤)
+work = "2.11.2"
 # Baseline Profile: 매크로벤치마크(생성기)와 Gradle 플러그인은 같은 버전을 쓴다
 benchmark = "1.4.1"
 profileinstaller = "1.4.1"
@@ -74,6 +76,8 @@ androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navig
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+# WorkManager (원격 데이터 갱신)
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 # Baseline Profile: 앱은 profileinstaller 로 프로필을 설치, :baselineprofile 모듈이 생성기 실행
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
 androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }

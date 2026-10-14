@@ -23,8 +23,11 @@ description: 공공데이터 CSV로 프리빌트 Room DB(app/src/main/assets/pet
    (네이버 Geocoding Client Secret 또는 카카오 REST 키 필요, 좌표 캐시 `tools/data/geocode_cache.json` 재사용).
    이 파일은 **세 번째 인자**로 넘긴다(기본 데이터셋과 이름·150m 중복이면 기본 쪽이 유지된다).
 
-2. **DB 버전을 올린다 (데이터만 바뀌어도 필수).** 앱은 마이그레이션 없이 버전이 오르면 기존 파일을
-   지우고 에셋을 재복사하므로, 버전을 그대로 두면 기존 설치는 새 데이터를 받지 못한다.
+2. **전달 경로를 고른다.**
+   - **원격 게시(데이터만 바뀐 경우 권장)**: DB 버전은 그대로 두고 3~4단계 후 5단계(원격 게시)로 보낸다.
+     기존 설치가 앱 업데이트 없이 하루 안에(Wi-Fi) 받는다. 기준일(`--data-date`)이 지난 게시보다 **늦어야** 전달된다.
+   - **앱 업데이트로 전달 / 스키마 변경**: 아래처럼 DB 버전을 올린다. 앱은 마이그레이션 없이 버전이 오르면 기존 파일을
+     지우고 에셋을 재복사하므로, 버전을 그대로 두면 앱 업데이트만으로는 기존 설치가 새 데이터를 받지 못한다.
    - `PetMapDatabase.VERSION` +1, 직전 버전을 `RECREATED_FROM`에 추가
    - `tools/build_db.py`의 `DB_VERSION`을 같은 값으로
    - 엔티티가 바뀌지 않았으면 `identityHash`는 그대로다(버전은 해시에 포함되지 않음). 바뀌었으면 아래 절 참고.
@@ -66,6 +69,16 @@ description: 공공데이터 CSV로 프리빌트 Room DB(app/src/main/assets/pet
    adb shell am start -n com.kimdev.petmap/.MainActivity
    adb logcat -d | grep -iE "FATAL|AndroidRuntime|Room|identity"
    ```
+
+5. (원격 게시) GitHub Pages 리포에 올린다:
+   ```bash
+   python3 tools/publish_db.py ../kim2214.github.io    # 경로: kim2214/kim2214.github.io 로컬 체크아웃
+   # → petmap/data/<identity_hash>/manifest.json + petmap-<기준일>.db.gz (이전 gz 는 삭제)
+   cd ../kim2214.github.io && git add petmap/data && git commit -m "펫맵 장소 데이터 <기준일>" && git push
+   ```
+   게시 확인: `curl -s https://kim2214.github.io/petmap/data/<identity_hash>/manifest.json`.
+   앱은 설정 "새 데이터 확인"으로 바로 받을 수 있다. 바뀐 `assets/petmap.db` 도 앱 리포에 커밋해 새 설치가 같은 데이터로 시작하게 한다.
+   스키마(identity_hash)가 바뀐 DB 는 새 디렉터리에 올라가므로 구버전 앱은 받지 않는다 — 그 앱을 배포한 뒤 게시한다.
 
 ## 스키마를 바꿨을 때 (중요)
 

@@ -13,8 +13,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * 장소 데이터 접근 추상화.
- * 프리빌트 에셋 Room DB(assets/petmap.db)가 단일 소스다. 네트워크 갱신 없음.
- * 데이터 갱신은 CSV → tools/build_db.py 재생성 → 앱 업데이트(DB 버전 업 → 에셋 재복사)로만 이뤄진다.
+ * 프리빌트 에셋 Room DB(assets/petmap.db)가 기본 소스다. 데이터 갱신 경로는 둘:
+ * 앱 업데이트(DB 버전 업 → 에셋 재복사), 그리고 원격 게시 데이터 교체([PlaceDataUpdater]).
  */
 interface PlaceRepository {
 

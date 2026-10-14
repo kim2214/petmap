@@ -232,6 +232,12 @@
     <string name="settings_data_updated_format">%1$s 기준 · %2$s곳 수록</string>
     <string name="settings_data_count_format">%1$s곳 수록</string>
     <string name="settings_data_updated_loading">불러오는 중…</string>
+    <string name="settings_data_check">새 데이터 확인</string>
+    <string name="settings_data_check_desc">앱 업데이트 없이 최신 장소 정보를 받아요 (Wi-Fi 에서는 하루 한 번 자동)</string>
+    <string name="settings_data_check_running">확인하는 중…</string>
+    <string name="settings_data_check_latest">이미 최신 데이터예요</string>
+    <string name="settings_data_check_updated">새 데이터로 업데이트했어요</string>
+    <string name="settings_data_check_failed">확인하지 못했어요. 네트워크를 확인하고 다시 눌러 주세요</string>
     <string name="settings_section_app_info">앱 정보</string>
     <string name="settings_version">버전</string>
     <string name="settings_version_format">%1$s (%2$d)</string>
@@ -250,6 +256,7 @@
     <string name="license_name_compose">Jetpack Compose · AndroidX</string>
     <string name="license_name_hilt">Hilt (Dagger)</string>
     <string name="license_name_room">Room</string>
+    <string name="license_name_workmanager">AndroidX WorkManager</string>
     <string name="license_name_accompanist">Accompanist</string>
     <string name="license_name_naver_map_compose">naver-map-compose (fornewid)</string>
     <string name="license_name_naver_maps_sdk">NAVER Maps SDK</string>

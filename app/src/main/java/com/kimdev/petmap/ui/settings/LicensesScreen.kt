@@ -30,6 +30,7 @@ private val LICENSES = listOf(
     LicenseItem(R.string.license_name_compose, R.string.license_apache2),
     LicenseItem(R.string.license_name_hilt, R.string.license_apache2),
     LicenseItem(R.string.license_name_room, R.string.license_apache2),
+    LicenseItem(R.string.license_name_workmanager, R.string.license_apache2),
     LicenseItem(R.string.license_name_accompanist, R.string.license_apache2),
     LicenseItem(R.string.license_name_naver_map_compose, R.string.license_apache2),
     LicenseItem(R.string.license_name_naver_maps_sdk, R.string.license_naver_cloud_terms),

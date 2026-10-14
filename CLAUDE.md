@@ -34,8 +34,9 @@ python3 tools/verify_db.py          # 에셋 DB ↔ Room 스키마 동기화 오
 
 ## 데이터: 프리빌트 Room DB
 
-- 단일 소스는 `app/src/main/assets/petmap.db`(약 24,700개 고유 장소, v9 — 동반가능 Y 만 수록, 시/도 명칭 현행화(강원특별자치도·전북특별자치도·전남광주통합특별시), 법인 표기 제거 + `sortKey`(한글→영문→숫자 이름순), 주차·요금·설명·`meta` 기준일 포함, 실내/실외는 nullable = 정보 없음, `maxPetKg` 는 크기 문구를 숫자화한 입장 가능 최대 체중). 첫 실행 시 Room `createFromAsset`로 즉시 로드 — 네트워크 경로 없음(원격 동기화 코드는 제거됨).
-- **데이터 갱신 전략 = DB 버전 업 → 파괴적 재생성.** 마이그레이션은 쓰지 않는다. `PetMapDatabase.VERSION`을 올리고 직전 버전을 `RECREATED_FROM`에 추가하면 Room이 기존 파일을 지우고 에셋을 재복사한다. 즐겨찾기는 `FavoriteBackup` 미러가 재생성 직전에 보존(`preserveLegacyDatabase`, `DatabaseModule`)하고 `ensureSeeded`가 복원한다. **장소 데이터만 바뀌어도 버전을 올려야 기존 설치에 전달된다.**
+- 단일 소스는 `app/src/main/assets/petmap.db`(약 24,700개 고유 장소, v9 — 동반가능 Y 만 수록, 시/도 명칭 현행화(강원특별자치도·전북특별자치도·전남광주통합특별시), 법인 표기 제거 + `sortKey`(한글→영문→숫자 이름순), 주차·요금·설명·`meta` 기준일 포함, 실내/실외는 nullable = 정보 없음, `maxPetKg` 는 크기 문구를 숫자화한 입장 가능 최대 체중). 첫 실행 시 Room `createFromAsset`로 즉시 로드.
+- **원격 데이터 갱신 (앱 업데이트 없이)**: `python3 tools/publish_db.py <kim2214.github.io 경로>` 가 에셋 DB 를 `petmap/data/<identity_hash>/`(manifest.json + gz)로 만든다 → 그 리포에서 커밋·푸시. 앱(`PlaceDataUpdaterImpl`, 하루 1회 Wi-Fi `PlaceDataUpdateWorker` + 설정 "새 데이터 확인")은 기준일(`meta.data_date`)이 **더 늦을 때만** 받아 검증 후 places·places_fts·meta 를 한 트랜잭션으로 교체한다 → 고쳐서 다시 게시할 땐 `--data-date` 를 올려야 전달된다. 데이터만 바뀐 갱신은 이 경로로 충분(DB 버전 업 불필요), 스키마가 바뀌면 앱 업데이트만 가능.
+- **데이터 갱신 전략(앱 업데이트) = DB 버전 업 → 파괴적 재생성.** 마이그레이션은 쓰지 않는다. `PetMapDatabase.VERSION`을 올리고 직전 버전을 `RECREATED_FROM`에 추가하면 Room이 기존 파일을 지우고 에셋을 재복사한다. 즐겨찾기는 `FavoriteBackup` 미러가 재생성 직전에 보존(`preserveLegacyDatabase`, `DatabaseModule`)하고 `ensureSeeded`가 복원한다. 앱 업데이트로 전달하려면 **장소 데이터만 바뀌어도 버전을 올려야 한다** (원격 게시로 보낼 땐 불필요).
 - 검색은 FTS4 유니그램 색인(`data/local/PlaceFts.kt`). 색인은 에셋에 동봉되며(`build_db.py`의 `fts_index`가 `PlaceFts.index`와 동일 로직이어야 함).
 - **DB를 새 CSV로 재생성할 때는 `/rebuild-db` 스킬을 사용한다** (`tools/build_db.py`의 identity_hash/버전 주의사항이 얽혀 있음). 원본 CSV 는 리포에 없다 — 공공데이터포털에서 받는다(다운로드 URL 은 스킬 참고). 식약처 "반려동물 동반출입 음식점"(약 2,700곳, 좌표 없음)은 `tools/fetch_restaurants.py`(네이버 Geocoding, `naver.map.clientSecret`)로 CSV 를 만들어 세 번째 입력으로 넘긴다. 좌표 캐시 `tools/data/`는 git 제외.
 - 엔티티(`PlaceEntity`/`FavoriteEntity`/`MetaEntity`) 스키마를 바꾸면 identity_hash가 달라진다. 기준값은 `app/schemas/**/<version>.json`의 `identityHash`이며 `tools/build_db.py`의 `ROOM_IDENTITY_HASH`를 함께 갱신해야 한다. 동기화가 어긋나면 androidTest `PetMapDatabaseAssetTest`가 실패한다. 재생성·즐겨찾기 보존 계약은 `LegacyDatabaseRecreateTest`.
@@ -50,7 +51,8 @@ python3 tools/verify_db.py          # 에셋 DB ↔ Room 스키마 동기화 오
 
 - 개인정보처리방침: `https://kim2214.github.io/privacy-policy.html` (앱 내 참조: `ui/settings/SettingsScreen.kt`).
 - AdMob `app-ads.txt`: `https://kim2214.github.io/app-ads.txt`.
-- 두 파일은 별도 리포 `kim2214/kim2214.github.io`(GitHub Pages)에서 서빙된다.
+- 원격 장소 데이터: `https://kim2214.github.io/petmap/data/<identity_hash>/manifest.json` (+ gz). 기준 URL 은 `core/common/Constants.DATA_UPDATE_BASE_URL`, 생성은 `tools/publish_db.py`. 로컬 체크아웃: `../kim2214.github.io`.
+- 모두 별도 리포 `kim2214/kim2214.github.io`(GitHub Pages)에서 서빙된다.
 
 ## 커밋 규칙
 

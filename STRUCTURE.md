@@ -19,10 +19,10 @@ com.kimdev.petmap
 │
 ├── domain/                       # 순수 비즈니스 (안드로이드 의존성 없음)
 │   ├── model/      Place·PetInfo·PlaceCategory·PetFilter, Region/RegionCount(지역 브라우징), GeoClusterCell(저줌 집계 셀)
-│   ├── repository/ PlaceRepository (인터페이스)
+│   ├── repository/ PlaceRepository, PlaceDataUpdater (인터페이스)
 │   └── util/       Geo(거리 계산·포맷), OpeningHours(운영시간 파싱 → 영업중 판정)
 │
-├── data/                         # 데이터 구현 (프리빌트 Room DB 단일 소스, 네트워크 없음)
+├── data/                         # 데이터 구현 (프리빌트 Room DB + 원격 데이터 교체)
 │   ├── local/
 │   │   ├── PetMapDatabase        # Room. exportSchema=true → app/schemas/ 에 JSON 커밋
 │   │   ├── FavoriteBackup        # 즐겨찾기 미러(JSON, Auto Backup 대상) + 구버전 DB 즐겨찾기 보존
@@ -33,10 +33,12 @@ com.kimdev.petmap
 │   │   ├── dao/    PlaceDao(뷰포트·그리드 집계·FTS 검색), FavoriteDao, MetaDao
 │   │   └── entity/ PlaceEntity(약 24,700행, 실내/실외 nullable, maxPetKg, sortKey), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
 │   ├── mapper/     Entity ↔ Domain 변환
+│   ├── remote/     DataManifest(원격 manifest.json), DataDownloader(URLConnection — https/file)
+│   ├── update/     PlaceDataUpdaterImpl(다운로드·검증·트랜잭션 교체), PlaceDataUpdateWorker(하루 1회, Wi-Fi)
 │   └── repository/ PlaceRepositoryImpl
 │
 ├── di/                           # Hilt 모듈
-│   DatabaseModule(createFromAsset + 버전 업 시 파괴적 재생성), DispatcherModule, RepositoryModule
+│   DatabaseModule(createFromAsset + 버전 업 시 파괴적 재생성), DispatcherModule, RepositoryModule, DataUpdateModule
 │
 └── ui/
     ├── navigation/ Destinations(Routes·TopLevelDestination), PetMapNavHost
@@ -71,8 +73,9 @@ assets/petmap.db (프리빌트, v9·FTS·meta 동봉) ─ createFromAsset ─→
 Room(places + favorites) ─→ PlaceRepositoryImpl ─→ ViewModel(StateFlow) ─→ Compose UI
 ```
 
-- **네트워크 경로 없음.** 데이터 갱신은 CSV → `tools/build_db.py` 재생성 → 앱 업데이트로만 이뤄진다
-  (`/rebuild-db` 스킬 및 `CLAUDE.md` 참고).
+- **데이터 갱신 경로 2가지**: CSV → `tools/build_db.py` 재생성 후 ① `tools/publish_db.py` 로 GitHub Pages 게시 →
+  앱이 하루 1회(Wi-Fi) 매니페스트 확인 → 기준일이 새로우면 내려받아 검증 후 places·FTS·meta 를 한 트랜잭션으로 교체
+  (`PlaceDataUpdaterImpl`), 또는 ② 앱 업데이트(DB 버전 업). `/rebuild-db` 스킬 및 `CLAUDE.md` 참고.
 - **버전 업 = 파괴적 재생성**: 마이그레이션 없이 `PetMapDatabase.VERSION`을 올리면 Room이 기존 파일을
   지우고 에셋을 재복사한다. 즐겨찾기는 `FavoriteBackup` 미러로 보존(`DatabaseModule`, open 전)·복원(`ensureSeeded`).
 - 검색: FTS4 글자 단위 유니그램(한국어 부분검색 보존). 색인은 에셋에 동봉된다.

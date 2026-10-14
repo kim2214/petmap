@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.AdUnits
 import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FormatSize
@@ -106,6 +107,7 @@ fun SettingsScreen(
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     var showFontScaleDialog by rememberSaveable { mutableStateOf(false) }
     val dataInfo by viewModel.dataInfo.collectAsStateWithLifecycle()
+    val dataUpdate by viewModel.dataUpdate.collectAsStateWithLifecycle()
     // EEA 등에서만 true. 이 경우 동의를 다시 변경할 진입점 제공이 Google 정책상 필수다.
     val adPrivacyRequired by AdsConsent.privacyOptionsRequired.collectAsStateWithLifecycle()
 
@@ -200,6 +202,20 @@ fun SettingsScreen(
                     if (date != null) stringResource(R.string.settings_data_updated_format, date, count)
                     else stringResource(R.string.settings_data_count_format, count)
                 } ?: stringResource(R.string.settings_data_updated_loading),
+            )
+            SettingRow(
+                Icons.Filled.CloudDownload,
+                stringResource(R.string.settings_data_check),
+                subtitle = stringResource(
+                    when (dataUpdate) {
+                        DataUpdateUiState.Idle -> R.string.settings_data_check_desc
+                        DataUpdateUiState.Checking -> R.string.settings_data_check_running
+                        DataUpdateUiState.UpToDate -> R.string.settings_data_check_latest
+                        DataUpdateUiState.Updated -> R.string.settings_data_check_updated
+                        DataUpdateUiState.Failed -> R.string.settings_data_check_failed
+                    },
+                ),
+                onClick = viewModel::checkDataUpdate,
             )
         }
 

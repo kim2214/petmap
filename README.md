@@ -26,7 +26,7 @@
 - **언어/UI**: Kotlin, Jetpack Compose, Material3
 - **아키텍처**: 단일 Activity + Compose Navigation, MVVM + Repository, 계층 분리(`data` / `domain` / `ui`)
 - **DI**: Hilt
-- **로컬 DB**: Room — 프리빌트 에셋 DB(장소) + 즐겨찾기. 네트워크 경로 없음
+- **로컬 DB**: Room — 프리빌트 에셋 DB(장소) + 즐겨찾기. 장소 데이터는 GitHub Pages 원격 갱신(WorkManager)으로도 교체
 - **지도**: 네이버 지도 SDK (`naver-map-compose`)
 - **위치**: Google Play Services FusedLocationProvider
 - **수익화/품질**: AdMob 배너 + UMP 동의, Firebase Crashlytics/Analytics, Play 인앱 리뷰
@@ -120,13 +120,19 @@ API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 �
 
 - `app/src/main/assets/petmap.db` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" + "문화 여가 활동 시설(액티비티)" 데이터셋(+ 선택: 식약처 "반려동물 동반출입 음식점" 지오코딩 결과)을 정제해 넣은 SQLite DB(v9 — 주차·이용료·애견 추가요금·장소설명, 시/도 명칭 현행화, 법인 표기("(주)" 등) 제거·`sortKey` 이름순 정렬 키, `meta` 데이터 기준일 포함, 실내/실외 여부는 **nullable = 정보 없음**, `maxPetKg` 는 "입장 가능 동물 크기" 문구를 숫자화한 최대 체중). `이름+좌표`(및 같은 이름 150m 이내) 기준 중복 제거 후 **동반 가능(Y) 장소만 약 24,700개**를 수록한다(동반 불가 N 은 제외). 식약처 음식점 약 2,640곳(식당 1,836·카페/제과 약 800)은 2026-03 시행 반려동물 동반출입 음식점 등록 업소로, 좌표는 네이버 Geocoding 결과이며 크기·실내외 조건은 정보 없음(null)으로 들어간다.
 - 첫 실행 시 Room `createFromAsset` 로 에셋 DB를 즉시 로드(파싱/시딩/색인 구축 없음).
-- 지도/목록/검색은 모두 **로컬 Room 쿼리** — 네트워크 경로 자체가 없다. 데이터 갱신은 아래 재생성 절차로만 이뤄진다.
+- 지도/목록/검색은 모두 **로컬 Room 쿼리**다. 네트워크는 장소 데이터 원격 갱신에만 쓴다(아래).
+- **원격 데이터 갱신 (앱 업데이트 없이)**: `tools/publish_db.py` 가 에셋 DB 를 gzip 해
+  `kim2214.github.io/petmap/data/<identity_hash>/`(`manifest.json` + `petmap-<기준일>.db.gz`)에 게시한다.
+  앱은 하루 한 번(Wi-Fi·배터리 여유, `PlaceDataUpdateWorker`) 또는 설정 "새 데이터 확인"에서 매니페스트를 읽고,
+  기준일이 자기 `meta.data_date` 보다 늦으면 내려받아 SHA-256·identity_hash·장소 수·FTS 행 수를 검증한 뒤
+  **한 트랜잭션으로** places·`places_fts`·meta 를 교체한다(`PlaceDataUpdaterImpl`). 실패하면 기존 데이터가 남고,
+  즐겨찾기는 별도 테이블이라 영향이 없다. 스키마별 경로라 엔티티가 바뀐 데이터는 구버전 앱에 가지 않는다.
 - **기존 설치의 데이터 갱신은 DB 버전 업으로 전달**된다: 마이그레이션 대신 Room 이 구버전 파일을 지우고 에셋을
   재복사한다(`PetMapDatabase.VERSION`/`RECREATED_FROM`). 즐겨찾기는 `files/favorites_backup.json` 미러가
   재생성 직전에 보존하고 첫 접근 시 복원한다. 설정 화면의 "데이터 갱신일"은 에셋 `meta.data_date` 다.
 - **검색은 FTS4 색인** 사용. 색인(`places_fts`)은 `build_db.py` 가 에셋에 **동봉**한다. 한국어 부분검색을 보존하기 위해 글자 단위 유니그램으로
   색인하고 검색어를 구문(phrase)으로 변환한다 — 자세한 건 `data/local/PlaceFts.kt` 참고.
-- 에셋 DB 로드·FTS 검색·meta 계약은 androidTest `PetMapDatabaseAssetTest`, 버전 업 재생성·즐겨찾기 보존은 `LegacyDatabaseRecreateTest` 가 실기기에서 검증한다.
+- 에셋 DB 로드·FTS 검색·meta 계약은 androidTest `PetMapDatabaseAssetTest`, 버전 업 재생성·즐겨찾기 보존은 `LegacyDatabaseRecreateTest`, 원격 갱신(교체·검증 실패 시 유지)은 `PlaceDataUpdaterImplTest` 가 실기기에서 검증한다.
 
 ### ⚡ Baseline Profile
 
@@ -155,7 +161,13 @@ API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 �
    python3 tools/build_db.py --data-date=YYYY-MM-DD "<반려동물 CSV>" "<액티비티 CSV>" [tools/data/restaurants.csv]
    # 출력: app/src/main/assets/petmap.db (고유 장소 N건)
    ```
-4. `PetMapDatabase.VERSION` 을 올리고(`/rebuild-db` 참고) 앱을 다시 빌드/설치하면 새 데이터가 반영된다.
+4. 기존 설치에 전달하는 방법은 둘 중 하나:
+   - **원격 게시(권장, 데이터만 바뀐 경우)** — 앱 업데이트 없이 하루 안에 반영:
+     ```bash
+     python3 tools/publish_db.py ../kim2214.github.io   # → petmap/data/<identity_hash>/ 생성, 이후 그 리포에서 커밋·푸시
+     ```
+     바뀐 `assets/petmap.db` 도 커밋해 두면 새 설치는 처음부터 새 데이터로 시작한다(DB 버전은 그대로 둔다).
+   - **앱 업데이트** — `PetMapDatabase.VERSION` 을 올리고(`/rebuild-db` 참고) 배포. 스키마가 바뀌었으면 이 경로만 가능.
 
 > 스크립트는 앱의 Room 스키마(테이블·인덱스·`room_master_table` identity_hash·`user_version`)와 FTS 색인을 그대로 재현하므로 `createFromAsset` 가 그대로 로드한다.
 > **주의**: 엔티티(`PlaceEntity`/`FavoriteEntity`) 스키마를 바꾸면 identity_hash 가 달라진다. 기준값은 빌드가 갱신하는 `app/schemas/**/<version>.json` 의 `identityHash` 이며, `tools/build_db.py` 의 `ROOM_IDENTITY_HASH`(및 `DB_VERSION`)를 함께 반영해야 한다. 자세한 절차는 `/rebuild-db` 스킬 참고.

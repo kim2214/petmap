@@ -234,6 +234,9 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    // 원격 데이터 갱신 (하루 1회, Wi-Fi)
+    implementation(libs.androidx.work.runtime.ktx)
+
     // Map + Location
     implementation(libs.naver.map.compose)
     implementation(libs.naver.map.location)

@@ -381,6 +381,11 @@ class PlaceRepositoryImpl @Inject constructor(
     @Volatile
     private var regionCountsCache: List<RegionCount>? = null
 
+    /** 원격 갱신(PlaceDataUpdaterImpl)으로 장소 데이터가 통째로 바뀌었을 때 메모리 캐시를 버린다 */
+    fun onDataReplaced() {
+        regionCountsCache = null
+    }
+
     override suspend fun getRegionCounts(): List<RegionCount> {
         regionCountsCache?.let { return it }
         val rows = placeDao.getRegionCounts()
