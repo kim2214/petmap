@@ -6,10 +6,11 @@
 (identity_hash)/user_version 을 앱의 Room 스키마와 동일하게 맞춘다.
 
 사용법:
-    python3 tools/build_db.py [--data-date=YYYY-MM-DD] "<CSV 경로>" ["<CSV 경로 2>" ...] [출력경로.db]
+    python3 tools/build_db.py [--data-date=YYYY-MM-DD] [--closed=<폐업 CSV>] "<CSV 경로>" ["<CSV 경로 2>" ...] [출력경로.db]
     # 마지막 인자가 .db 로 끝나면 출력경로, 아니면 전부 입력 CSV
     # 출력경로 기본값: app/src/main/assets/petmap.db
     # --data-date: 수록 데이터 기준일(설정 화면 "데이터 갱신일"에 표시). 생략 시 오늘 날짜
+    # --closed: tools/fetch_closures.py 가 만든 인허가 폐업 목록. 같은 업종·같은 이름·100m 안의 장소를 뺀다
 
 입력 CSV 규칙:
 - 여러 파일을 주면 순서대로 합친다. 같은 장소(이름+좌표)는 먼저 온 파일이 우선.
@@ -33,6 +34,7 @@
 - 지방행정 인허가 "동물병원"은 tools/fetch_hospitals.py 가 같은 형식으로 만든다(마지막 입력). 동물병원은 추가로
   **같은 건물(30m) 안에서 일반어("24시"·"동물병원" 등)를 뺀 이름이 같거나 앞부분이 겹치면** 중복으로 본다
   (same_building_dup — 데이터셋 간 표기 차이 흡수).
+- --closed: tools/fetch_closures.py 의 인허가 폐업 목록(동물병원·동물약국). 같은 업종·같은 이름·100m 안이면 뺀다.
 
 버전 주의 (데이터 갱신 = 버전 업): 앱은 마이그레이션 없이 **DB 버전이 오르면 기존 파일을 지우고
 에셋을 재복사**한다(PetMapDatabase.VERSION / RECREATED_FROM, 즐겨찾기는 미러로 보존·복원).
@@ -303,6 +305,27 @@ def first_col(r, *names):
     return None
 
 
+CLOSED_NEAR_METERS = 100.0
+
+
+def read_closed(path):
+    """폐업 목록 → {(category, normalize_name): [(lat, lng)]}"""
+    closed = {}
+    with open(path, encoding="utf-8", newline="") as f:
+        for r in csv.DictReader(f):
+            key = normalize_name(clean_name(r["name"]))
+            if key:
+                closed.setdefault((r["category"], key), []).append((float(r["lat"]), float(r["lng"])))
+    return closed
+
+
+def is_closed(closed, category, name, lat, lng):
+    return any(
+        near(lat, lng, la, ln, CLOSED_NEAR_METERS)
+        for la, ln in closed.get((category, normalize_name(name)), ())
+    )
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -318,6 +341,13 @@ def main():
             data_date = datetime.date.fromisoformat(value).isoformat()
         except ValueError:
             raise SystemExit(f"오류: 잘못된 --data-date 값 {value!r} (YYYY-MM-DD)")
+    closed = {}
+    for a in [a for a in args if a.startswith("--closed")]:
+        args.remove(a)
+        if "=" not in a:
+            raise SystemExit("오류: --closed=<폐업 CSV> 형식으로 지정")
+        closed = read_closed(a.split("=", 1)[1])
+    closed_ids = set()  # 폐업으로 뺀 장소 id (원본 CSV 의 중복 행을 한 번만 센다)
     if not args:
         print(__doc__)
         sys.exit(1)
@@ -342,7 +372,7 @@ def main():
                 f"오류: {csv_path} 에 동반 가능 여부 컬럼({' / '.join(PET_ALLOWED_COLUMNS)})이 없음 — "
                 "동반 가능 장소만 담는 앱 취지상 이 데이터셋은 넣을 수 없다"
             )
-        added = filtered = near_dups = building_dups = 0
+        added = filtered = near_dups = building_dups = closed_dups = 0
         for r in file_rows:
             if (r.get(pet_col) or "").strip() != "Y":
                 filtered += 1
@@ -364,6 +394,11 @@ def main():
                 near_dups += 1
                 continue
             category = category_name(r.get("카테고리3"), r.get("카테고리1"))
+            if closed and is_closed(closed, category, name, lat, lng):
+                if pid not in closed_ids:
+                    closed_ids.add(pid)
+                    closed_dups += 1
+                continue
             core = core_name(name)
             ci, cj = grid_cell(lat, lng)
             if core and category in SAME_BUILDING_CATEGORIES and any(
@@ -407,7 +442,9 @@ def main():
             by_cell.setdefault((ci, cj), []).append((lat, lng, category, core))
             added += 1
         print(f"  {os.path.basename(csv_path)}: 동반가능 Y 이외 제외 {filtered}건, 신규 반영 {added}건, "
-              f"이름·150m 중복 제외 {near_dups}건, 같은 건물·비슷한 이름 중복 제외 {building_dups}건")
+              f"이름·150m 중복 제외 {near_dups}건, 같은 건물·비슷한 이름 중복 제외 {building_dups}건"
+              + (f", 인허가 폐업 제외 {closed_dups}곳" if closed else ""))
+
 
     if os.path.exists(out_path):
         os.remove(out_path)
@@ -429,7 +466,8 @@ def main():
     db.commit()
     db.execute("VACUUM")
     db.close()
-    print(f"✓ {out_path} 생성: 고유 장소 {len(rows)}건, 기준일 {data_date}, v{DB_VERSION}")
+    closed_note = f", 인허가 폐업 제외 {len(closed_ids)}곳" if closed else ""
+    print(f"✓ {out_path} 생성: 고유 장소 {len(rows)}건{closed_note}, 기준일 {data_date}, v{DB_VERSION}")
 
 
 if __name__ == "__main__":

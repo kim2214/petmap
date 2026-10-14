@@ -26,7 +26,10 @@ description: 공공데이터 CSV로 프리빌트 Room DB(app/src/main/assets/pet
    `python3 tools/fetch_hospitals.py` 가 받아 `tools/data/hospitals.csv` 를 만든다(키 불필요, 원본 좌표 EPSG:5174 를
    WGS84 로 변환 — `tools/test_fetch_hospitals.py`). 원본은 file.localdata.go.kr 이며 브라우저 UA·Referer 가 없으면 403.
    **마지막(네 번째) 인자**로 넘긴다 — 기본 데이터셋과 겹치는 약 3,400곳은 이름·150m 또는
-   같은 건물(30m)·비슷한 이름(`same_building_dup`, 동물병원만) 규칙으로 걸러지고 약 1,860곳이 새로 들어간다.
+   같은 건물(30m)·비슷한 이름(`same_building_dup`, 동물병원만) 규칙으로 걸러지고 약 1,870곳이 새로 들어간다.
+   폐업 정리: `python3 tools/fetch_closures.py` → `tools/data/closed.csv`(인허가 동물병원·동물약국 중 폐업·취소이고
+   같은 이름의 영업 기록이 100m 안에 없는 곳). `build_db.py --closed=tools/data/closed.csv` 로 넘기면 같은 업종·이름·100m 안의
+   장소를 뺀다(2026-10 기준 약 1,400곳). 휴업은 빼지 않는다.
 
 2. **전달 경로를 고른다.**
    - **원격 게시(데이터만 바뀐 경우 권장)**: DB 버전은 그대로 두고 3~4단계 후 5단계(원격 게시)로 보낸다.
@@ -40,7 +43,7 @@ description: 공공데이터 CSV로 프리빌트 Room DB(app/src/main/assets/pet
 
 3. 스크립트 실행 (여러 CSV 가능 — **기본 데이터셋을 먼저** 줘야 중복 시 기본 메타가 우선):
    ```bash
-   python3 tools/build_db.py --data-date=YYYY-MM-DD "<반려동물 CSV>" ["<액티비티 CSV>" ...]
+   python3 tools/build_db.py --data-date=YYYY-MM-DD [--closed=tools/data/closed.csv] "<반려동물 CSV>" ["<액티비티 CSV>" ...]
    # --data-date: 공공데이터 기준일(설정 화면 "데이터 갱신일"). 생략 시 오늘
    # 출력 기본값: app/src/main/assets/petmap.db (마지막 인자가 .db 면 출력경로)
    # 성공 시: "✓ app/src/main/assets/petmap.db 생성: 고유 장소 N건, 기준일 ..., vN"

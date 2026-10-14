@@ -25,8 +25,9 @@ import os
 import sys
 import urllib.request
 
-SOURCE_PAGE = "https://file.localdata.go.kr/file/animal_hospitals/info"
-SOURCE_URL = "https://file.localdata.go.kr/file/download/animal_hospitals/info"
+# LOCALDATA 파일 다운로드: /file/<dataset>/info 페이지, /file/download/<dataset>/info 가 CSV
+LOCALDATA = "https://file.localdata.go.kr/file"
+DATASET = "animal_hospitals"
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -164,9 +165,10 @@ def to_rows(source_rows):
     return out, skipped_status, skipped_coord
 
 
-def download(path):
-    req = urllib.request.Request(SOURCE_URL, headers={
-        "User-Agent": UA, "Referer": SOURCE_PAGE, "Accept-Language": "ko-KR,ko",
+def download(path, dataset=DATASET):
+    """LOCALDATA 데이터셋 전체 CSV(cp949)를 받는다. 브라우저 UA·Referer 가 없으면 403."""
+    req = urllib.request.Request(f"{LOCALDATA}/download/{dataset}/info", headers={
+        "User-Agent": UA, "Referer": f"{LOCALDATA}/{dataset}/info", "Accept-Language": "ko-KR,ko",
     })
     with urllib.request.urlopen(req, timeout=120) as resp, open(path, "wb") as f:
         f.write(resp.read())
@@ -178,8 +180,8 @@ def main():
     src = args.get("--csv")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     if not src:
-        src = os.path.join(os.path.dirname(out_path) or ".", "hospitals_source.csv")
-        print(f"다운로드: {SOURCE_URL}")
+        src = os.path.join(os.path.dirname(out_path) or ".", f"{DATASET}_source.csv")
+        print(f"다운로드: {LOCALDATA}/download/{DATASET}/info")
         download(src)
     rows, skipped_status, skipped_coord = to_rows(read_source(src))
     with open(out_path, "w", encoding="utf-8", newline="") as f:
