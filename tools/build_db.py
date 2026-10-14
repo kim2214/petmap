@@ -30,11 +30,15 @@
 - 식약처 "반려동물 동반출입 음식점" 목록은 tools/fetch_restaurants.py 가 지오코딩해 같은 컬럼 형식의
   CSV 로 만들어 준다. 좌표가 지오코딩 결과라 기본 데이터셋과 좌표가 조금 달라도 같은 가게일 수 있으므로,
   **정규화한 이름이 같고 150m 안**이면 중복으로 보고 먼저 온 파일을 유지한다.
+- 지방행정 인허가 "동물병원"은 tools/fetch_hospitals.py 가 같은 형식으로 만든다(마지막 입력). 동물병원은 추가로
+  **같은 건물(30m) 안에서 일반어("24시"·"동물병원" 등)를 뺀 이름이 같거나 앞부분이 겹치면** 중복으로 본다
+  (same_building_dup — 데이터셋 간 표기 차이 흡수).
 
 버전 주의 (데이터 갱신 = 버전 업): 앱은 마이그레이션 없이 **DB 버전이 오르면 기존 파일을 지우고
 에셋을 재복사**한다(PetMapDatabase.VERSION / RECREATED_FROM, 즐겨찾기는 미러로 보존·복원).
-따라서 장소 데이터만 바뀌어도 기존 설치에 전달하려면 DB_VERSION 과 앱의 PetMapDatabase.VERSION 을
-함께 올리고, 직전 버전을 RECREATED_FROM 에 추가해야 한다. 버전을 그대로 두면 신규 설치만 새 데이터를 받는다.
+앱 업데이트로 장소 데이터를 기존 설치에 전달하려면 DB_VERSION 과 앱의 PetMapDatabase.VERSION 을
+함께 올리고, 직전 버전을 RECREATED_FROM 에 추가해야 한다. 버전을 그대로 두면 신규 설치만 새 데이터를 받는다
+(원격 게시 tools/publish_db.py 로 보낼 때는 버전을 올리지 않아도 된다).
 
 FTS 주의: FTS 색인(places_fts)을 **동봉**한다. 색인을 여기서 만들어 두면 신규 설치가 첫 실행에
 2.2만 행을 재색인하는 비용이 사라진다. fts_index() 는 앱의 PlaceFts.index()(글자 단위 유니그램)와
@@ -57,7 +61,7 @@ import sqlite3
 import sys
 
 ROOM_IDENTITY_HASH = "f73e8da48ecee6b464710547abbab63e"  # app/schemas/**/9.json 의 identityHash
-DB_VERSION = 9  # v9: sortKey(이름순 정렬 키) + 법인 표기 제거. v8: 시/도 정규화. v7: maxPetKg. v6: 실내/실외 nullable. 앱 PetMapDatabase.VERSION 과 동일
+DB_VERSION = 10  # v10: 동물병원 인허가(LOCALDATA) 보강. v9: sortKey(이름순 정렬 키) + 법인 표기 제거. v8: 시/도 정규화. v7: maxPetKg. v6: 실내/실외 nullable. 앱 PetMapDatabase.VERSION 과 동일
 
 # 앱이 읽는 meta 키 (MetaEntity.KEY_DATA_DATE)
 META_KEY_DATA_DATE = "data_date"
@@ -240,6 +244,41 @@ def near(lat1, lng1, lat2, lng2, meters=150.0):
     return math.hypot(dlat, dlng) <= meters
 
 
+# 같은 건물(30m) 안의 동물병원은 이름 표기가 달라도 같은 곳일 가능성이 높다 — 인허가 데이터(fetch_hospitals.py)와
+# 기본 데이터셋의 표기 차이("웰니스클리닉(청계천점)" ↔ "웰니스클리닉 청계천점", "24시 루시드 동물메디컬센터" ↔
+# "루시드 동물메디컬센터")를 흡수한다. 다른 업종은 같은 건물에 다른 가게가 흔해("롯데마트 X점" ↔ "다이소 롯데마트X점")
+# 적용하지 않는다.
+SAME_BUILDING_METERS = 30.0
+SAME_BUILDING_CATEGORIES = ("HOSPITAL",)
+GENERIC_NAME_WORDS = ("24시", "동물메디컬센터", "동물의료센터", "동물병원", "메디컬센터", "의료센터")
+
+
+def core_name(name):
+    """느슨한 중복 판정용 이름: 괄호를 떼지 않은 정규화 + 업종 일반어 제거 (2글자 미만이면 빈 값)."""
+    n = re.sub(r"\(주\)|㈜|주식회사", "", name)
+    n = re.sub(r"[^0-9A-Za-z가-힣]", "", n).lower()
+    for w in GENERIC_NAME_WORDS:
+        n = n.replace(w, "")
+    return n if len(n) >= 2 else ""
+
+
+def same_building_dup(core_a, core_b):
+    """핵심 이름이 같거나, 짧은 쪽(3글자 이상)이 긴 쪽의 앞부분이면 같은 곳 (지점명·24시 표기 차이 흡수).
+    포함이 아니라 앞부분만 보는 이유: "신도림" ↔ "아이러브펫신도림점", "대구" ↔ "대구야간응급연합"처럼
+    지명만 겹치는 다른 병원을 묶지 않기 위해서다."""
+    if not core_a or not core_b:
+        return False
+    if core_a == core_b:
+        return True
+    short, long_ = sorted((core_a, core_b), key=len)
+    return len(short) >= 3 and long_.startswith(short)
+
+
+def grid_cell(lat, lng):
+    """약 100m 격자 (30m 이웃 탐색용)."""
+    return int(math.floor(lat * 1000)), int(math.floor(lng * 1000))
+
+
 # 데이터셋별로 이름이 다른 동반 가능 여부 컬럼 (하나는 반드시 존재해야 함)
 PET_ALLOWED_COLUMNS = ("반려동물 동반 가능정보", "애완동물 출입 여부")
 
@@ -292,6 +331,7 @@ def main():
 
     rows = {}  # id -> tuple (dedup: 첫 등장 유지 — 먼저 준 파일이 우선)
     by_name = {}  # normalize_name -> [(lat, lng)] (좌표가 다른 같은 가게 판정용)
+    by_cell = {}  # grid_cell -> [(lat, lng, category, core_name)] (같은 건물·표기 다른 이름 판정용)
     for csv_path in csv_paths:
         file_rows = read_rows(csv_path)
         if not file_rows:
@@ -302,7 +342,7 @@ def main():
                 f"오류: {csv_path} 에 동반 가능 여부 컬럼({' / '.join(PET_ALLOWED_COLUMNS)})이 없음 — "
                 "동반 가능 장소만 담는 앱 취지상 이 데이터셋은 넣을 수 없다"
             )
-        added = filtered = near_dups = 0
+        added = filtered = near_dups = building_dups = 0
         for r in file_rows:
             if (r.get(pet_col) or "").strip() != "Y":
                 filtered += 1
@@ -322,6 +362,16 @@ def main():
             key = normalize_name(name)
             if key and any(near(lat, lng, la, ln) for la, ln in by_name.get(key, ())):
                 near_dups += 1
+                continue
+            category = category_name(r.get("카테고리3"), r.get("카테고리1"))
+            core = core_name(name)
+            ci, cj = grid_cell(lat, lng)
+            if core and category in SAME_BUILDING_CATEGORIES and any(
+                cat == category and same_building_dup(core, c) and near(lat, lng, la, ln, SAME_BUILDING_METERS)
+                for di in (-1, 0, 1) for dj in (-1, 0, 1)
+                for la, ln, cat, c in by_cell.get((ci + di, cj + dj), ())
+            ):
+                building_dups += 1
                 continue
             road = normalize_sido(meaningful(r.get("도로명주소")) or (r.get("지번주소") or "").strip())
             lot = normalize_sido((r.get("지번주소") or "").strip())
@@ -343,7 +393,7 @@ def main():
             if restriction and any(h in restriction for h in OUTDOOR_ONLY_HINTS):
                 indoor, outdoor = 0, 1
             rows[pid] = (
-                pid, name, category_name(r.get("카테고리3"), r.get("카테고리1")), road,
+                pid, name, category, road,
                 lot, lat, lng,
                 meaningful(first_col(r, "전화번호", "시설 전화번호")), meaningful(r.get("운영시간")),
                 meaningful(r.get("휴무일")), meaningful(first_col(r, "홈페이지", "웹사이트")),
@@ -354,9 +404,10 @@ def main():
             )
             if key:
                 by_name.setdefault(key, []).append((lat, lng))
+            by_cell.setdefault((ci, cj), []).append((lat, lng, category, core))
             added += 1
         print(f"  {os.path.basename(csv_path)}: 동반가능 Y 이외 제외 {filtered}건, 신규 반영 {added}건, "
-              f"이름·150m 중복 제외 {near_dups}건")
+              f"이름·150m 중복 제외 {near_dups}건, 같은 건물·비슷한 이름 중복 제외 {building_dups}건")
 
     if os.path.exists(out_path):
         os.remove(out_path)

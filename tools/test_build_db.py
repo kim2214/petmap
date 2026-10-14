@@ -85,5 +85,23 @@ class HelpersTest(unittest.TestCase):
         self.assertFalse(b.near(37.5, 127.0, 37.5020, 127.0))
 
 
+class SameBuildingDupTest(unittest.TestCase):
+    def test_core_name_strips_generic_words(self):
+        self.assertEqual(b.core_name("24시 동대문 루시드 동물메디컬센터"), "동대문루시드")
+        self.assertEqual(b.core_name("웰니스클리닉(청계천점)"), "웰니스클리닉청계천점")
+        self.assertEqual(b.core_name("동물병원"), "")  # 일반어뿐이면 판정 안 함
+
+    def test_same_or_prefix_is_duplicate(self):
+        self.assertTrue(b.same_building_dup(b.core_name("그랜드동물병원"), b.core_name("그랜드24시동물병원")))
+        self.assertTrue(b.same_building_dup(b.core_name("웰니스클리닉 청계천점"), b.core_name("웰니스클리닉")))
+        self.assertTrue(b.same_building_dup(b.core_name("치료해주오 동물병원 중랑묵동점"), b.core_name("치료해 주오")))
+
+    def test_shared_place_name_is_not_duplicate(self):
+        # 지명만 겹치는 다른 병원: 앞부분이 아니거나 짧은 쪽이 3글자 미만
+        self.assertFalse(b.same_building_dup(b.core_name("아이러브펫동물병원 신도림점"), b.core_name("신도림동물병원")))
+        self.assertFalse(b.same_building_dup(b.core_name("대구동물메디컬센터"), b.core_name("대구24시 야간응급연합동물병원")))
+        self.assertFalse(b.same_building_dup(b.core_name("꼬마동물병원"), b.core_name("초이스동물병원")))
+
+
 if __name__ == "__main__":
     unittest.main()

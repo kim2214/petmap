@@ -227,7 +227,7 @@
     <string name="settings_email_subject">[펫맵] 문의</string>
     <string name="settings_section_data_source">데이터 출처</string>
     <string name="settings_data_source">한국문화정보원 공공데이터</string>
-    <string name="settings_data_source_desc">한국문화정보원 반려동물 동반 문화시설·액티비티, 식약처 반려동물 동반출입 음식점</string>
+    <string name="settings_data_source_desc">한국문화정보원 반려동물 동반 문화시설·액티비티, 식약처 반려동물 동반출입 음식점, 지방행정 인허가 동물병원</string>
     <string name="settings_data_updated">데이터 갱신일</string>
     <string name="settings_data_updated_format">%1$s 기준 · %2$s곳 수록</string>
     <string name="settings_data_count_format">%1$s곳 수록</string>

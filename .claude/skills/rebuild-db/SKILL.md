@@ -22,6 +22,11 @@ description: 공공데이터 CSV로 프리빌트 Room DB(app/src/main/assets/pet
    `python3 tools/fetch_restaurants.py` 가 다운로드·지오코딩해 `tools/data/restaurants.csv` 를 만든다
    (네이버 Geocoding Client Secret 또는 카카오 REST 키 필요, 좌표 캐시 `tools/data/geocode_cache.json` 재사용).
    이 파일은 **세 번째 인자**로 넘긴다(기본 데이터셋과 이름·150m 중복이면 기본 쪽이 유지된다).
+   동물병원 보강: 지방행정 인허가 "동물병원"(전국 약 1만 건 중 영업/정상·좌표 있는 약 5,300곳) →
+   `python3 tools/fetch_hospitals.py` 가 받아 `tools/data/hospitals.csv` 를 만든다(키 불필요, 원본 좌표 EPSG:5174 를
+   WGS84 로 변환 — `tools/test_fetch_hospitals.py`). 원본은 file.localdata.go.kr 이며 브라우저 UA·Referer 가 없으면 403.
+   **마지막(네 번째) 인자**로 넘긴다 — 기본 데이터셋과 겹치는 약 3,400곳은 이름·150m 또는
+   같은 건물(30m)·비슷한 이름(`same_building_dup`, 동물병원만) 규칙으로 걸러지고 약 1,860곳이 새로 들어간다.
 
 2. **전달 경로를 고른다.**
    - **원격 게시(데이터만 바뀐 경우 권장)**: DB 버전은 그대로 두고 3~4단계 후 5단계(원격 게시)로 보낸다.
