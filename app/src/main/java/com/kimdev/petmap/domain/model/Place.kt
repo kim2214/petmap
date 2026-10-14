@@ -30,6 +30,11 @@ data class Place(
     val memo: String? = null,
     /** 사용자 위치 기준 거리(m). 위치를 모르면 null */
     val distanceMeters: Double? = null,
+    /**
+     * 최신 장소 데이터에 없는 즐겨찾기(폐업 정리·데이터 갱신으로 빠짐) — 저장 당시 스냅샷이라 정보가 최소한이다.
+     * 상세 화면이 안내를 띄운다.
+     */
+    val isOutdated: Boolean = false,
 )
 
 /** 반려동물 동반 관련 정보 */

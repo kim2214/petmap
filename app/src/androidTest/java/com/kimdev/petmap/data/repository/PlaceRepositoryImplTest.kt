@@ -219,6 +219,25 @@ class PlaceRepositoryImplTest {
     }
 
     @Test
+    fun getPlace_fallsBackToFavoriteSnapshot_whenRemovedFromData() = runBlocking {
+        db.insertPlace("live", name = "영업중병원", category = "HOSPITAL")
+        // 폐업 정리로 places 에서 빠졌지만 즐겨찾기에는 남은 장소
+        db.favoriteDao().insert(FavoriteEntity("gone", "폐업병원", "HOSPITAL", "서울 어딘가", 37.5, 127.0, "02-1", memo = "메모"))
+
+        val live = repo.getPlace("live")
+        assertEquals(false, live?.isOutdated)
+
+        val gone = repo.getPlace("gone")
+        assertNotNull(gone)
+        assertEquals("폐업병원", gone!!.name)
+        assertEquals(PlaceCategory.HOSPITAL, gone.category)
+        assertEquals("메모", gone.memo)
+        assertTrue(gone.isFavorite && gone.isOutdated)
+
+        assertNull(repo.getPlace("nowhere"))
+    }
+
+    @Test
     fun getPlaces_keepsRequestedOrder_andSkipsMissing() = runBlocking {
         db.insertPlace("p1")
         db.insertPlace("p2")

@@ -413,7 +413,12 @@ class PlaceRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getPlace(id: String): Place? = placeDao.getById(id)?.toDomain()
+    /**
+     * 장소 데이터에 없으면 즐겨찾기 스냅샷으로 폴백한다 — 폐업 정리·원격 갱신으로 빠진 즐겨찾기를 눌렀을 때
+     * "찾을 수 없음"으로 막히지 않고, 안내([Place.isOutdated])와 함께 저장된 정보·메모·하트 해제를 쓸 수 있게.
+     */
+    override suspend fun getPlace(id: String): Place? =
+        placeDao.getById(id)?.toDomain() ?: favoriteDao.getById(id)?.toDomain()
 
     override suspend fun getPlaces(ids: List<String>): List<Place> {
         if (ids.isEmpty()) return emptyList()

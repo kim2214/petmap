@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocalParking
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
@@ -196,6 +197,7 @@ private fun DetailContent(
         Header(place)
 
         Column(modifier = Modifier.padding(16.dp)) {
+            if (place.isOutdated) OutdatedNotice()
             QuickActions(place, onShowOnMap)
 
             SectionTitle(stringResource(R.string.section_location))
@@ -582,6 +584,28 @@ private fun LocationMiniMap(place: Place, onClick: () -> Unit) {
                 .matchParentSize()
                 .clickable(onClickLabel = stringResource(R.string.detail_show_on_map)) { onClick() },
         )
+    }
+}
+
+/** 최신 데이터에서 빠진 즐겨찾기(폐업 등) 안내 */
+@Composable
+private fun OutdatedNotice() {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+    ) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Info, contentDescription = null)
+            Text(
+                stringResource(R.string.detail_outdated_notice),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+        }
     }
 }
 

@@ -70,4 +70,5 @@ fun FavoriteEntity.toDomain(): Place = Place(
     petInfo = PetInfo(null, null, indoorAllowed = null, outdoorAllowed = null),
     isFavorite = true,
     memo = memo,
+    isOutdated = true,
 )

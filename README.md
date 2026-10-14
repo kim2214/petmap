@@ -129,7 +129,7 @@ API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 �
   즐겨찾기는 별도 테이블이라 영향이 없다. 스키마별 경로라 엔티티가 바뀐 데이터는 구버전 앱에 가지 않는다.
 - **기존 설치의 데이터 갱신은 DB 버전 업으로 전달**된다: 마이그레이션 대신 Room 이 구버전 파일을 지우고 에셋을
   재복사한다(`PetMapDatabase.VERSION`/`RECREATED_FROM`). 즐겨찾기는 `files/favorites_backup.json` 미러가
-  재생성 직전에 보존하고 첫 접근 시 복원한다. 설정 화면의 "데이터 갱신일"은 에셋 `meta.data_date` 다.
+  재생성 직전에 보존하고 첫 접근 시 복원한다. 데이터 갱신(폐업 정리 등)으로 빠진 즐겨찾기는 목록에 남고, 상세는 저장된 스냅샷과 "최신 데이터에 없는 장소" 안내로 열린다. 설정 화면의 "데이터 갱신일"은 에셋 `meta.data_date` 다.
 - **검색은 FTS4 색인** 사용. 색인(`places_fts`)은 `build_db.py` 가 에셋에 **동봉**한다. 한국어 부분검색을 보존하기 위해 글자 단위 유니그램으로
   색인하고 검색어를 구문(phrase)으로 변환한다 — 자세한 건 `data/local/PlaceFts.kt` 참고.
 - 에셋 DB 로드·FTS 검색·meta 계약은 androidTest `PetMapDatabaseAssetTest`, 버전 업 재생성·즐겨찾기 보존은 `LegacyDatabaseRecreateTest`, 원격 갱신(교체·검증 실패 시 유지)은 `PlaceDataUpdaterImplTest` 가 실기기에서 검증한다.
