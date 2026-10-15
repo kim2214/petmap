@@ -99,12 +99,10 @@ naver.map.clientId=네이버클라우드_Maps_ClientID
 
 ## 테스트
 
-- 단위 테스트(`app/src/test/`): ViewModel(Map·List), 매퍼, FTS 문자열 변환, 클러스터링,
+- 단위 테스트(`app/src/test/`): ViewModel(Map·List·Detail·Favorite), 매퍼, FTS 문자열 변환, 클러스터링,
   거리/운영시간 유틸. `fake/`에 FakePlaceRepository 등 페이크 인프라.
 - 계약 테스트(`app/src/androidTest/`): `PetMapDatabaseAssetTest` — 에셋 DB 로드(identity_hash 검증)
   + FTS 검색 + meta 기준일을 실기기에서 고정. `LegacyDatabaseRecreateTest` — 구버전 파일 재생성 시
   즐겨찾기 보존·복원. `build_db.py` 동기화 실수를 잡는 안전망.
-- CI(`.github/workflows/ci.yml`): PR/main 푸시마다 단위 테스트 + Lint + R8 릴리스 빌드.
-
-## 다음 확장 포인트
-
+- CI(`.github/workflows/ci.yml`): PR/main 푸시마다 `build` 잡(데이터 도구 검사 `verify_db.py`·tools 테스트 +
+  단위 테스트 + Lint + R8 릴리스 빌드 + Baseline Profile 생성기 컴파일)과 `androidTest` 잡(에뮬레이터 API 34 계측 테스트).

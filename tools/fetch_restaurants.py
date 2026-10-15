@@ -113,6 +113,10 @@ def clean_address(addr):
     return a
 
 
+# Geocoder.geocode 가 일시 오류(429/5xx/네트워크)로 결론을 못 냈을 때 돌려주는 표식 — 캐시하지 않는다
+TRANSIENT = object()
+
+
 class Geocoder:
     def __init__(self, props):
         env = os.environ
@@ -155,7 +159,12 @@ class Geocoder:
         return None
 
     def geocode(self, addr):
-        """(lat, lng, roadAddress, lotAddress) 또는 None. 429/5xx 는 잠시 쉬고 한 번 재시도."""
+        """(lat, lng, roadAddress, lotAddress), 결과 없음이면 None, 일시 오류로 판단 못 했으면 TRANSIENT.
+
+        429/5xx·네트워크 오류는 잠시 쉬고 한 번 재시도한다. 그래도 실패한 제공자가 있고 아무 데서도 좌표를
+        못 얻었으면 TRANSIENT — 호출 측은 캐시에 남기지 않아 다음 실행에서 다시 묻는다(None 은 "없음"으로 영구 캐시).
+        """
+        transient = False
         for name, fn in self.providers:
             for attempt in range(2):
                 try:
@@ -168,11 +177,23 @@ class Geocoder:
                         raise SystemExit(f"오류: {name} 지오코딩 인증 실패 (HTTP {e.code}) — 키/서비스 활성화 확인")
                     if e.code == 429 or e.code >= 500:
                         time.sleep(2.0 * (attempt + 1))
+                        if attempt == 1:
+                            transient = True
                         continue
                     break
                 except (urllib.error.URLError, TimeoutError):
                     time.sleep(1.0)
-        return None
+                    if attempt == 1:
+                        transient = True
+        return TRANSIENT if transient else None
+
+
+def save_cache(cache, path):
+    """임시 파일에 쓴 뒤 교체 — 쓰는 도중 중단돼도 기존 캐시(20분짜리 지오코딩 결과)가 깨지지 않는다."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=0)
+    os.replace(tmp, path)
 
 
 def main():
@@ -198,14 +219,20 @@ def main():
         geocoder = Geocoder(read_props())
         print(f"  지오코딩 {len(pending)}건 ({'+'.join(n for n, _ in geocoder.providers)}) …")
     today = time.strftime("%Y-%m-%d")
+    transient = 0
     for i, r in enumerate(pending, 1):
         q = clean_address(r["addr"])
         hit = geocoder.geocode(q)
-        cache[q] = list(hit) if hit else None
+        if hit is TRANSIENT:
+            transient += 1
+        else:
+            cache[q] = list(hit) if hit else None
         if i % 100 == 0 or i == len(pending):
-            json.dump(cache, open(cache_path, "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+            save_cache(cache, cache_path)
             print(f"    {i}/{len(pending)}")
         time.sleep(0.05)
+    if transient:
+        print(f"  ! 일시 오류 {transient}건은 캐시하지 않음 — 다시 실행하면 그 주소만 재시도한다")
 
     written = missed = 0
     with open(out_path, "w", encoding="utf-8-sig", newline="") as fh:

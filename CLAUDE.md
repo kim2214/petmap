@@ -43,7 +43,7 @@ python3 tools/verify_db.py          # 에셋 DB ↔ Room 스키마 동기화 오
 
 ## 비밀 키 (git 제외)
 
-- `local.properties`: `naver.map.clientId` (AdMob ID 는 비밀이 아니라 `app/build.gradle.kts`에 하드코딩). 선택: `naver.map.clientSecret` 또는 `kakao.restApiKey` — 앱이 아니라 `tools/fetch_restaurants.py` 지오코딩 전용.
+- `local.properties`: `naver.map.clientId` (AdMob ID 는 비밀이 아니라 `app/build.gradle.kts`에 하드코딩). clientId 는 NCP 콘솔의 **Client ID(10자 내외)** — Client Secret(40자)을 넣으면 지도가 조용히 빈 격자만 나온다(401 은 logcat `NaverMap` 태그에만). 선택: `naver.map.clientSecret` 또는 `kakao.restApiKey` — 앱이 아니라 `tools/fetch_restaurants.py` 지오코딩 전용.
 - `keystore.properties`, `petmap-upload.jks`: 릴리스 서명.
 - `app/google-services.json`: 있으면 Firebase Crashlytics/Analytics 활성화, 없으면 앱은 정상 빌드(Firebase만 비활성).
 
