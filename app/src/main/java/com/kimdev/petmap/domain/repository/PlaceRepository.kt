@@ -10,6 +10,7 @@ import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.model.Region
 import com.kimdev.petmap.domain.model.RegionCount
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 장소 데이터 접근 추상화.
@@ -20,6 +21,12 @@ interface PlaceRepository {
 
     /** 첫 접근 시 에셋 DB 복사(또는 버전 업 재복사)가 일어나도록 워밍업하고, 비어 있는 즐겨찾기를 미러에서 복원 */
     suspend fun ensureSeeded()
+
+    /**
+     * 장소 데이터 세대. 원격 갱신([PlaceDataUpdater])으로 장소 데이터가 통째로 바뀔 때마다 오른다.
+     * 화면은 이를 구독해, 한 번만 불러 두던 값(지역 개수·최근 본 장소·기준일)과 현재 결과를 다시 조회한다.
+     */
+    val dataVersion: StateFlow<Long>
 
     /** 내장 데이터 기준일·수록 장소 수 (설정 화면) */
     suspend fun getDataInfo(): DataInfo
@@ -101,7 +108,7 @@ interface PlaceRepository {
 
     /**
      * 지역 브라우징용 시/도·시/군/구별 장소 개수. 시/군/구로 볼 수 없는 토큰(세종의 읍·면 등)은
-     * sigungu = null 한 행으로 합쳐진다. 장소 데이터는 설치 동안 불변이므로 첫 호출 결과를 캐시한다.
+     * sigungu = null 한 행으로 합쳐진다. 첫 호출 결과를 캐시하고, 원격 갱신으로 데이터가 바뀌면 버린다.
      */
     suspend fun getRegionCounts(): List<RegionCount>
 

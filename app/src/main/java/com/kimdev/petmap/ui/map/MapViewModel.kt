@@ -202,6 +202,13 @@ class MapViewModel @Inject constructor(
                 .onEach { savedStateHandle[KEY_PET_FILTERS] = SavedFilters.petFiltersToNames(it) }
                 .collect {}
         }
+        // 원격 갱신으로 데이터가 바뀌면 지금 보이는 마커(검색 마커 모드면 같은 검색어)와 지역 개수를 다시 받는다
+        viewModelScope.launch {
+            repository.dataVersion.drop(1).collect {
+                fetch()
+                reloadRegionCounts()
+            }
+        }
         // 설정에서 체중이 바뀌면(등록 해제 포함) '내 아이' 필터가 켜진 경우 재조회한다
         viewModelScope.launch {
             petProfileStore.weightKg.drop(1).collect { kg ->
@@ -408,7 +415,7 @@ class MapViewModel @Inject constructor(
     private var regionCountsJob: Job? = null
 
     /**
-     * 지역 선택 시트가 열려 있는 동안 호출 — 개수는 설치 동안 불변이라 한 번만 가져온다.
+     * 지역 선택 시트가 열려 있는 동안 호출 — 개수는 데이터가 바뀌기 전까지 그대로라 한 번만 가져온다.
      * 시트는 rememberSaveable 이라 프로세스 복원 후에도 다시 열리므로 화면이 열림 상태를 키로 호출한다.
      */
     fun loadRegionCounts() {
@@ -423,6 +430,14 @@ class MapViewModel @Inject constructor(
                     _uiState.update { it.copy(regionCountsError = true) }
                 }
         }
+    }
+
+    /** 데이터 교체 후: 이미 불러 둔(또는 불러오는 중인) 지역 개수만 새로 받는다 */
+    private fun reloadRegionCounts() {
+        val wasLoaded = _uiState.value.regionCounts.isNotEmpty() || regionCountsJob?.isActive == true
+        regionCountsJob?.cancel()
+        _uiState.update { it.copy(regionCounts = emptyList()) }
+        if (wasLoaded) loadRegionCounts()
     }
 
     /**

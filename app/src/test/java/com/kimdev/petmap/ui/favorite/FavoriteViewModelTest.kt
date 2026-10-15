@@ -40,6 +40,19 @@ class FavoriteViewModelTest {
     }
 
     @Test
+    fun `원격 갱신으로 데이터가 바뀌면 최근 본 장소를 다시 조회한다`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = FavoriteViewModel(repo, FakeRecentPlaceStore(listOf("a")))
+        vm.recentState.launchIn(backgroundScope)
+        advanceUntilIdle()
+        assertEquals("a", vm.recentState.value.places.single().name)
+
+        repo.dataset = listOf(testPlace("a", name = "새 이름"))
+        repo.simulateDataReplaced()
+        advanceUntilIdle()
+        assertEquals("새 이름", vm.recentState.value.places.single().name)
+    }
+
+    @Test
     fun `최근 본 목록의 하트는 즐겨찾기와 동기화되고 토글해도 카드는 남는다`() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = FavoriteViewModel(repo, FakeRecentPlaceStore(listOf("b")))
         vm.recentState.launchIn(backgroundScope)

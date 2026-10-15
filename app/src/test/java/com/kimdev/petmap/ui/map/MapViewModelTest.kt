@@ -151,6 +151,22 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `원격 갱신으로 데이터가 바뀌면 지금 보는 영역을 다시 조회한다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("old", lat = 37.50, lng = 127.00))
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.researchHere(37.5, 127.0, 16.0)
+        advanceUntilIdle()
+        assertEquals(listOf("old"), vm.uiState.value.clusters.mapNotNull { it.single?.id })
+
+        repo.dataset = listOf(testPlace("new", lat = 37.50, lng = 127.00))
+        repo.simulateDataReplaced()
+        advanceUntilIdle()
+
+        assertEquals(listOf("new"), vm.uiState.value.clusters.mapNotNull { it.single?.id })
+    }
+
+    @Test
     fun `줌 버킷이 바뀌면 자동으로 재조회한다`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
         val vm = viewModel()

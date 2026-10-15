@@ -71,13 +71,14 @@ class FavoriteViewModel @Inject constructor(
         )
 
     /**
-     * 최근 본 장소. ID 목록이 바뀔 때만 DB 를 조회하고(최대 30건 IN 조회), 하트는 즐겨찾기 ID 로 덧입힌다.
+     * 최근 본 장소. ID 목록이나 데이터 세대(원격 갱신)가 바뀔 때만 DB 를 조회하고(최대 30건 IN 조회),
+     * 하트는 즐겨찾기 ID 로 덧입힌다.
      * 조회 실패(에셋 DB 준비 실패 등)는 빈 목록으로 — 즐겨찾기 탭 전체를 에러로 만들 일은 아니다.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val recentState: StateFlow<RecentUiState> =
         combine(
-            recentPlaceStore.recent.mapLatest { ids ->
+            combine(recentPlaceStore.recent, repository.dataVersion) { ids, _ -> ids }.mapLatest { ids ->
                 try {
                     repository.getPlaces(ids)
                 } catch (e: CancellationException) {

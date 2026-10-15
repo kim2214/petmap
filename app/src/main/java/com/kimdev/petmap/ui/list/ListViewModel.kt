@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -153,6 +154,14 @@ class ListViewModel @Inject constructor(
         viewModelScope.launch {
             recentSearchStore.recent.collect { list ->
                 _uiState.update { it.copy(recentSearches = list) }
+            }
+        }
+        // 원격 갱신으로 데이터가 바뀌면 현재 조건으로 다시 조회하고, 불러 둔 지역 개수도 새로 받는다
+        viewModelScope.launch {
+            repository.dataVersion.drop(1).collect {
+                if (!seeded) return@collect
+                refreshSearch()
+                reloadRegionCounts()
             }
         }
         // 체중은 SearchKey 에 포함돼 바뀌면 재조회된다. 등록 해제되면 '내 아이' 칩도 함께 꺼진다.
@@ -351,7 +360,7 @@ class ListViewModel @Inject constructor(
     private var regionCountsJob: Job? = null
 
     /**
-     * 지역 선택 시트가 열려 있는 동안 호출 — 개수는 설치 동안 불변이라 한 번만 가져온다.
+     * 지역 선택 시트가 열려 있는 동안 호출 — 개수는 데이터가 바뀌기 전까지 그대로라 한 번만 가져온다.
      * 시트는 rememberSaveable 이라 프로세스 복원 후에도 다시 열리므로 화면이 열림 상태를 키로 호출한다.
      */
     fun loadRegionCounts() {
@@ -366,6 +375,14 @@ class ListViewModel @Inject constructor(
                     _uiState.update { it.copy(regionCountsError = true) }
                 }
         }
+    }
+
+    /** 데이터 교체 후: 이미 불러 둔(또는 불러오는 중인) 지역 개수만 새로 받는다 */
+    private fun reloadRegionCounts() {
+        val wasLoaded = _uiState.value.regionCounts.isNotEmpty() || regionCountsJob?.isActive == true
+        regionCountsJob?.cancel()
+        _uiState.update { it.copy(regionCounts = emptyList()) }
+        if (wasLoaded) loadRegionCounts()
     }
 
     fun toggleFavorite(place: Place) {

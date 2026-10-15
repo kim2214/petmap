@@ -162,6 +162,23 @@ class ListViewModelTest {
         }
 
     @Test
+    fun `원격 갱신으로 데이터가 바뀌면 현재 조건으로 다시 조회하고 불러 둔 지역 개수도 새로 받는다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("old", roadAddress = "서울특별시 강남구 1"))
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.loadRegionCounts(); advanceUntilIdle()
+            assertEquals(listOf("서울특별시"), vm.uiState.value.regionCounts.map { it.sido })
+
+            repo.dataset = listOf(testPlace("new", roadAddress = "부산광역시 해운대구 1"))
+            repo.simulateDataReplaced()
+            advanceUntilIdle()
+
+            assertEquals(listOf("new"), vm.uiState.value.places.map { it.id })
+            assertEquals(listOf("부산광역시"), vm.uiState.value.regionCounts.map { it.sido })
+        }
+
+    @Test
     fun `거리순 정렬이고 위치 있으면 searchNearby 사용`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = listOf(testPlace("a"))
         val vm = viewModel(location = UserLocation(37.5, 127.0))

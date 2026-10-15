@@ -15,6 +15,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -58,12 +59,11 @@ class SettingsViewModel @Inject constructor(
     val dataUpdate: StateFlow<DataUpdateUiState> = _dataUpdate.asStateFlow()
 
     init {
-        loadDataInfo()
-    }
-
-    private fun loadDataInfo() {
+        // 원격 갱신(주기 작업 포함)으로 데이터가 바뀌면 기준일·장소 수를 다시 읽는다
         viewModelScope.launch {
-            _dataInfo.value = runCatching { placeRepository.getDataInfo() }.getOrNull()
+            placeRepository.dataVersion.collectLatest {
+                _dataInfo.value = runCatching { placeRepository.getDataInfo() }.getOrNull()
+            }
         }
     }
 
@@ -74,7 +74,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _dataUpdate.value = when (placeDataUpdater.update()) {
                 DataUpdateResult.UpToDate -> DataUpdateUiState.UpToDate
-                is DataUpdateResult.Updated -> DataUpdateUiState.Updated.also { loadDataInfo() }
+                is DataUpdateResult.Updated -> DataUpdateUiState.Updated
                 is DataUpdateResult.Failed -> DataUpdateUiState.Failed
             }
         }

@@ -52,7 +52,10 @@ class PlaceDataUpdateWorker(
         private const val TAG = "PlaceDataUpdateWorker"
         private const val UNIQUE_NAME = "place_data_update"
 
-        /** 앱 시작 시 호출. 이미 등록돼 있으면 그대로 둔다(주기가 매번 초기화되지 않게) */
+        /**
+         * 앱 시작 시 호출. UPDATE 는 이미 등록된 작업의 주기 기준 시각을 유지한 채 요청(주기·제약)만
+         * 바꾼다 — KEEP 이면 앱 업데이트로 조건을 바꿔도 기존 설치엔 첫 등록 때 요청이 영영 남는다.
+         */
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<PlaceDataUpdateWorker>(1, TimeUnit.DAYS)
                 .setConstraints(
@@ -64,7 +67,7 @@ class PlaceDataUpdateWorker(
                 )
                 .build()
             WorkManager.getInstance(context)
-                .enqueueUniquePeriodicWork(UNIQUE_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+                .enqueueUniquePeriodicWork(UNIQUE_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
         }
     }
 }

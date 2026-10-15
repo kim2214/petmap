@@ -26,7 +26,11 @@ import com.kimdev.petmap.domain.util.distanceMeters
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -378,23 +382,36 @@ class PlaceRepositoryImpl @Inject constructor(
     }
 
 
-    @Volatile
-    private var regionCountsCache: List<RegionCount>? = null
+    private val _dataVersion = MutableStateFlow(0L)
+    override val dataVersion: StateFlow<Long> = _dataVersion.asStateFlow()
 
-    /** 원격 갱신(PlaceDataUpdaterImpl)으로 장소 데이터가 통째로 바뀌었을 때 메모리 캐시를 버린다 */
+    /** 캐시를 채운 시점의 [dataVersion] 과 함께 둔다 — 교체 전에 시작한 조회가 옛 값을 다시 넣지 못하게 */
+    private class RegionCountsCache(val version: Long, val counts: List<RegionCount>)
+
+    @Volatile
+    private var regionCountsCache: RegionCountsCache? = null
+
+    /**
+     * 원격 갱신(PlaceDataUpdaterImpl)으로 장소 데이터가 통째로 바뀌었을 때(트랜잭션 커밋 후) 호출.
+     * 메모리 캐시를 버리고 세대를 올려 화면들이 다시 조회하게 한다.
+     */
     fun onDataReplaced() {
         regionCountsCache = null
+        _dataVersion.update { it + 1 }
     }
 
     override suspend fun getRegionCounts(): List<RegionCount> {
-        regionCountsCache?.let { return it }
+        val version = _dataVersion.value
+        regionCountsCache?.takeIf { it.version == version }?.let { return it.counts }
         val rows = placeDao.getRegionCounts()
         // 시/군/구가 아닌 둘째 토큰(세종의 읍·면·도로명 등)은 시/도 아래 "기타" 한 행으로 합친다
         val merged = rows
             .groupBy { it.sido to (it.token.takeIf { t -> Region.isSigunguToken(t) }) }
             .map { (key, group) -> RegionCount(key.first, key.second, group.sumOf { it.cnt }) }
             .filter { it.sido.isNotBlank() }
-        return merged.also { regionCountsCache = it }
+        // 조회 중에 데이터가 교체됐다면 옛 스냅샷일 수 있으니 캐시에 남기지 않는다
+        if (_dataVersion.value == version) regionCountsCache = RegionCountsCache(version, merged)
+        return merged
     }
 
     override suspend fun getRegionBounds(region: Region): GeoBounds? {

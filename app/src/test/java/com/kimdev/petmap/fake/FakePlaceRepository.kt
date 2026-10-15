@@ -14,6 +14,7 @@ import com.kimdev.petmap.domain.util.distanceMeters
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 
 /**
@@ -40,6 +41,12 @@ class FakePlaceRepository : PlaceRepository {
     var lastClusterCellsLimit: Int? = null
 
     fun setFavorites(ids: Set<String>) { favorites.value = ids }
+
+    private val _dataVersion = MutableStateFlow(0L)
+    override val dataVersion: StateFlow<Long> = _dataVersion
+
+    /** 원격 갱신으로 데이터가 교체된 것처럼 세대를 올린다 (dataset 은 호출 측이 먼저 바꾼다) */
+    fun simulateDataReplaced() { _dataVersion.value++ }
 
     private fun List<Place>.filterBy(
         query: String,
