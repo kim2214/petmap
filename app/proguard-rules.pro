@@ -15,7 +15,8 @@
 }
 
 # ----- Naver Map SDK -----
--keep class com.naver.maps.** { *; }
+# SDK 가 consumer rules(proguard.txt)를 동봉한다: @NativeApi·native 메서드(JNI), LatLng/LatLngBounds 생성자,
+# TypefaceFactory·OkHttpClientProvider 구현체, Gson. 그래서 전체 keep 없이 축소·난독화되게 둔다.
 -dontwarn com.naver.maps.**
 
 # ----- 도메인 enum (DB 에 name() 저장 / valueOf 로 복원) -----
