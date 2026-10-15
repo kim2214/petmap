@@ -8,6 +8,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -61,8 +62,22 @@ fun PetMapNavHost(
             exitTransition = { fadeOut(tween(200)) },
             popEnterTransition = { fadeIn(tween(200)) },
             popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(200)) },
-        ) {
-            MapScreen(onPlaceClick = openDetail)
+        ) { entry ->
+            val focusId = entry.arguments?.getString(Routes.MAP_ARG_FOCUS)
+            MapScreen(
+                onPlaceClick = { id ->
+                    // 포커스한 그 장소의 "자세히"는 바로 아래 상세로 돌아간다 — 새로 push 하면
+                    // 상세 → 지도 → 상세 … 가 끝없이 쌓인다
+                    val previous = navController.previousBackStackEntry
+                    if (id == focusId && previous?.destination?.route == Routes.DETAIL_PATTERN &&
+                        previous.arguments?.getString(Routes.DETAIL_ARG_ID) == id
+                    ) {
+                        navController.popBackStack()
+                    } else {
+                        openDetail(id)
+                    }
+                },
+            )
         }
         composable(Routes.LIST) {
             val reselects = remember { tabReselects.filter { it == Routes.LIST }.map { } }
@@ -89,7 +104,8 @@ fun PetMapNavHost(
             )
         }
         composable(Routes.LICENSES) {
-            LicensesScreen(onBack = { navController.popBackStack() })
+            // dropUnlessResumed: 닫히는 전환 중의 두 번째 탭이 아래 화면까지 꺼내 빈 NavHost 가 되는 것을 막는다
+            LicensesScreen(onBack = dropUnlessResumed { navController.popBackStack() })
         }
         composable(Routes.ONBOARDING) {
             OnboardingScreen(onFinish = { navController.popBackStack() })
@@ -110,7 +126,7 @@ fun PetMapNavHost(
             popExitTransition = { slideOutHorizontally(tween(300)) { it } + fadeOut(tween(200)) },
         ) {
             DetailScreen(
-                onBack = { navController.popBackStack() },
+                onBack = dropUnlessResumed { navController.popBackStack() },
                 onShowOnMap = { placeId ->
                     // 포커스 대상을 라우트 인자로 실어 지도를 상세 위에 push 한다 → 뒤로가기로 상세 복귀.
                     // (새 지도 ViewModel 이 자기 인자를 읽으므로 기존 지도 탭과 경쟁하지 않는다)

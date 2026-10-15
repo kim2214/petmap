@@ -351,6 +351,23 @@ fun ListScreen(
                     }
                     if (state.isLoadingMore) {
                         item(key = "loading_more") { PlaceCardSkeleton() }
+                    } else if (state.loadMoreFailed) {
+                        // 추가 로드 실패 — 안내 없이 끝난 목록처럼 보이지 않게 끝에 재시도를 둔다
+                        item(key = "load_more_failed") {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                            ) {
+                                Text(
+                                    stringResource(R.string.list_load_more_failed),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                TextButton(onClick = viewModel::loadMore) { Text(stringResource(R.string.action_retry)) }
+                            }
+                        }
                     } else if (state.reachedLimit) {
                         // 상한까지 불러왔음을 숨기지 않고 좁히는 방법을 안내한다
                         item(key = "reached_limit") {

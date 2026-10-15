@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.PetMap" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- 창 배경을 Compose 배경과 맞춘다 — 다크 모드는 values-night 에서 덮어쓴다(콜드 스타트 흰 플래시 방지) -->
+    <style name="Theme.PetMap" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_bg_light</item>
+    </style>
 
     <!-- 런치 스플래시: 인디고 배경 + 발바닥 아이콘, 이후 본 테마로 전환 -->
     <style name="Theme.PetMap.Starting" parent="Theme.SplashScreen">

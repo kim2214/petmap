@@ -464,6 +464,29 @@ class ListViewModelTest {
     }
 
     @Test
+    fun `추가 로드가 실패하면 목록은 두고 loadMoreFailed 로 알리며 다시 시도하면 같은 페이지를 요청한다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = (1..450).map { testPlace("p$it") }
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            repo.searchFailure = IllegalStateException("db busy")
+            vm.loadMore()
+            advanceUntilIdle()
+            assertEquals(200, vm.uiState.value.places.size)
+            assertTrue(vm.uiState.value.loadMoreFailed)
+            assertFalse(vm.uiState.value.isError)
+            assertFalse(vm.uiState.value.isLoadingMore)
+
+            repo.searchFailure = null
+            vm.loadMore()
+            advanceUntilIdle()
+            assertEquals(400, repo.lastSearchLimit)
+            assertEquals(400, vm.uiState.value.places.size)
+            assertFalse(vm.uiState.value.loadMoreFailed)
+        }
+
+    @Test
     fun `검색 조건이 바뀌면 페이지가 첫 페이지로 초기화된다`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = (1..450).map { testPlace("p$it", name = "카페$it") }
         val vm = viewModel()

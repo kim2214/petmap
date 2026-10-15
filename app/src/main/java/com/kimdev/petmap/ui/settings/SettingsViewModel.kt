@@ -52,8 +52,13 @@ class SettingsViewModel @Inject constructor(
 
     private val _dataInfo = MutableStateFlow<DataInfo?>(null)
 
-    /** 데이터 기준일·장소 수. 조회 전/실패 시 null (행은 "불러오는 중" 표시) */
+    /** 데이터 기준일·장소 수. 조회 전/실패 시 null */
     val dataInfo: StateFlow<DataInfo?> = _dataInfo.asStateFlow()
+
+    private val _dataInfoFailed = MutableStateFlow(false)
+
+    /** 기준일 조회 실패 — "불러오는 중"에 멈춰 있지 않고 실패를 알린다 */
+    val dataInfoFailed: StateFlow<Boolean> = _dataInfoFailed.asStateFlow()
 
     private val _dataUpdate = MutableStateFlow<DataUpdateUiState>(DataUpdateUiState.Idle)
     val dataUpdate: StateFlow<DataUpdateUiState> = _dataUpdate.asStateFlow()
@@ -62,7 +67,9 @@ class SettingsViewModel @Inject constructor(
         // 원격 갱신(주기 작업 포함)으로 데이터가 바뀌면 기준일·장소 수를 다시 읽는다
         viewModelScope.launch {
             placeRepository.dataVersion.collectLatest {
-                _dataInfo.value = runCatching { placeRepository.getDataInfo() }.getOrNull()
+                val info = runCatching { placeRepository.getDataInfo() }.getOrNull()
+                _dataInfo.value = info
+                _dataInfoFailed.value = info == null
             }
         }
     }

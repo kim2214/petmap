@@ -142,10 +142,10 @@ fun MapScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
 
-    // 마커 탭 시 미리보기할 장소
-    var previewPlace by remember { mutableStateOf<Place?>(null) }
-    // 더 못 쪼개는 클러스터를 탭했을 때 펼쳐 보여줄 장소 목록
-    var clusterList by remember { mutableStateOf<List<Place>?>(null) }
+    // 마커 탭 시 미리보기할 장소 / 더 못 쪼개는 클러스터를 탭했을 때 펼쳐 보여줄 장소 목록.
+    // ViewModel 이 들고 있어 회전·글자 크기 변경으로 화면이 재생성돼도 시트가 유지된다.
+    val previewPlace by viewModel.previewPlace.collectAsStateWithLifecycle()
+    val clusterList by viewModel.clusterList.collectAsStateWithLifecycle()
     // 검색창 포커스 여부 (최근 검색어 표시용)
     var searchFocused by remember { mutableStateOf(false) }
     // 검색바 하단(윈도우 px). 지도 contentPadding 을 하드코딩 대신 실측으로 잡는다.
@@ -225,9 +225,9 @@ fun MapScreen(
                 is MapEvent.FocusPlace -> {
                     // 조회는 ViewModel 이 이 장소 기준으로 이미 시작했다 — 여기선 카메라·미리보기만
                     moveCameraTo(event.place.lat, event.place.lng, MapViewModel.FOCUS_ZOOM)
-                    previewPlace = event.place
+                    viewModel.showPreview(event.place)
                 }
-                is MapEvent.ExpandCluster -> clusterList = event.places
+                is MapEvent.ExpandCluster -> viewModel.showClusterList(event.places)
                 is MapEvent.FitRegion -> scope.launch {
                     val b = event.bounds
                     val update = if (b.isPoint) {
@@ -350,8 +350,8 @@ fun MapScreen(
                 categoryMarkers = categoryMarkers,
                 clusterIcon = clusterIcon,
                 cameraPositionState = cameraPositionState,
-                onSingleClick = { previewPlace = it },
-                onExpandCluster = { clusterList = it },
+                onSingleClick = { viewModel.showPreview(it) },
+                onExpandCluster = { viewModel.showClusterList(it) },
                 onExpandAggregated = viewModel::expandAggregatedCell,
                 onZoomTo = { lat, lng, zoom -> moveCameraTo(lat, lng, zoom, CameraAnimation.Easing) },
             )
@@ -406,7 +406,7 @@ fun MapScreen(
                             SearchResultRow(p) {
                                 val q = state.searchQuery
                                 moveCameraTo(p.lat, p.lng, 16.0)
-                                previewPlace = p
+                                viewModel.showPreview(p)
                                 viewModel.researchHere(p.lat, p.lng, 16.0)
                                 if (q.isNotBlank()) viewModel.recordRecentSearch(q)
                                 viewModel.clearSearch()
@@ -667,7 +667,7 @@ fun MapScreen(
             place.copy(distanceMeters = distanceMeters(loc.lat, loc.lng, place.lat, place.lng))
         } ?: place
         ModalBottomSheet(
-            onDismissRequest = { previewPlace = null },
+            onDismissRequest = { viewModel.showPreview(null) },
             sheetState = sheetState,
         ) {
             PlacePreviewSheet(
@@ -677,7 +677,7 @@ fun MapScreen(
                 onDirections = { context.openNaverDirections(place) },
                 onDetail = {
                     val id = place.id
-                    previewPlace = null
+                    viewModel.showPreview(null)
                     onPlaceClick(id)
                 },
             )
@@ -688,7 +688,7 @@ fun MapScreen(
     clusterList?.let { places ->
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
-            onDismissRequest = { clusterList = null },
+            onDismissRequest = { viewModel.showClusterList(null) },
             sheetState = sheetState,
         ) {
             Text(
@@ -705,7 +705,7 @@ fun MapScreen(
                     PlaceCard(
                         place = p.copy(isFavorite = p.id in state.favoriteIds),
                         onClick = {
-                            clusterList = null
+                            viewModel.showClusterList(null)
                             onPlaceClick(p.id)
                         },
                         onToggleFavorite = { viewModel.toggleFavorite(p) },

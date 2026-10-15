@@ -100,6 +100,12 @@ class MainActivity : ComponentActivity() {
         // 긍정 시그널(길찾기·공유)이 쌓인 뒤의 앱 실행에서만 인앱 리뷰 요청 (Play 설치 빌드에서만 실제 노출).
         // 구성 변경에 의한 Activity 재생성에서는 다시 묻지 않는다.
         if (savedInstanceState == null) InAppReview.maybeAsk(this)
+        // 창 배경은 values(-night) 테마가 시스템 설정을 따른다 → 인앱에서 테마를 강제했으면 그 색으로 맞춘다
+        when (themeStore.mode.value) {
+            ThemeMode.LIGHT -> window.setBackgroundDrawableResource(R.color.window_bg_light)
+            ThemeMode.DARK -> window.setBackgroundDrawableResource(R.color.window_bg_dark)
+            ThemeMode.SYSTEM -> Unit
+        }
         setContent {
             val themeMode by themeStore.mode.collectAsStateWithLifecycle()
             val darkTheme = when (themeMode) {
@@ -212,7 +218,8 @@ private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivit
                                 icon = {
                                     Icon(
                                         painter = painterResource(dest.iconRes),
-                                        contentDescription = stringResource(dest.labelRes),
+                                        // 라벨이 이미 읽히므로 아이콘은 설명을 비운다 (TalkBack "지도, 지도" 중복 방지)
+                                        contentDescription = null,
                                         tint = Color.Unspecified, // 컬러 일러스트 원본 색 유지
                                         modifier = Modifier
                                             .size(26.dp)

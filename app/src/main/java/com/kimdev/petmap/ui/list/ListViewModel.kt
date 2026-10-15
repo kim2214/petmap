@@ -70,6 +70,8 @@ data class ListUiState(
     val canLoadMore: Boolean = false,
     /** 추가 페이지 로딩 중(첫 로딩 스피너와 구분) */
     val isLoadingMore: Boolean = false,
+    /** 추가 페이지 조회 실패 — 이미 보이는 목록은 두고 끝에 "다시 시도"를 붙인다 */
+    val loadMoreFailed: Boolean = false,
     /** 상한까지 불러왔다 → 더 보려면 검색어·필터로 좁혀야 한다는 안내 */
     val reachedLimit: Boolean = false,
 )
@@ -125,7 +127,9 @@ class ListViewModel @Inject constructor(
     private var userLocation: UserLocation? = null
     // 현재까지 불러온 페이지 크기. 검색 조건이 바뀌면 첫 페이지로 되돌린다.
     private var pageLimit = PAGE_SIZE
-    private var loadMoreJob: Job? = null
+    // 진행 중인 조회(첫 페이지·추가 페이지·재조회 공용). 새 조회는 이전 것을 취소한다 — 그대로 두면
+    // 늦게 끝난 옛 조회가 최신 결과를 덮어쓴다.
+    private var searchJob: Job? = null
     // ensureSeeded 성공 여부. 실패 후 retry() 는 검색만 아니라 준비도 다시 한다.
     private var seeded = false
 
@@ -134,15 +138,14 @@ class ListViewModel @Inject constructor(
         // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
         viewModelScope.launch {
             _uiState
-                .map { SearchKey(it.query, it.selectedCategories, it.sortByDistance, it.openNowOnly, it.petFilters, it.myPetKg, it.region) }
+                .map { it.searchKey() }
                 .distinctUntilChanged()
                 .onEach { persist(it) }
                 .debounce(250)
                 .collect { key ->
                     // 조건이 바뀌면 페이지를 처음부터 다시 센다
                     pageLimit = PAGE_SIZE
-                    loadMoreJob?.cancel()
-                    runSearch(key)
+                    launchSearch(key)
                 }
         }
         viewModelScope.launch {
@@ -176,8 +179,8 @@ class ListViewModel @Inject constructor(
 
     private suspend fun runSearch(key: SearchKey, loadingMore: Boolean = false) {
         _uiState.update {
-            if (loadingMore) it.copy(isLoadingMore = true, isError = false)
-            else it.copy(isLoading = true, isError = false)
+            if (loadingMore) it.copy(isLoadingMore = true, loadMoreFailed = false)
+            else it.copy(isLoading = true, isError = false, loadMoreFailed = false)
         }
         val loc = userLocation
         // 영업중 필터는 조회 후 걸러지므로, 걸러진 뒤에도 페이지가 채워지도록 더 넉넉히 가져온다.
@@ -227,7 +230,13 @@ class ListViewModel @Inject constructor(
             // 로딩 상태를 죽이고 isError 를 잘못 세운다(지도 쪽과 동일 패턴).
             if (e is CancellationException) throw e
             Log.w(TAG, "search failed: ${e.message}")
-            _uiState.update { it.copy(isLoading = false, hasLoaded = true, isLoadingMore = false, isError = true) }
+            if (loadingMore) {
+                // 이미 보이는 목록은 그대로 두고, 다시 시도하면 같은 페이지를 다시 요청하도록 되돌린다
+                pageLimit = (pageLimit - PAGE_SIZE).coerceAtLeast(PAGE_SIZE)
+                _uiState.update { it.copy(isLoadingMore = false, loadMoreFailed = true) }
+            } else {
+                _uiState.update { it.copy(isLoading = false, hasLoaded = true, isLoadingMore = false, isError = true) }
+            }
         }
     }
 
@@ -267,24 +276,21 @@ class ListViewModel @Inject constructor(
         val s = _uiState.value
         if (s.isLoading || s.isLoadingMore || !s.canLoadMore) return
         pageLimit = (pageLimit + PAGE_SIZE).coerceAtMost(MAX_LIMIT)
-        loadMoreJob?.cancel()
-        loadMoreJob = viewModelScope.launch {
-            runSearch(
-                SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters, s.myPetKg, s.region),
-                loadingMore = true,
-            )
-        }
+        launchSearch(s.searchKey(), loadingMore = true)
     }
 
     private data class FetchResult(val places: List<Place>, val hasMore: Boolean)
 
     /** 현재 검색 조건으로 즉시 재조회(위치 뒤늦은 확보·에러 후 재시도). */
-    private fun refreshSearch() {
-        val s = _uiState.value
-        viewModelScope.launch {
-            runSearch(SearchKey(s.query, s.selectedCategories, s.sortByDistance, s.openNowOnly, s.petFilters, s.myPetKg, s.region))
-        }
+    private fun refreshSearch() = launchSearch(_uiState.value.searchKey())
+
+    private fun launchSearch(key: SearchKey, loadingMore: Boolean = false) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch { runSearch(key, loadingMore) }
     }
+
+    private fun ListUiState.searchKey() =
+        SearchKey(query, selectedCategories, sortByDistance, openNowOnly, petFilters, myPetKg, region)
 
     /** 에러 상태에서 사용자가 "다시 시도" 를 눌렀을 때. */
     /** 오류 안내의 "다시 시도". DB 준비가 안 됐으면 준비부터 다시 하고, 검색도 재조회한다 */

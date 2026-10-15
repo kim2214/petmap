@@ -107,6 +107,7 @@ fun SettingsScreen(
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     var showFontScaleDialog by rememberSaveable { mutableStateOf(false) }
     val dataInfo by viewModel.dataInfo.collectAsStateWithLifecycle()
+    val dataInfoFailed by viewModel.dataInfoFailed.collectAsStateWithLifecycle()
     val dataUpdate by viewModel.dataUpdate.collectAsStateWithLifecycle()
     // EEA 등에서만 true. 이 경우 동의를 다시 변경할 진입점 제공이 Google 정책상 필수다.
     val adPrivacyRequired by AdsConsent.privacyOptionsRequired.collectAsStateWithLifecycle()
@@ -201,7 +202,9 @@ fun SettingsScreen(
                     val date = info.dataDate?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
                     if (date != null) stringResource(R.string.settings_data_updated_format, date, count)
                     else stringResource(R.string.settings_data_count_format, count)
-                } ?: stringResource(R.string.settings_data_updated_loading),
+                } ?: stringResource(
+                    if (dataInfoFailed) R.string.settings_data_updated_failed else R.string.settings_data_updated_loading,
+                ),
             )
             SettingRow(
                 Icons.Filled.CloudDownload,

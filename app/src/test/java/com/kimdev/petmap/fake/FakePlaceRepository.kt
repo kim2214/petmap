@@ -139,6 +139,9 @@ class FakePlaceRepository : PlaceRepository {
     var lastSearchNearbyMyPetKg: Double? = null
     var lastRegion: Region? = null
 
+    /** 설정하면 search 가 이 예외를 던진다 (조회 실패 시뮬레이션) */
+    var searchFailure: Throwable? = null
+
     override suspend fun search(
         query: String,
         categories: Set<PlaceCategory>,
@@ -154,6 +157,7 @@ class FakePlaceRepository : PlaceRepository {
         lastSearchPetFilters = petFilters
         lastSearchMyPetKg = myPetKg
         searchGate?.await()
+        searchFailure?.let { throw it }
         return dataset.filterBy(query, categories, petFilters, myPetKg, region).take(limit)
     }
 

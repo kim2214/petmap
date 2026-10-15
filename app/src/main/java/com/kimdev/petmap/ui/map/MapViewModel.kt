@@ -127,6 +127,24 @@ class MapViewModel @Inject constructor(
     private val _userLocation = MutableStateFlow<UserLocation?>(null)
     val userLocation: StateFlow<UserLocation?> = _userLocation.asStateFlow()
 
+    // 바텀시트 대상(마커 미리보기 / 겹친 클러스터 목록). 화면의 remember 에 두면 회전·글자 크기 변경으로
+    // Activity 가 재생성될 때 시트가 사라지고, 포커스 지도의 미리보기는 이벤트가 다시 오지 않아 복구되지 않는다.
+    private val _previewPlace = MutableStateFlow<Place?>(null)
+    val previewPlace: StateFlow<Place?> = _previewPlace.asStateFlow()
+
+    private val _clusterList = MutableStateFlow<List<Place>?>(null)
+    val clusterList: StateFlow<List<Place>?> = _clusterList.asStateFlow()
+
+    /** 미리보기 시트 열기(null 이면 닫기) */
+    fun showPreview(place: Place?) {
+        _previewPlace.value = place
+    }
+
+    /** 클러스터 목록 시트 열기(null 이면 닫기) */
+    fun showClusterList(places: List<Place>?) {
+        _clusterList.value = places
+    }
+
     // 현재 카메라 위치
     private var lastCenterLat = Constants.DEFAULT_LAT
     private var lastCenterLng = Constants.DEFAULT_LNG

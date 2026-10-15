@@ -3,4 +3,7 @@
     <!-- 스플래시 배경 (themes.xml 의 windowSplashScreenBackground 에서 참조).
          앱 내 색상은 전부 Compose 테마(ui/theme)에서 정의 — 여기에 추가하지 말 것. -->
     <color name="icon_bg">#FFFBF5E9</color>
+    <!-- 첫 Compose 프레임 전 창 배경 (themes.xml / values-night). Compose 테마 background(Cream / NightBg)와 같은 값 -->
+    <color name="window_bg_light">#FFF6FBF7</color>
+    <color name="window_bg_dark">#FF0F1511</color>
 </resources>
