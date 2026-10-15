@@ -28,14 +28,14 @@ python3 tools/verify_db.py          # 에셋 DB ↔ Room 스키마 동기화 오
 ./gradlew :app:bundleRelease        # 스토어용 .aab (Play가 ABI 분리)
 ```
 
-- 서명은 `keystore.properties`(git 제외)에서 읽고, 없으면 디버그 서명으로 폴백(로컬 검증용).
+- 서명은 `keystore.properties`(git 제외)에서 읽고, 없으면 디버그 서명으로 폴백(로컬 검증용). 단 `bundleRelease` 는 키스토어와 `app/google-services.json` 이 없으면 실패한다(우회: `-PallowDebugSigning` / `-PallowNoFirebase`).
 - 릴리스 빌드만 **실제 AdMob ID** 사용(`app/build.gradle.kts` release 블록). 디버그는 Google 테스트 ID.
 - **배포 순서 (필수)**: ① versionCode/versionName 범프를 커밋 → ② 그 커밋에 `vX.Y` 태그 → ③ 그 상태에서 `bundleRelease` → 업로드. 커밋 없이 배포하면 스토어 빌드를 재현할 소스가 사라진다(1.5 때 실제 발생, 히스토리 재작성으로 복구).
 
 ## 데이터: 프리빌트 Room DB
 
 - 단일 소스는 `app/src/main/assets/petmap.db`(약 25,200개 고유 장소, v10 — 동물병원은 인허가 데이터로 보강·인허가 폐업 동물병원/약국 제외, 동반가능 Y 만 수록, 시/도 명칭 현행화(강원특별자치도·전북특별자치도·전남광주통합특별시), 법인 표기 제거 + `sortKey`(한글→영문→숫자 이름순), 주차·요금·설명·`meta` 기준일 포함, 실내/실외는 nullable = 정보 없음, `maxPetKg` 는 크기 문구를 숫자화한 입장 가능 최대 체중). 첫 실행 시 Room `createFromAsset`로 즉시 로드.
-- **원격 데이터 갱신 (앱 업데이트 없이)**: `python3 tools/publish_db.py <kim2214.github.io 경로>` 가 에셋 DB 를 `petmap/data/<identity_hash>/`(manifest.json + gz)로 만든다 → 그 리포에서 커밋·푸시. 앱(`PlaceDataUpdaterImpl`, 하루 1회 Wi-Fi `PlaceDataUpdateWorker` + 설정 "새 데이터 확인")은 기준일(`meta.data_date`)이 **더 늦을 때만** 받아 검증 후 places·places_fts·meta 를 한 트랜잭션으로 교체한다 → 고쳐서 다시 게시할 땐 `--data-date` 를 올려야 전달된다. 데이터만 바뀐 갱신은 이 경로로 충분(DB 버전 업 불필요), 스키마가 바뀌면 앱 업데이트만 가능.
+- **원격 데이터 갱신 (앱 업데이트 없이)**: `python3 tools/publish_db.py <kim2214.github.io 경로>` 가 에셋 DB 를 `petmap/data/<identity_hash>/`(manifest.json + gz)로 만든다 → 그 리포에서 커밋·푸시. 앱(`PlaceDataUpdaterImpl`, 하루 1회 Wi-Fi `PlaceDataUpdateWorker` + 설정 "새 데이터 확인")은 기준일(`meta.data_date`)이 **더 늦을 때만** 받아 검증 후 places·places_fts·meta 를 한 트랜잭션으로 교체한다 → 고쳐서 다시 게시할 땐 `--data-date` 를 올려야 전달된다(`publish_db.py` 는 게시된 기준일보다 늦지 않은 DB 를 거부, 같은 DB 재게시는 허용, 강제는 `--force`; 직전 gz 는 CDN 캐시 대비로 한 번 더 남긴다). 데이터만 바뀐 갱신은 이 경로로 충분(DB 버전 업 불필요), 스키마가 바뀌면 앱 업데이트만 가능.
 - **데이터 갱신 전략(앱 업데이트) = DB 버전 업 → 파괴적 재생성.** 마이그레이션은 쓰지 않는다. `PetMapDatabase.VERSION`을 올리고 직전 버전을 `RECREATED_FROM`에 추가하면 Room이 기존 파일을 지우고 에셋을 재복사한다. 즐겨찾기는 `FavoriteBackup` 미러가 재생성 직전에 보존(`preserveLegacyDatabase`, `DatabaseModule`)하고 `ensureSeeded`가 복원한다. 앱 업데이트로 전달하려면 **장소 데이터만 바뀌어도 버전을 올려야 한다** (원격 게시로 보낼 땐 불필요).
 - 검색은 FTS4 유니그램 색인(`data/local/PlaceFts.kt`). 색인은 에셋에 동봉되며(`build_db.py`의 `fts_index`가 `PlaceFts.index`와 동일 로직이어야 함).
 - **DB를 새 CSV로 재생성할 때는 `/rebuild-db` 스킬을 사용한다** (`tools/build_db.py`의 identity_hash/버전 주의사항이 얽혀 있음). 원본 CSV 는 리포에 없다 — 공공데이터포털에서 받는다(다운로드 URL 은 스킬 참고). 식약처 "반려동물 동반출입 음식점"(약 2,700곳, 좌표 없음)은 `tools/fetch_restaurants.py`(네이버 Geocoding, `naver.map.clientSecret`)로 CSV 를 만들어 세 번째 입력으로, 지방행정 인허가 "동물병원"은 `tools/fetch_hospitals.py`(키 불필요, EPSG:5174→WGS84 변환)로 만들어 네 번째(마지막) 입력으로 넘긴다. 폐업 목록은 `tools/fetch_closures.py` → `build_db.py --closed=tools/data/closed.csv`. 좌표 캐시 `tools/data/`는 git 제외.

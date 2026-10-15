@@ -57,16 +57,46 @@ class PublishTest(unittest.TestCase):
         with gzip.open(gz, "rb") as f, open(self.db, "rb") as orig:
             self.assertEqual(f.read(), orig.read())
 
-    def test_same_db_gives_same_sha_and_old_files_are_removed(self):
+    def _gz_files(self, out_dir):
+        return sorted(f for f in os.listdir(out_dir) if f.endswith(".gz"))
+
+    def _rebuild(self, data_date, places=3):
+        os.remove(self.db)
+        make_db(self.db, data_date=data_date, places=places)
+
+    def test_same_db_republish_is_allowed_and_gives_same_sha(self):
         make_db(self.db, data_date="2026-09-10")
         _, first = p.publish(self.site, self.db)
         _, again = p.publish(self.site, self.db)
         self.assertEqual(first["sha256"], again["sha256"])
 
-        os.remove(self.db)
-        make_db(self.db, data_date="2026-10-14")
+    def test_keeps_previous_gz_once_then_removes_older(self):
+        make_db(self.db, data_date="2026-09-10")
+        p.publish(self.site, self.db)
+        self._rebuild("2026-10-14")
         out_dir, _ = p.publish(self.site, self.db)
-        self.assertEqual(sorted(f for f in os.listdir(out_dir) if f.endswith(".gz")), ["petmap-2026-10-14.db.gz"])
+        # CDN 이 옛 매니페스트를 캐시하는 동안 직전 gz 가 404 가 되지 않게 남긴다
+        self.assertEqual(self._gz_files(out_dir), ["petmap-2026-09-10.db.gz", "petmap-2026-10-14.db.gz"])
+        self._rebuild("2026-10-20")
+        p.publish(self.site, self.db)
+        self.assertEqual(self._gz_files(out_dir), ["petmap-2026-10-14.db.gz", "petmap-2026-10-20.db.gz"])
+
+    def test_rejects_date_not_after_published_unless_forced(self):
+        make_db(self.db, data_date="2026-10-14")
+        out_dir, published = p.publish(self.site, self.db)
+        # 같은 날짜인데 내용이 다르면 앱이 받지 않으므로 거부 (게시물은 그대로)
+        self._rebuild("2026-10-14", places=4)
+        with self.assertRaises(SystemExit):
+            p.publish(self.site, self.db)
+        self.assertEqual(p.read_manifest(out_dir), published)
+        self.assertFalse(any(f.endswith(".tmp") for f in os.listdir(out_dir)))
+        # 더 이른 날짜도 거부
+        self._rebuild("2026-10-01")
+        with self.assertRaises(SystemExit):
+            p.publish(self.site, self.db)
+        # --force 면 덮어쓴다
+        _, forced = p.publish(self.site, self.db, force=True)
+        self.assertEqual(forced["dataDate"], "2026-10-01")
 
     def test_rejects_identity_hash_mismatch(self):
         make_db(self.db, identity_hash="other")

@@ -170,16 +170,26 @@ ksp {
 
 // 스토어 업로드용 .aab 가 디버그 키로 만들어지는 사고 방지.
 // 로컬 검증이 목적이면 -PallowDebugSigning 으로 명시적으로 우회할 수 있다.
+// google-services.json 이 없으면 Firebase 가 통째로 빠진 채 조용히 빌드된다(1.5 때 Crashlytics 미수신 우려와
+// 같은 종류) → 스토어 빌드에선 막고, 의도한 것이면 -PallowNoFirebase 로 우회한다.
 tasks.matching { it.name == "bundleRelease" }.configureEach {
     // doFirst 람다는 configuration cache 에 직렬화된다 — 빌드스크립트 객체(project 등)를
     // 캡처하면 안 되므로 구성 시점에 Boolean 으로 평가해 값만 캡처한다.
     val keystoreReady = hasReleaseKeystore
     val allowDebugSigning = providers.gradleProperty("allowDebugSigning").isPresent
+    val firebaseReady = file("google-services.json").exists()
+    val allowNoFirebase = providers.gradleProperty("allowNoFirebase").isPresent
     doFirst {
         if (!keystoreReady && !allowDebugSigning) {
             throw GradleException(
                 "bundleRelease 는 릴리스 키스토어가 필요합니다. keystore.properties 를 설정하거나 " +
                     "로컬 검증용이면 -PallowDebugSigning 을 지정하세요."
+            )
+        }
+        if (!firebaseReady && !allowNoFirebase) {
+            throw GradleException(
+                "bundleRelease 는 app/google-services.json 이 필요합니다(없으면 Crashlytics/Analytics 가 빠진 채 " +
+                    "빌드됨). Firebase 없이 만들 의도면 -PallowNoFirebase 를 지정하세요."
             )
         }
     }
