@@ -14,8 +14,10 @@ import java.util.regex.Pattern
 /**
  * Baseline Profile 생성기.
  *
- * 콜드 스타트 → (첫 실행이면) 온보딩 건너뛰기 → 지도 → 목록 스크롤 → 즐겨찾기 → 설정 순으로
- * 사용자의 첫 1분을 재현한다. 여기서 실행된 코드 경로가 AOT 컴파일 대상이 된다.
+ * - [startup]: 콜드 스타트 → 첫 지도 렌더링까지만. startup-prof.txt 로도 들어가 DEX 레이아웃 최적화
+ *   (시작 코드를 첫 dex 에 모음)를 받는다. 여기에 화면 순회까지 넣으면 거의 앱 전체가 "시작 코드"가 돼
+ *   최적화가 무의미해진다(이전엔 startup-prof == baseline-prof 였다).
+ * - [journey]: 지도 → 목록 스크롤·상세 → 즐겨찾기 → 설정. baseline-prof.txt 에만 들어가 AOT 컴파일 대상이 된다.
  *
  * 실행: 에뮬레이터/기기(API 33+) 연결 후 `./gradlew :app:generateBaselineProfile`
  * 결과: app/src/release/generated/baselineProfiles/{baseline-prof,startup-prof}.txt (리포에 커밋)
@@ -29,23 +31,16 @@ class BaselineProfileGenerator {
     val rule = BaselineProfileRule()
 
     @Test
-    fun generate() {
-        rule.collect(
-            packageName = PACKAGE,
-            // 시작 경로는 startup-prof.txt 로 분리 → DEX 레이아웃 최적화까지 받는다
-            includeInStartupProfile = true,
-        ) {
-            pressHome()
-            // 지도 첫 진입이 위치 권한을 요청한다 → 시스템 다이얼로그가 탐색을 막지 않도록 미리 허용
-            grantLocationPermissions()
-            startActivityAndWait()
-            skipOnboardingIfShown()
-            dismissPermissionDialogIfShown()
-            // 지도: 에셋 DB 복사(첫 실행) + 첫 조회 + 마커 렌더링이 끝날 때까지
-            device.waitForIdle()
-            device.wait(Until.gone(By.text("장소 데이터를 준비하고 있어요…")), 30_000)
-            Thread.sleep(2_000)
+    fun startup() {
+        rule.collect(packageName = PACKAGE, includeInStartupProfile = true) {
+            coldStartToMap()
+        }
+    }
 
+    @Test
+    fun journey() {
+        rule.collect(packageName = PACKAGE, includeInStartupProfile = false) {
+            coldStartToMap()
             openTab("목록")
             scrollList()
             openTab("즐겨찾기")
@@ -55,6 +50,19 @@ class BaselineProfileGenerator {
             openTab("지도")
             device.waitForIdle()
         }
+    }
+
+    private fun MacrobenchmarkScope.coldStartToMap() {
+        pressHome()
+        // 지도 첫 진입이 위치 권한을 요청한다 → 시스템 다이얼로그가 탐색을 막지 않도록 미리 허용
+        grantLocationPermissions()
+        startActivityAndWait()
+        skipOnboardingIfShown()
+        dismissPermissionDialogIfShown()
+        // 지도: 에셋 DB 복사(첫 실행) + 첫 조회 + 마커 렌더링이 끝날 때까지
+        device.waitForIdle()
+        device.wait(Until.gone(By.text("장소 데이터를 준비하고 있어요…")), 30_000)
+        Thread.sleep(2_000)
     }
 
     private fun MacrobenchmarkScope.grantLocationPermissions() {
