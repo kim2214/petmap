@@ -1,5 +1,8 @@
 package com.kimdev.petmap.ui.favorite
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Explore
@@ -22,8 +26,11 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +44,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -90,6 +100,20 @@ fun FavoriteScreen(
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) viewModel.restoreFavorite(snapshot)
+        }
+    }
+
+    // 최근 본 장소 지우기 — 밀어서 지우므로 실수 대비 실행취소를 준다(원래 자리로 복원)
+    fun removeRecentWithUndo(place: Place) {
+        val index = viewModel.removeRecent(place.id) ?: return
+        scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val result = snackbarHostState.showSnackbar(
+                message = resources.getString(R.string.recent_removed_format, place.name),
+                actionLabel = resources.getString(R.string.action_undo),
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.restoreRecent(place.id, index)
         }
     }
 
@@ -148,6 +172,7 @@ fun FavoriteScreen(
                 listState = recentListState,
                 onPlaceClick = onPlaceClick,
                 onToggleFavorite = viewModel::toggleFavorite,
+                onRemove = ::removeRecentWithUndo,
                 onExplore = onExplore,
             )
             return@TabScreenScaffold
@@ -219,6 +244,7 @@ private fun RecentContent(
     listState: LazyListState,
     onPlaceClick: (String) -> Unit,
     onToggleFavorite: (Place) -> Unit,
+    onRemove: (Place) -> Unit,
     onExplore: () -> Unit,
 ) {
     when {
@@ -237,14 +263,67 @@ private fun RecentContent(
         )
 
         else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            items(state.places, key = { it.id }) { place ->
-                PlaceCard(
-                    place = place,
-                    onClick = { onPlaceClick(place.id) },
-                    onToggleFavorite = { onToggleFavorite(place) },
-                    modifier = Modifier.animateItem(),
+            item(key = "swipe_hint") {
+                Text(
+                    text = stringResource(R.string.recent_swipe_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
             }
+            items(state.places, key = { it.id }) { place ->
+                SwipeToRemove(onRemove = { onRemove(place) }, modifier = Modifier.animateItem()) {
+                    PlaceCard(
+                        place = place,
+                        onClick = { onPlaceClick(place.id) },
+                        onToggleFavorite = { onToggleFavorite(place) },
+                    )
+                }
+            }
         }
+    }
+}
+
+/**
+ * 양방향으로 밀어 지우는 행. 밀기는 보조 동작이라 스크린리더용 동작("최근 본 목록에서 지우기")도 단다.
+ * 지운 행은 목록에서 빠지며 컴포지션을 떠나므로 상태를 되돌릴 필요가 없고, 실행취소로 돌아오면 새 상태로 그려진다.
+ */
+@Composable
+private fun SwipeToRemove(
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val state = rememberSwipeToDismissBoxState()
+    val removeLabel = stringResource(R.string.recent_remove_action)
+    SwipeToDismissBox(
+        state = state,
+        modifier = modifier.semantics {
+            customActions = listOf(CustomAccessibilityAction(removeLabel) { onRemove(); true })
+        },
+        onDismiss = { onRemove() },
+        backgroundContent = {
+            val alignment = if (state.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
+                Alignment.CenterStart
+            } else {
+                Alignment.CenterEnd
+            }
+            Box(
+                contentAlignment = alignment,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 24.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        },
+    ) {
+        content()
     }
 }

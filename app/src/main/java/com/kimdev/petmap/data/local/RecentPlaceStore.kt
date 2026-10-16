@@ -15,6 +15,9 @@ interface RecentPlaceStore {
     val recent: StateFlow<List<String>>
     fun add(placeId: String)
     fun remove(placeId: String)
+
+    /** 실행취소: [remove] 한 장소를 원래 자리([index])에 되돌린다(이미 있으면 무시) */
+    fun restore(placeId: String, index: Int)
     fun clear()
 
     companion object {
@@ -46,6 +49,14 @@ class RecentPlaceStoreImpl @Inject constructor(
 
     override fun remove(placeId: String) {
         _recent.update { list -> list.filter { it != placeId } }
+        persist()
+    }
+
+    override fun restore(placeId: String, index: Int) {
+        _recent.update { list ->
+            if (placeId in list) list
+            else list.toMutableList().apply { add(index.coerceIn(0, size), placeId) }.take(RecentPlaceStore.MAX)
+        }
         persist()
     }
 

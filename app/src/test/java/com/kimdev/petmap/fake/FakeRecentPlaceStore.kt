@@ -19,5 +19,11 @@ class FakeRecentPlaceStore(initial: List<String> = emptyList()) : RecentPlaceSto
         _recent.value = _recent.value.filter { it != placeId }
     }
 
+    override fun restore(placeId: String, index: Int) {
+        val list = _recent.value
+        if (placeId in list) return
+        _recent.value = list.toMutableList().apply { add(index.coerceIn(0, size), placeId) }.take(RecentPlaceStore.MAX)
+    }
+
     override fun clear() { _recent.value = emptyList() }
 }

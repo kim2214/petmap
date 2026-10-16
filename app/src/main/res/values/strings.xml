@@ -173,6 +173,9 @@
     <string name="recent_empty_title">아직 본 장소가 없어요</string>
     <string name="recent_empty_desc">장소 상세를 열어 보면\n최근 %1$d곳까지 여기에 남아요.</string>
     <string name="recent_clear_title">최근 본 장소를 모두 지울까요?</string>
+    <string name="recent_removed_format">\'%1$s\' 최근 본 목록에서 지웠어요</string>
+    <string name="recent_remove_action">최근 본 목록에서 지우기</string>
+    <string name="recent_swipe_hint">옆으로 밀면 목록에서 지워요</string>
 
     <!-- 상세 화면 -->
     <string name="detail_title_fallback">상세</string>

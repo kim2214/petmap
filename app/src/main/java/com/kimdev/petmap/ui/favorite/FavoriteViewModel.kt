@@ -104,6 +104,15 @@ class FavoriteViewModel @Inject constructor(
 
     fun clearRecent() = recentPlaceStore.clear()
 
+    /** 최근 본 장소 하나 지우기. 실행취소용으로 지우기 전 위치를 돌려준다(이미 없으면 null) */
+    fun removeRecent(placeId: String): Int? {
+        val index = recentPlaceStore.recent.value.indexOf(placeId).takeIf { it >= 0 } ?: return null
+        recentPlaceStore.remove(placeId)
+        return index
+    }
+
+    fun restoreRecent(placeId: String, index: Int) = recentPlaceStore.restore(placeId, index)
+
     fun onQueryChange(q: String) {
         query.value = q
     }

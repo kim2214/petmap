@@ -74,4 +74,21 @@ class FavoriteViewModelTest {
         advanceUntilIdle()
         assertTrue(vm.recentState.value.places.isEmpty())
     }
+
+    @Test
+    fun `최근 본 장소 하나를 지우고 실행취소하면 원래 자리로 돌아온다`() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = FavoriteViewModel(repo, FakeRecentPlaceStore(listOf("a", "b", "c")))
+        vm.recentState.launchIn(backgroundScope)
+        advanceUntilIdle()
+
+        val index = vm.removeRecent("b")
+        advanceUntilIdle()
+        assertEquals(1, index)
+        assertEquals(listOf("a", "c"), vm.recentState.value.places.map { it.id })
+        assertEquals(null, vm.removeRecent("b")) // 이미 지운 장소
+
+        vm.restoreRecent("b", index!!)
+        advanceUntilIdle()
+        assertEquals(listOf("a", "b", "c"), vm.recentState.value.places.map { it.id })
+    }
 }
