@@ -8,6 +8,7 @@ import com.kimdev.petmap.data.local.FavoriteBackup
 import com.kimdev.petmap.data.local.PlaceFts
 import com.kimdev.petmap.data.local.dao.FavoriteDao
 import com.kimdev.petmap.data.local.dao.MetaDao
+import com.kimdev.petmap.data.local.dao.OPEN_24H_SQL
 import com.kimdev.petmap.data.local.dao.PlaceDao
 import com.kimdev.petmap.data.local.entity.MetaEntity
 import com.kimdev.petmap.data.mapper.toDomain
@@ -144,6 +145,7 @@ class PlaceRepositoryImpl @Inject constructor(
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
             parking = PetFilter.PARKING in petFilters,
+            open24h = PetFilter.OPEN_24H in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
             myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
@@ -183,6 +185,7 @@ class PlaceRepositoryImpl @Inject constructor(
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
             parking = PetFilter.PARKING in petFilters,
+            open24h = PetFilter.OPEN_24H in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
             myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
@@ -224,6 +227,7 @@ class PlaceRepositoryImpl @Inject constructor(
             indoor = PetFilter.INDOOR in petFilters,
             outdoor = PetFilter.OUTDOOR in petFilters,
             parking = PetFilter.PARKING in petFilters,
+            open24h = PetFilter.OPEN_24H in petFilters,
             sizeAll = PetFilter.SIZE_ALL,
             myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
             limit = limit,
@@ -255,6 +259,7 @@ class PlaceRepositoryImpl @Inject constructor(
                 indoor = PetFilter.INDOOR in petFilters,
                 outdoor = PetFilter.OUTDOOR in petFilters,
                 parking = PetFilter.PARKING in petFilters,
+                open24h = PetFilter.OPEN_24H in petFilters,
                 sizeAll = PetFilter.SIZE_ALL,
                 myPetKg = PetFilter.effectiveWeight(petFilters, myPetKg),
                 region = region?.prefix ?: "",
@@ -287,6 +292,7 @@ class PlaceRepositoryImpl @Inject constructor(
                 indoor = PetFilter.INDOOR in petFilters,
                 outdoor = PetFilter.OUTDOOR in petFilters,
                 parking = PetFilter.PARKING in petFilters,
+                open24h = PetFilter.OPEN_24H in petFilters,
                 sizeAll = PetFilter.SIZE_ALL,
                 myPetKg = weight,
                 region = region?.prefix ?: "", limit = limit,
@@ -347,6 +353,8 @@ class PlaceRepositoryImpl @Inject constructor(
         if (PetFilter.INDOOR in petFilters) sql.append(" AND places.indoorAllowed = 1")
         if (PetFilter.OUTDOOR in petFilters) sql.append(" AND places.outdoorAllowed = 1")
         if (PetFilter.PARKING in petFilters) sql.append(" AND places.parkingAvailable = 1")
+        // places_fts 에도 name 컬럼이 있어 places. 로 한정한다
+        if (PetFilter.OPEN_24H in petFilters) sql.append(" AND " + OPEN_24H_SQL_QUALIFIED)
         if (myPetKg != null) {
             sql.append(" AND places.maxPetKg >= ?")
             args.add(myPetKg)
@@ -506,3 +514,6 @@ class PlaceRepositoryImpl @Inject constructor(
 fun List<Place>.withFavorites(favoriteIds: Set<String>): List<Place> =
     map { it.copy(isFavorite = it.id in favoriteIds) }
 
+private val OPEN_24H_SQL_QUALIFIED = OPEN_24H_SQL
+    .replace("operatingTime", "places.operatingTime")
+    .replace("name LIKE", "places.name LIKE")

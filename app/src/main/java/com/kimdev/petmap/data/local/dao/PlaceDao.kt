@@ -15,6 +15,15 @@ data class LatLngRow(val lat: Double, val lng: Double)
 /** [PlaceDao.getRegionCounts] 결과: 주소 첫 토큰(시/도)·둘째 토큰(시/군/구 후보)별 장소 개수 */
 data class RegionRow(val sido: String, val token: String, val cnt: Int)
 
+/**
+ * 24시간 운영 판정 ([com.kimdev.petmap.domain.model.PetFilter.OPEN_24H]). 영업시간 표기("매일 00:00~24:00"·"24시간"·
+ * "상시 개방")로 보고, 영업시간 정보가 없으면 상호의 "24시"(대개 24시 동물병원)로 본다 — 시간표가 따로 있으면 시간표를 따른다.
+ * 요일 일부만 24시간("월~금 00:00~24:00")인 곳도 포함된다(2026-10 기준 약 20곳). [PetFilter.matches] 와 같은 정책이어야 한다.
+ */
+const val OPEN_24H_SQL = "(operatingTime LIKE '%24시간%' OR operatingTime LIKE '%상시%'" +
+    " OR operatingTime LIKE '%00:00~24:00%' OR operatingTime LIKE '%00:00-24:00%'" +
+    " OR operatingTime LIKE '%00:00~00:00%' OR (operatingTime IS NULL AND name LIKE '%24시%'))"
+
 @Dao
 interface PlaceDao {
 
@@ -33,7 +42,7 @@ interface PlaceDao {
      * 지도 뷰포트(위/경도 박스) 안의 장소. 중심에서 가까운 순으로 제한.
      * 카테고리 다중 필터: catCount 가 0 이면 전체, 아니면 category IN (cats).
      * (cats 는 빈 리스트일 때 SQL 오류가 나므로 항상 1개 이상 전달)
-     * 동반 조건(anySize/indoor/outdoor/parking/myPetKg): 켜진 조건은 AND 로 걸리며 정보 없는 장소는 제외된다.
+     * 동반 조건(anySize/indoor/outdoor/parking/open24h/myPetKg): 켜진 조건은 AND 로 걸리며 정보 없는 장소는 제외된다.
      * myPetKg(내 반려견 체중)는 null 이면 조건 없음, 아니면 maxPetKg >= 체중(maxPetKg NULL 은 제외)
      * ([com.kimdev.petmap.domain.model.PetFilter.matches] 와 같은 정책; sizeAll = PetFilter.SIZE_ALL).
      * 정렬: 경도 1도는 위도 1도보다 실제 거리가 짧으므로 lng 항에 cos²(lat)(=lngScaleSq)를 곱해 보정.
@@ -48,6 +57,7 @@ interface PlaceDao {
           AND (:indoor = 0 OR indoorAllowed = 1)
           AND (:outdoor = 0 OR outdoorAllowed = 1)
           AND (:parking = 0 OR parkingAvailable = 1)
+          AND (:open24h = 0 OR $OPEN_24H_SQL)
           AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
         ORDER BY ((lat - :centerLat) * (lat - :centerLat)
                   + (lng - :centerLng) * (lng - :centerLng) * :lngScaleSq) ASC
@@ -68,6 +78,7 @@ interface PlaceDao {
         indoor: Boolean,
         outdoor: Boolean,
         parking: Boolean,
+        open24h: Boolean,
         sizeAll: String,
         myPetKg: Double?,
         limit: Int,
@@ -90,6 +101,7 @@ interface PlaceDao {
           AND (:indoor = 0 OR indoorAllowed = 1)
           AND (:outdoor = 0 OR outdoorAllowed = 1)
           AND (:parking = 0 OR parkingAvailable = 1)
+          AND (:open24h = 0 OR $OPEN_24H_SQL)
           AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
         GROUP BY CAST((lat - :minLat) / :latStep AS INTEGER),
                  CAST((lng - :minLng) / :lngStep AS INTEGER)
@@ -110,6 +122,7 @@ interface PlaceDao {
         indoor: Boolean,
         outdoor: Boolean,
         parking: Boolean,
+        open24h: Boolean,
         sizeAll: String,
         myPetKg: Double?,
         limit: Int,
@@ -127,6 +140,7 @@ interface PlaceDao {
           AND (:indoor = 0 OR indoorAllowed = 1)
           AND (:outdoor = 0 OR outdoorAllowed = 1)
           AND (:parking = 0 OR parkingAvailable = 1)
+          AND (:open24h = 0 OR $OPEN_24H_SQL)
           AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
           AND (:region = '' OR roadAddress LIKE :region || '%')
         ORDER BY sortKey ASC
@@ -140,6 +154,7 @@ interface PlaceDao {
         indoor: Boolean,
         outdoor: Boolean,
         parking: Boolean,
+        open24h: Boolean,
         sizeAll: String,
         myPetKg: Double?,
         region: String,
@@ -160,6 +175,7 @@ interface PlaceDao {
           AND (:indoor = 0 OR indoorAllowed = 1)
           AND (:outdoor = 0 OR outdoorAllowed = 1)
           AND (:parking = 0 OR parkingAvailable = 1)
+          AND (:open24h = 0 OR $OPEN_24H_SQL)
           AND (:myPetKg IS NULL OR maxPetKg >= :myPetKg)
           AND (:region = '' OR roadAddress LIKE :region || '%')
         ORDER BY ((lat - :lat) * (lat - :lat)
@@ -181,6 +197,7 @@ interface PlaceDao {
         indoor: Boolean,
         outdoor: Boolean,
         parking: Boolean,
+        open24h: Boolean,
         sizeAll: String,
         myPetKg: Double?,
         region: String,

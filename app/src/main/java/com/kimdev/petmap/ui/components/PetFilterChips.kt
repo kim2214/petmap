@@ -22,6 +22,7 @@ val PetFilter.labelRes: Int
         PetFilter.MY_PET -> R.string.filter_my_pet
         PetFilter.LARGE_DOG -> R.string.filter_large_dog
         PetFilter.PARKING -> R.string.filter_parking
+        PetFilter.OPEN_24H -> R.string.filter_open_24h
     }
 
 /**

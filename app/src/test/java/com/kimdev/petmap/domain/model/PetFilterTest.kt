@@ -79,4 +79,14 @@ class PetFilterTest {
         assertFalse(PetInfo(null, null, indoorAllowed = false, outdoorAllowed = null).isUnknown)
         assertFalse(PetInfo("소형", null, null, null).isUnknown)
     }
+
+    @Test
+    fun `24시는 영업시간 표기로, 시간 정보가 없을 때만 상호로 판정한다`() {
+        assertTrue(PetFilter.OPEN_24H.matches(testPlace("a", operatingTime = "매일 00:00~24:00")))
+        assertTrue(PetFilter.OPEN_24H.matches(testPlace("b", operatingTime = "상시 개방")))
+        assertTrue(PetFilter.OPEN_24H.matches(testPlace("c", name = "24시 튼튼동물병원")))
+        assertFalse(PetFilter.OPEN_24H.matches(testPlace("d", name = "24시 밤동물병원", operatingTime = "매일 09:00~21:00")))
+        assertFalse(PetFilter.OPEN_24H.matches(testPlace("e", operatingTime = "연중무휴 10:00~22:00")))
+        assertEquals(PetFilter.OPEN_24H, PetFilter.CHIP_ORDER.first())
+    }
 }

@@ -61,6 +61,7 @@
     <string name="filter_my_pet">내 아이 가능</string>
     <string name="filter_large_dog">대형견 가능</string>
     <string name="filter_parking">주차 가능</string>
+    <string name="filter_open_24h">24시</string>
     <string name="filter_region">지역</string>
     <string name="region_sheet_title">지역 선택</string>
     <string name="region_pick_sido">시/도를 고르세요</string>

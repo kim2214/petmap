@@ -111,6 +111,20 @@ class PlaceRepositoryImplTest {
     }
 
     @Test
+    fun search_open24h_matchesHoursOrNameWithoutHours() = runBlocking {
+        db.insertPlace("h1", name = "해피동물병원", category = "HOSPITAL", operatingTime = "매일 00:00~24:00")
+        db.insertPlace("h2", name = "24시 튼튼동물병원", category = "HOSPITAL") // 시간 정보 없음 → 상호로 판정
+        db.insertPlace("h3", name = "24시 밤동물병원", category = "HOSPITAL", operatingTime = "매일 09:00~21:00") // 시간표 우선
+        db.insertPlace("p1", name = "한강공원", category = "TRAVEL", operatingTime = "상시 개방")
+        db.insertPlace("c1", name = "낮동물카페", operatingTime = "매일 10:00~22:00")
+        db.buildFtsIndex()
+
+        // 브라우징(@Query)과 FTS 검색(RawQuery: places_fts 에도 name 이 있어 places. 한정 필요) 모두
+        assertEquals(setOf("h1", "h2", "p1"), repo.search("", petFilters = setOf(PetFilter.OPEN_24H)).map { it.id }.toSet())
+        assertEquals(setOf("h1", "h2"), repo.search("동물병원", petFilters = setOf(PetFilter.OPEN_24H)).map { it.id }.toSet())
+    }
+
+    @Test
     fun search_usesFtsAndCategoryFilter() = runBlocking {
         db.insertPlace("c1", name = "행복카페", category = "CAFE")
         db.insertPlace("c2", name = "카페온더힐", category = "CAFE")

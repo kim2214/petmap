@@ -28,7 +28,13 @@ enum class PetFilter {
     LARGE_DOG,
 
     /** 주차 가능 (원본 데이터 "주차 가능여부" = Y) */
-    PARKING;
+    PARKING,
+
+    /**
+     * 24시간 운영 — 동반 조건은 아니지만 같은 칩 줄·같은 SQL 경로(LIMIT 전 필터, 지도 집계 개수 반영)를 쓴다.
+     * 판정 규칙은 PlaceDao 의 OPEN_24H_SQL 과 같다.
+     */
+    OPEN_24H;
 
     /**
      * 클라이언트 측 판정(조회 후 후처리·테스트 페이크). SQL 판정(PlaceDao)과 같은 정책이어야 한다.
@@ -41,6 +47,8 @@ enum class PetFilter {
         MY_PET -> myWeightKg == null || place.petInfo.allowsWeight(myWeightKg)
         LARGE_DOG -> place.petInfo.allowsWeight(LARGE_DOG_MIN_KG)
         PARKING -> place.parkingAvailable == true
+        OPEN_24H -> place.operatingTime?.let { ot -> OPEN_24H_HOURS.any { ot.contains(it) } }
+            ?: place.name.contains("24시")
     }
 
     companion object {
@@ -54,7 +62,11 @@ enum class PetFilter {
         const val LARGE_DOG_MIN_KG = 25.01
 
         /** 칩 표시 순서 (목록·지도 공용) */
-        val CHIP_ORDER = listOf(MY_PET, LARGE_DOG, ANY_SIZE, INDOOR, OUTDOOR, PARKING)
+        // 24시는 영업중 칩 바로 뒤에 오도록 맨 앞(급할 때 찾는 동물병원)
+        val CHIP_ORDER = listOf(OPEN_24H, MY_PET, LARGE_DOG, ANY_SIZE, INDOOR, OUTDOOR, PARKING)
+
+        /** [OPEN_24H] 의 영업시간 표기 (OPEN_24H_SQL 의 LIKE 패턴과 같다) */
+        private val OPEN_24H_HOURS = listOf("24시간", "상시", "00:00~24:00", "00:00-24:00", "00:00~00:00")
 
         /**
          * SQL 의 `maxPetKg >= ?` 에 바인딩할 체중 하한, 조건이 없으면 null.

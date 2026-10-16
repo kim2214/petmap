@@ -16,6 +16,7 @@ fun PetMapDatabase.insertPlace(
     outdoorAllowed: Boolean? = true,
     maxPetKg: Double? = null,
     parkingAvailable: Boolean? = null,
+    operatingTime: String? = null,
     /** 기본은 이름 그대로 — 정렬 버킷을 검증하는 테스트만 명시한다 */
     sortKey: String = name,
 ) {
@@ -24,7 +25,7 @@ fun PetMapDatabase.insertPlace(
         arrayOf<Any?>(
             id, name, category, roadAddress, "", lat, lng,
             // phone, operatingTime, closedDays, homepage, allowedPetSize, restriction, indoor, outdoor
-            null, null, null, null, allowedPetSize, null,
+            null, operatingTime, null, null, allowedPetSize, null,
             indoorAllowed?.let { if (it) 1 else 0 }, outdoorAllowed?.let { if (it) 1 else 0 },
             // v4: parkingAvailable, fee, petFee, description
             parkingAvailable?.let { if (it) 1 else 0 }, null, null, null,
