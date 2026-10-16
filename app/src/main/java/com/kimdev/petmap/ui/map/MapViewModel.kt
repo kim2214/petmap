@@ -145,6 +145,22 @@ class MapViewModel @Inject constructor(
         _clusterList.value = places
     }
 
+    /**
+     * 원격 갱신 후 열려 있는 시트의 장소를 새 데이터로 바꾼다. 데이터에서 빠진 장소는 시트에서 뺀다
+     * (미리보기는 닫고, 클러스터 목록은 남은 장소만 — 하나도 없으면 닫는다).
+     * 조회 중에 사용자가 시트를 닫거나 다른 장소를 열었으면 덮어쓰지 않는다.
+     */
+    private suspend fun refreshOpenSheets() {
+        _previewPlace.value?.let { open ->
+            val fresh = runCatching { repository.getPlaces(listOf(open.id)) }.getOrNull() ?: return@let
+            _previewPlace.compareAndSet(open, fresh.firstOrNull())
+        }
+        _clusterList.value?.let { open ->
+            val fresh = runCatching { repository.getPlaces(open.map { it.id }) }.getOrNull() ?: return@let
+            _clusterList.compareAndSet(open, fresh.ifEmpty { null })
+        }
+    }
+
     // 현재 카메라 위치
     private var lastCenterLat = Constants.DEFAULT_LAT
     private var lastCenterLng = Constants.DEFAULT_LNG
@@ -225,6 +241,7 @@ class MapViewModel @Inject constructor(
             repository.dataVersion.drop(1).collect {
                 fetch()
                 reloadRegionCounts()
+                refreshOpenSheets()
             }
         }
         // 설정에서 체중이 바뀌면(등록 해제 포함) '내 아이' 필터가 켜진 경우 재조회한다

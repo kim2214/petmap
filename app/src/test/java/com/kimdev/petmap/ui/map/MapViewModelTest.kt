@@ -167,6 +167,28 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `원격 갱신 후 열린 미리보기·클러스터 목록은 새 데이터로 바뀌고 빠진 장소는 사라진다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("a"), testPlace("b"), testPlace("c"))
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.showPreview(repo.dataset[0])
+            vm.showClusterList(repo.dataset)
+
+            repo.dataset = listOf(testPlace("a", name = "새 이름"), testPlace("c"))
+            repo.simulateDataReplaced()
+            advanceUntilIdle()
+            assertEquals("새 이름", vm.previewPlace.value?.name)
+            assertEquals(listOf("a", "c"), vm.clusterList.value?.map { it.id })
+
+            repo.dataset = emptyList()
+            repo.simulateDataReplaced()
+            advanceUntilIdle()
+            assertNull(vm.previewPlace.value)
+            assertNull(vm.clusterList.value)
+        }
+
+    @Test
     fun `줌 버킷이 바뀌면 자동으로 재조회한다`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))
         val vm = viewModel()
