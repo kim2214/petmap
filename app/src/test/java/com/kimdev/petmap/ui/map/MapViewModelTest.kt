@@ -521,4 +521,31 @@ class MapViewModelTest {
         advanceUntilIdle()
         assertFalse(vm.uiState.value.canResearch)
     }
+
+    @Test
+    fun `영업 중 필터 - 고줌은 영업 중으로 확실한 곳만, 저줌은 집계 상태를 알린다, 저장·복원된다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(
+                testPlace("open", lat = 37.500, lng = 127.000, operatingTime = "24시간"),
+                testPlace("unknown", lat = 37.501, lng = 127.001),
+            )
+            val saved = SavedStateHandle()
+            val vm = viewModel(saved)
+            advanceUntilIdle()
+            vm.researchHere(37.5, 127.0, 16.0)
+            advanceUntilIdle()
+            assertEquals(2, vm.uiState.value.clusters.sumOf { it.count })
+
+            vm.toggleOpenNow()
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.openNowOnly)
+            assertFalse(vm.uiState.value.isAggregated)
+            assertEquals(listOf("open"), vm.uiState.value.clusters.flatMap { it.members }.map { it.id })
+
+            vm.researchHere(37.5, 127.0, 9.0)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isAggregated)
+
+            assertTrue(viewModel(saved).uiState.value.openNowOnly)
+        }
 }

@@ -491,6 +491,16 @@ fun MapScreen(
                                 label = { Text(stringResource(R.string.filter_region)) },
                                 leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) },
                             )
+                            FilterChip(
+                                selected = state.openNowOnly,
+                                onClick = viewModel::toggleOpenNow,
+                                label = { Text(stringResource(R.string.label_open_now)) },
+                                leadingIcon = if (state.openNowOnly) {
+                                    { Icon(Icons.Filled.Check, contentDescription = null) }
+                                } else {
+                                    null
+                                },
+                            )
                             PetFilterChips(
                                 selected = state.petFilters,
                                 onToggle = viewModel::togglePetFilter,
@@ -499,6 +509,27 @@ fun MapScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // '영업 중' 필터는 개별 마커에만 걸린다 — 저줌 집계(개수 클러스터)에선 확대하라고 알린다
+            if (state.openNowOnly && state.isAggregated && state.searchResults.isEmpty() &&
+                !(searchFocused && state.searchQuery.isBlank())
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    shape = RoundedCornerShape(50),
+                    shadowElevation = 2.dp,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 10.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.map_open_now_zoom_hint),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
                 }
             }
 

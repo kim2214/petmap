@@ -161,6 +161,7 @@
     <!-- 즐겨찾기 화면 -->
     <string name="favorite_count_format">%1$d곳</string>
     <string name="favorite_sort">정렬</string>
+    <string name="map_open_now_zoom_hint">확대하면 영업 중인 곳만 보여요</string>
     <string name="favorite_sort_recent">최근 추가순</string>
     <string name="favorite_sort_name">이름순</string>
     <string name="favorite_sort_distance">가까운순</string>

@@ -18,6 +18,7 @@ import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.model.Region
 import com.kimdev.petmap.domain.model.RegionCount
 import com.kimdev.petmap.domain.repository.PlaceRepository
+import com.kimdev.petmap.domain.util.OpeningHours
 import com.kimdev.petmap.ui.common.SavedFilters
 import com.kimdev.petmap.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDateTime
 import javax.inject.Inject
 
 data class MapUiState(
@@ -52,6 +54,13 @@ data class MapUiState(
     val petFilters: Set<PetFilter> = emptySet(),
     /** 설정에 등록한 내 반려견 체중(kg). null 이면 '내 아이 가능' 칩이 등록 다이얼로그를 먼저 띄운다 */
     val myPetKg: Double? = null,
+    /**
+     * 영업 중인 곳만. 영업시간은 SQL 이 아니라 [OpeningHours] 로 판정하므로 개별 마커(고줌·검색 마커·셀 펼치기)에만
+     * 걸리고, 저줌 집계 클러스터 개수에는 반영되지 않는다 → [isAggregated] 일 때 화면이 "확대하면 적용" 안내를 띄운다.
+     */
+    val openNowOnly: Boolean = false,
+    /** 지금 지도가 저줌 집계 클러스터(개수만)로 그려져 있다 */
+    val isAggregated: Boolean = false,
     /** 지역 선택 시트용 개수. 시트를 처음 열 때 채워진다(비어 있으면 로딩 중) */
     val regionCounts: List<RegionCount> = emptyList(),
     /** 지역 개수 조회 실패 — 시트가 무한 로딩 대신 재시도를 보인다 */
@@ -115,6 +124,7 @@ class MapViewModel @Inject constructor(
             selectedCategories = SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]),
             petFilters = SavedFilters.namesToPetFilters(savedStateHandle[KEY_PET_FILTERS]),
             myPetKg = petProfileStore.weightKg.value,
+            openNowOnly = savedStateHandle[KEY_OPEN_NOW] ?: false,
         )
     )
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
@@ -338,7 +348,13 @@ class MapViewModel @Inject constructor(
                     return@onSuccess
                 }
                 val truncated = found.size > SEARCH_MARKERS_LIMIT
-                val shown = found.take(SEARCH_MARKERS_LIMIT)
+                val shown = found.take(SEARCH_MARKERS_LIMIT).openNowFiltered()
+                if (shown.isEmpty()) {
+                    // 검색 결과는 있지만 지금 영업 중인 곳이 없음
+                    _uiState.update { it.copy(isLoading = false) }
+                    _events.send(MapEvent.NoResults)
+                    return@onSuccess
+                }
                 places = shown
                 val clusters = withContext(defaultDispatcher) { clusterPlaces(shown, lastZoom) }
                 _uiState.update {
@@ -346,6 +362,7 @@ class MapViewModel @Inject constructor(
                         isLoading = false,
                         clusters = clusters,
                         canResearch = false,
+                        isAggregated = false,
                         searchMarkers = SearchMarkers(query, shown.size, truncated),
                     )
                 }
@@ -518,6 +535,19 @@ class MapViewModel @Inject constructor(
         fetch()
     }
 
+    fun toggleOpenNow() {
+        _uiState.update { it.copy(openNowOnly = !it.openNowOnly) }
+        savedStateHandle[KEY_OPEN_NOW] = _uiState.value.openNowOnly
+        fetch()
+    }
+
+    /** '영업 중' 필터가 켜져 있으면 지금 영업 중이라고 확실한 곳만 남긴다(정보 없음·판단불가는 제외 — 목록과 같은 정책) */
+    private fun List<Place>.openNowFiltered(): List<Place> {
+        if (!_uiState.value.openNowOnly) return this
+        val now = LocalDateTime.now()
+        return filter { OpeningHours.isOpenNow(it.operatingTime, it.closedDays, now) == true }
+    }
+
     fun togglePetFilter(filter: PetFilter) {
         _uiState.update {
             val next = if (filter in it.petFilters) it.petFilters - filter else it.petFilters + filter
@@ -578,12 +608,13 @@ class MapViewModel @Inject constructor(
                 fetchAggregated()
                 return@onSuccess
             }
-            places = loaded
-            val clusters = withContext(defaultDispatcher) { clusterPlaces(loaded, lastZoom) }
+            val shown = loaded.openNowFiltered()
+            places = shown
+            val clusters = withContext(defaultDispatcher) { clusterPlaces(shown, lastZoom) }
             _uiState.update {
-                it.copy(isLoading = false, clusters = clusters, canResearch = false)
+                it.copy(isLoading = false, clusters = clusters, canResearch = false, isAggregated = false)
             }
-            if (loaded.isEmpty()) _events.send(MapEvent.NoResults)
+            if (shown.isEmpty()) _events.send(MapEvent.NoResults)
         }.onFailure { e ->
             // 잡 취소(연속 카메라 이동·권한 허용 직후 재조회 등)는 실패가 아니다 —
             // runCatching 이 CancellationException 까지 잡으면 LoadFailed 가 오발된다.
@@ -616,7 +647,8 @@ class MapViewModel @Inject constructor(
                     limit = AGGREGATE_EXPAND_MAX + 1,
                 )
             }.onSuccess { found ->
-                if (found.isNotEmpty()) _events.send(MapEvent.ExpandCluster(found))
+                val shown = found.openNowFiltered()
+                _events.send(if (shown.isNotEmpty()) MapEvent.ExpandCluster(shown) else MapEvent.NoResults)
             }.onFailure { e ->
                 if (e is CancellationException) throw e
                 Log.w(TAG, "getPlacesInCell failed: ${e.message}")
@@ -652,7 +684,7 @@ class MapViewModel @Inject constructor(
                 )
             }
             _uiState.update {
-                it.copy(isLoading = false, clusters = clusters, canResearch = false)
+                it.copy(isLoading = false, clusters = clusters, canResearch = false, isAggregated = true)
             }
             if (cells.isEmpty()) _events.send(MapEvent.NoResults)
         }.onFailure { e ->
@@ -667,6 +699,7 @@ class MapViewModel @Inject constructor(
         private const val TAG = "MapViewModel"
         private const val KEY_CATEGORIES = "map_categories"
         private const val KEY_PET_FILTERS = "map_pet_filters"
+        private const val KEY_OPEN_NOW = "map_open_now"
 
         /**
          * 이 줌 미만에선 개별 로우 대신 SQL 그리드 집계로 개요를 그린다.
