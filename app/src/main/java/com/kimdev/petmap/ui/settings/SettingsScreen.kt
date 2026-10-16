@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.AdUnits
 import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
@@ -65,6 +66,7 @@ import com.kimdev.petmap.core.ads.AdsConsent
 import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sendEmail
+import com.kimdev.petmap.data.local.DirectionsApp
 import com.kimdev.petmap.data.local.FontScale
 import com.kimdev.petmap.data.local.ThemeMode
 import java.time.format.DateTimeFormatter
@@ -81,6 +83,12 @@ private val ThemeMode.labelRes: Int
 
 /** 글자 크기 표시 라벨. */
 @get:StringRes
+private val DirectionsApp.labelRes: Int
+    get() = when (this) {
+        DirectionsApp.NAVER -> R.string.directions_app_naver
+        DirectionsApp.KAKAO -> R.string.directions_app_kakao
+    }
+
 private val FontScale.labelRes: Int
     get() = when (this) {
         FontScale.NORMAL -> R.string.font_scale_normal
@@ -106,6 +114,8 @@ fun SettingsScreen(
     var showPetWeightDialog by rememberSaveable { mutableStateOf(false) }
     val fontScale by viewModel.fontScale.collectAsStateWithLifecycle()
     var showFontScaleDialog by rememberSaveable { mutableStateOf(false) }
+    val directionsApp by viewModel.directionsApp.collectAsStateWithLifecycle()
+    var showDirectionsDialog by rememberSaveable { mutableStateOf(false) }
     val dataInfo by viewModel.dataInfo.collectAsStateWithLifecycle()
     val dataInfoFailed by viewModel.dataInfoFailed.collectAsStateWithLifecycle()
     val dataUpdate by viewModel.dataUpdate.collectAsStateWithLifecycle()
@@ -154,6 +164,15 @@ fun SettingsScreen(
                 subtitle = stringResource(R.string.settings_replay_onboarding_desc),
                 onClick = onReplayOnboarding,
             )
+        }
+
+        SectionTitle(stringResource(R.string.settings_section_apps))
+        SettingsCard {
+            SettingRow(
+                Icons.Filled.Directions,
+                stringResource(R.string.settings_directions_app),
+                subtitle = stringResource(directionsApp.labelRes),
+            ) { showDirectionsDialog = true }
         }
 
         SectionTitle(stringResource(R.string.settings_section_terms))
@@ -260,6 +279,19 @@ fun SettingsScreen(
                 showThemeDialog = false
             },
             onDismiss = { showThemeDialog = false },
+        )
+    }
+    if (showDirectionsDialog) {
+        RadioDialog(
+            title = stringResource(R.string.settings_directions_app),
+            options = DirectionsApp.entries,
+            current = directionsApp,
+            labelOf = { stringResource(it.labelRes) },
+            onSelect = {
+                viewModel.setDirectionsApp(it)
+                showDirectionsDialog = false
+            },
+            onDismiss = { showDirectionsDialog = false },
         )
     }
     if (showFontScaleDialog) {

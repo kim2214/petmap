@@ -258,6 +258,10 @@
     <string name="theme_light">라이트</string>
     <string name="theme_dark">다크</string>
     <string name="settings_font_scale">글자 크기</string>
+    <string name="settings_section_apps">외부 앱</string>
+    <string name="settings_directions_app">길찾기 앱</string>
+    <string name="directions_app_naver">네이버 지도</string>
+    <string name="directions_app_kakao">카카오맵</string>
     <string name="font_scale_normal">보통</string>
     <string name="font_scale_large">크게</string>
     <string name="font_scale_extra_large">아주 크게</string>

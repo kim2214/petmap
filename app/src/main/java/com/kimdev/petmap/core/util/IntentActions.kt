@@ -12,6 +12,8 @@ import android.widget.Toast
 import androidx.core.net.toUri
 import com.kimdev.petmap.R
 import com.kimdev.petmap.core.review.InAppReview
+import com.kimdev.petmap.data.local.DirectionsApp
+import com.kimdev.petmap.data.local.DirectionsAppStore
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.ui.navigation.Routes
 
@@ -77,35 +79,47 @@ fun Context.openUrl(url: String) {
 }
 
 /**
- * 네이버 지도 앱으로 자동차 길찾기(반려동물 동반 이동은 차량이 기본).
- * 미설치 시 좌표 geo: 인텐트로 설치된 다른 지도 앱(카카오맵·구글맵 등)에 위임하고,
- * 그마저 없으면 웹 지도로 폴백한다 — 이름 검색이 아니라 좌표를 넘겨 목적지가 특정되게 한다.
- * 네이버 딥링크는 appname 파라미터(호출 앱 패키지)를 요구한다.
+ * 길찾기: 설정에서 고른 지도 앱(기본 네이버 지도)으로 자동차 경로를 연다(반려동물 동반 이동은 차량이 기본). 그 앱이 없으면 다른 앱,
+ * 그마저 없으면 기기 기본 지도(geo:), 그것도 없으면 웹 지도로 폴백한다 — 이름 검색이 아니라 좌표를
+ * 넘겨 목적지가 특정되게 한다. 네이버 딥링크는 appname 파라미터(호출 앱 패키지)를 요구한다.
+ * 카카오맵은 출발지(sp)를 생략하면 현재 위치에서 출발한다.
  */
-fun Context.openNaverDirections(place: Place) {
+fun Context.openDirections(place: Place) {
     // 길찾기 실행은 앱이 실제 도움이 된 순간 → 인앱 리뷰 요청 조건으로 쌓는다
     InAppReview.recordPositiveSignal(this)
     val name = Uri.encode(place.name)
-    val deepLink = "nmap://route/car?dlat=${place.lat}&dlng=${place.lng}" +
-        "&dname=$name&appname=$packageName"
-    val appIntent = Intent(Intent.ACTION_VIEW, deepLink.toUri())
-        .setPackage("com.nhn.android.nmap")
-    try {
-        startActivity(appIntent)
-        return
-    } catch (e: ActivityNotFoundException) {
-        // 네이버 지도 미설치 → 아래 폴백으로
-    }
+    val naver = Intent(
+        Intent.ACTION_VIEW,
+        "nmap://route/car?dlat=${place.lat}&dlng=${place.lng}&dname=$name&appname=$packageName".toUri(),
+    ).setPackage(NAVER_MAP_PACKAGE)
+    val kakao = Intent(
+        Intent.ACTION_VIEW,
+        "kakaomap://route?ep=${place.lat},${place.lng}&by=CAR".toUri(),
+    ).setPackage(KAKAO_MAP_PACKAGE)
+    val preferred = DirectionsAppStore.readStored(this)
+    val apps = if (preferred == DirectionsApp.KAKAO) listOf(kakao, naver) else listOf(naver, kakao)
     val geo = Intent(
         Intent.ACTION_VIEW,
         "geo:${place.lat},${place.lng}?q=${place.lat},${place.lng}($name)".toUri(),
     )
-    try {
-        startActivity(geo)
-    } catch (e: ActivityNotFoundException) {
-        openUrl("https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}")
+    for (intent in apps + geo) {
+        try {
+            startActivity(intent)
+            return
+        } catch (e: ActivityNotFoundException) {
+            // 설치 안 됨 → 다음 후보로
+        }
     }
+    val web = if (preferred == DirectionsApp.KAKAO) {
+        "https://map.kakao.com/link/to/$name,${place.lat},${place.lng}"
+    } else {
+        "https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}"
+    }
+    openUrl(web)
 }
+
+private const val NAVER_MAP_PACKAGE = "com.nhn.android.nmap"
+private const val KAKAO_MAP_PACKAGE = "net.daum.android.map"
 
 /** 리뷰·사진을 볼 외부 지도 서비스 (자체 리뷰가 없으므로 장소 검색으로 넘긴다) */
 enum class ReviewProvider { NAVER, KAKAO }

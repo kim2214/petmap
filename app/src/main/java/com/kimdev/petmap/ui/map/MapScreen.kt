@@ -83,7 +83,7 @@ import com.kimdev.petmap.core.common.Constants
 import com.kimdev.petmap.domain.model.GeoClusterCell
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.util.distanceMeters
-import com.kimdev.petmap.core.util.openNaverDirections
+import com.kimdev.petmap.core.util.openDirections
 import com.kimdev.petmap.ui.components.CategoryFilterRow
 import com.kimdev.petmap.ui.components.PetFilterChips
 import com.kimdev.petmap.ui.components.PetWeightDialog
@@ -674,7 +674,7 @@ fun MapScreen(
                 place = placeWithDistance,
                 isFavorite = place.id in state.favoriteIds,
                 onToggleFavorite = { viewModel.toggleFavorite(place) },
-                onDirections = { context.openNaverDirections(place) },
+                onDirections = { context.openDirections(place) },
                 onDetail = {
                     val id = place.id
                     viewModel.showPreview(null)

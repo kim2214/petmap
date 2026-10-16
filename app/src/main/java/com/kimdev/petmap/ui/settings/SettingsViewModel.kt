@@ -2,6 +2,8 @@ package com.kimdev.petmap.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kimdev.petmap.data.local.DirectionsApp
+import com.kimdev.petmap.data.local.DirectionsAppStore
 import com.kimdev.petmap.data.local.FontScale
 import com.kimdev.petmap.data.local.FontScaleStore
 import com.kimdev.petmap.data.local.PetProfileStore
@@ -32,6 +34,7 @@ sealed interface DataUpdateUiState {
 class SettingsViewModel @Inject constructor(
     private val themeStore: ThemeStore,
     private val fontScaleStore: FontScaleStore,
+    private val directionsAppStore: DirectionsAppStore,
     private val petProfileStore: PetProfileStore,
     private val placeRepository: PlaceRepository,
     private val placeDataUpdater: PlaceDataUpdater,
@@ -44,6 +47,10 @@ class SettingsViewModel @Inject constructor(
     val fontScale: StateFlow<FontScale> = fontScaleStore.scale
 
     fun setFontScale(scale: FontScale) = fontScaleStore.setScale(scale)
+
+    val directionsApp: StateFlow<DirectionsApp> = directionsAppStore.app
+
+    fun setDirectionsApp(app: DirectionsApp) = directionsAppStore.setApp(app)
 
     /** 내 반려견 체중(kg). null = 미등록. '내 아이 가능' 필터의 기준값 */
     val petWeightKg: StateFlow<Double?> = petProfileStore.weightKg

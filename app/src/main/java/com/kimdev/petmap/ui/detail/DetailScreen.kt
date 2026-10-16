@@ -98,7 +98,7 @@ import com.kimdev.petmap.core.util.copyToClipboard
 import com.kimdev.petmap.core.util.dialPhone
 import com.kimdev.petmap.core.util.sendEmail
 import com.kimdev.petmap.core.util.ReviewProvider
-import com.kimdev.petmap.core.util.openNaverDirections
+import com.kimdev.petmap.core.util.openDirections
 import com.kimdev.petmap.core.util.openPlaceReviews
 import com.kimdev.petmap.core.util.openUrl
 import com.kimdev.petmap.core.util.sharePlace
@@ -443,7 +443,7 @@ private fun QuickActions(place: Place, onShowOnMap: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         QuickAction(Icons.Filled.Directions, stringResource(R.string.action_directions), primary = true) {
-            context.openNaverDirections(place)
+            context.openDirections(place)
         }
         place.phone?.let { phone ->
             QuickAction(Icons.Filled.Phone, stringResource(R.string.action_phone)) { context.dialPhone(phone) }
