@@ -2,6 +2,7 @@ package com.kimdev.petmap.ui.favorite
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,12 +12,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.R
 import com.kimdev.petmap.data.local.RecentPlaceStore
 import com.kimdev.petmap.domain.model.Place
+import com.kimdev.petmap.ui.common.rememberLocationPermission
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
@@ -86,6 +92,34 @@ fun FavoriteScreen(
     }
     // 설정 변경(언어 등)에 따라 갱신되는 리소스 접근 (Context 경유는 lint 에러)
     val resources = LocalResources.current
+
+    // "가까운순"에서 위치 권한을 바로 요청한다(목록 탭 거리순과 같은 흐름)
+    var pendingDistanceSort by rememberSaveable { mutableStateOf(false) }
+    val locationPermission = rememberLocationPermission(
+        settingsMessage = stringResource(R.string.location_message_favorite),
+    ) { granted -> if (!granted) pendingDistanceSort = false }
+    LaunchedEffect(locationPermission.granted) {
+        if (locationPermission.granted && pendingDistanceSort) {
+            pendingDistanceSort = false
+            viewModel.selectSort(FavoriteSort.DISTANCE)
+        }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                FavoriteEvent.LocationUnavailable ->
+                    snackbarHostState.showSnackbar(resources.getString(R.string.list_location_unavailable))
+            }
+        }
+    }
+    fun onSortSelected(sort: FavoriteSort) {
+        if (sort == FavoriteSort.DISTANCE && !locationPermission.granted) {
+            pendingDistanceSort = true
+            locationPermission.request() // 시스템 요청 또는(영구 거부) 설정 안내
+        } else {
+            viewModel.selectSort(sort)
+        }
+    }
 
     // 하트 탭으로 목록에서 즉시 사라지므로, 실수 방지용 실행취소 동선을 준다.
     // 토글이 아니라 삭제/스냅샷 복원을 쓴다: 토글로 되살리면 메모가 비고 목록 맨 위로 올라가며,
@@ -127,11 +161,14 @@ fun FavoriteScreen(
                 TextButton(onClick = { confirmClearRecent = true }) { Text(stringResource(R.string.action_clear)) }
             }
         } else if (state.favorites.isNotEmpty()) {
-            Text(
-                stringResource(R.string.favorite_count_format, state.favorites.size),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.favorite_count_format, state.favorites.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (state.favorites.size > 1) SortMenu(current = state.sort, onSelect = ::onSortSelected)
+            }
         }
         },
         header = {
@@ -325,5 +362,40 @@ private fun SwipeToRemove(
         },
     ) {
         content()
+    }
+}
+
+private val FavoriteSort.labelRes: Int
+    get() = when (this) {
+        FavoriteSort.RECENT -> R.string.favorite_sort_recent
+        FavoriteSort.NAME -> R.string.favorite_sort_name
+        FavoriteSort.DISTANCE -> R.string.favorite_sort_distance
+    }
+
+/** 즐겨찾기 정렬 선택("최근 추가순 ▾" → 메뉴) */
+@Composable
+private fun SortMenu(current: FavoriteSort, onSelect: (FavoriteSort) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(stringResource(current.labelRes))
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = stringResource(R.string.favorite_sort))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            FavoriteSort.entries.forEach { sort ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(sort.labelRes)) },
+                    leadingIcon = if (sort == current) {
+                        { Icon(Icons.Filled.Check, contentDescription = null) }
+                    } else {
+                        null
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelect(sort)
+                    },
+                )
+            }
+        }
     }
 }

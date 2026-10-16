@@ -155,10 +155,15 @@
     <string name="empty_none_title">표시할 장소가 없어요</string>
     <string name="action_open_now_off">영업중 필터 끄기</string>
     <string name="action_clear_search">검색 지우기</string>
+    <string name="location_message_favorite">가까운순 정렬에는 위치 권한이 필요합니다. 설정에서 권한을 허용해 주세요.</string>
     <string name="location_message_list">거리순 정렬에는 위치 권한이 필요합니다. 설정에서 권한을 허용해 주세요.</string>
 
     <!-- 즐겨찾기 화면 -->
     <string name="favorite_count_format">%1$d곳</string>
+    <string name="favorite_sort">정렬</string>
+    <string name="favorite_sort_recent">최근 추가순</string>
+    <string name="favorite_sort_name">이름순</string>
+    <string name="favorite_sort_distance">가까운순</string>
     <!-- 목록 결과 개수. 페이징 상한이 있어 더 있을 수 있으면 + 표기 -->
     <string name="list_count_format">%1$d곳</string>
     <string name="list_count_more_format">%1$d+곳</string>

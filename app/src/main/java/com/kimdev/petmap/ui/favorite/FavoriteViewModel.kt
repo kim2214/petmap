@@ -1,25 +1,33 @@
 package com.kimdev.petmap.ui.favorite
 
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kimdev.petmap.core.location.LocationProvider
+import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.data.local.RecentPlaceStore
 import com.kimdev.petmap.domain.model.FavoriteSnapshot
 import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.domain.repository.PlaceRepository
+import com.kimdev.petmap.domain.util.distanceMeters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.Collator
+import java.util.Locale
 import javax.inject.Inject
 
 data class FavoriteUiState(
@@ -31,7 +39,16 @@ data class FavoriteUiState(
     val totalCount: Int = 0,
     /** 첫 emit 전(초기값)엔 true. 데이터가 오기 전 "즐겨찾기 없음" 이 잘못 깜빡이는 것을 막는다. */
     val isLoading: Boolean = true,
+    val sort: FavoriteSort = FavoriteSort.RECENT,
 )
+
+/** 즐겨찾기 정렬. RECENT 는 DAO 순서(최근 추가순) 그대로 */
+enum class FavoriteSort { RECENT, NAME, DISTANCE }
+
+sealed interface FavoriteEvent {
+    /** 가까운순을 골랐지만 위치를 얻지 못함(권한은 있음) */
+    data object LocationUnavailable : FavoriteEvent
+}
 
 data class RecentUiState(
     /** 최근 본 순서(최신 우선). 하트 상태는 즐겨찾기와 동기화된다 */
@@ -43,13 +60,28 @@ data class RecentUiState(
 class FavoriteViewModel @Inject constructor(
     private val repository: PlaceRepository,
     private val recentPlaceStore: RecentPlaceStore,
+    private val locationProvider: LocationProvider,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val selectedCategories = MutableStateFlow<Set<PlaceCategory>>(emptySet())
     private val query = MutableStateFlow("")
 
+    // 가까운순은 위치가 있어야 하므로 복원 시 RECENT 로 시작하고, 위치를 다시 얻으면 [selectSort] 가 켠다
+    private val sort = MutableStateFlow(
+        savedStateHandle.get<String>(KEY_SORT)
+            ?.let { runCatching { FavoriteSort.valueOf(it) }.getOrNull() }
+            ?.takeIf { it != FavoriteSort.DISTANCE } ?: FavoriteSort.RECENT,
+    )
+    private val userLocation = MutableStateFlow<UserLocation?>(null)
+
+    private val _events = Channel<FavoriteEvent>(Channel.BUFFERED)
+    val events = _events.receiveAsFlow()
+
     val uiState: StateFlow<FavoriteUiState> =
-        combine(repository.observeFavorites(), selectedCategories, query) { favorites, selected, q ->
+        combine(
+            repository.observeFavorites(), selectedCategories, query, sort, userLocation,
+        ) { favorites, selected, q, sortBy, loc ->
             // 로컬 목록(수십~수백 건)이라 DB 검색 없이 이름/주소 부분 일치로 충분하다
             val filtered = favorites
                 .filter { selected.isEmpty() || it.category in selected }
@@ -57,12 +89,19 @@ class FavoriteViewModel @Inject constructor(
                     q.isBlank() || it.name.contains(q, ignoreCase = true) ||
                         it.roadAddress.contains(q, ignoreCase = true)
                 }
+                .map { p -> loc?.let { p.copy(distanceMeters = distanceMeters(it.lat, it.lng, p.lat, p.lng)) } ?: p }
+            val sorted = when (sortBy) {
+                FavoriteSort.RECENT -> filtered
+                FavoriteSort.NAME -> filtered.sortedWith(compareBy(NAME_ORDER) { it.name })
+                FavoriteSort.DISTANCE -> filtered.sortedBy { it.distanceMeters ?: Double.MAX_VALUE }
+            }
             FavoriteUiState(
-                favorites = filtered,
+                favorites = sorted,
                 selectedCategories = selected,
                 query = q,
                 totalCount = favorites.size,
                 isLoading = false,
+                sort = sortBy,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -113,6 +152,30 @@ class FavoriteViewModel @Inject constructor(
 
     fun restoreRecent(placeId: String, index: Int) = recentPlaceStore.restore(placeId, index)
 
+    /**
+     * 정렬 변경. 가까운순은 위치를 먼저 얻는다(권한 요청은 화면 몫) — 못 얻으면 정렬을 바꾸지 않고 안내 이벤트.
+     */
+    fun selectSort(next: FavoriteSort) {
+        if (next != FavoriteSort.DISTANCE) {
+            setSort(next)
+            return
+        }
+        viewModelScope.launch {
+            val loc = locationProvider.lastLocation() ?: locationProvider.currentLocation()
+            if (loc == null) {
+                _events.send(FavoriteEvent.LocationUnavailable)
+                return@launch
+            }
+            userLocation.value = loc
+            setSort(FavoriteSort.DISTANCE)
+        }
+    }
+
+    private fun setSort(next: FavoriteSort) {
+        sort.value = next
+        savedStateHandle[KEY_SORT] = next.name
+    }
+
     fun onQueryChange(q: String) {
         query.value = q
     }
@@ -139,5 +202,21 @@ class FavoriteViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "FavoriteViewModel"
+        const val KEY_SORT = "favorite_sort"
+
+        /** 이름순: 앱 목록 정렬(DB sortKey)과 같게 한글 → 영문 → 숫자 → 기타, 같은 묶음 안에선 한국어 정렬 */
+        val NAME_ORDER: Comparator<String> = run {
+            val collator = Collator.getInstance(Locale.KOREAN)
+            fun bucket(name: String): Int {
+                val c = name.firstOrNull { it.isLetterOrDigit() } ?: return 3
+                return when {
+                    c in '\uAC00'..'\uD7A3' || c in '\u3131'..'\u318E' -> 0
+                    c in 'a'..'z' || c in 'A'..'Z' -> 1
+                    c.isDigit() -> 2
+                    else -> 3
+                }
+            }
+            compareBy<String> { bucket(it) }.then { a, b -> collator.compare(a, b) }
+        }
     }
 }
