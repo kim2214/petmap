@@ -10,11 +10,14 @@ import com.kimdev.petmap.data.local.PetMapDatabase
 import com.kimdev.petmap.data.local.PlaceFts
 import com.kimdev.petmap.data.local.entity.FavoriteEntity
 import com.kimdev.petmap.data.local.entity.MetaEntity
+import com.kimdev.petmap.data.remote.DataDownloader
 import com.kimdev.petmap.data.remote.UrlDataDownloader
 import com.kimdev.petmap.data.repository.PlaceRepositoryImpl
 import com.kimdev.petmap.domain.model.DataUpdateResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -24,6 +27,8 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.security.MessageDigest
 import java.time.LocalDate
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
 
 /**
@@ -31,6 +36,7 @@ import java.util.zip.GZIPOutputStream
  *  - 새 데이터면 places·FTS·meta 가 통째로 바뀌고 즐겨찾기는 남는다.
  *  - 매니페스트 없음/같은 기준일 → 받지 않음.
  *  - SHA-256·identity_hash 불일치, 장소 수 급감 → 실패하고 기존 데이터 유지.
+ *  - 다운로드 중 취소 → 곧바로 멈추고 기존 데이터 유지, 다음 갱신은 정상.
  */
 @RunWith(AndroidJUnit4::class)
 class PlaceDataUpdaterImplTest {
@@ -103,6 +109,13 @@ class PlaceDataUpdaterImplTest {
         assertEquals("메모", db.favoriteDao().getById("fav-1")?.memo)
         // 작업 파일 정리
         assertTrue(File(context.cacheDir, "data_update").exists().not())
+        // 교체 후 정리: FTS 세그먼트는 optimize 로 하나로 합쳐지고(옛 색인의 삭제 표시가 남지 않음),
+        // 큰 트랜잭션으로 불어난 WAL 은 TRUNCATE 체크포인트로 줄어든다
+        val segments = db.openHelper.writableDatabase.query("SELECT COUNT(*) FROM ${PlaceFts.TABLE}_segdir")
+            .use { it.moveToFirst(); it.getLong(0) }
+        assertEquals(1L, segments)
+        val wal = File(context.getDatabasePath(TEST_DB).path + "-wal")
+        assertTrue("WAL ${wal.length()}B", wal.length() < 1024 * 1024)
 
         // 같은 기준일이 됐으니 다시 받지 않는다
         assertEquals(DataUpdateResult.UpToDate, updater.update())
@@ -141,6 +154,38 @@ class PlaceDataUpdaterImplTest {
             src.execSQL("DELETE FROM places_fts WHERE docid > 100")
         }
         assertFailedAndUnchanged()
+    }
+
+    @Test
+    fun cancelDuringDownload_stopsPromptlyAndKeepsData() = runBlocking {
+        publish(NEW_DATE) {}
+        val started = CountDownLatch(1)
+        // 다운로드가 끝나지 않는 원격: 인터럽트(=취소)로만 빠져나온다
+        val stuck = object : DataDownloader {
+            private val real = UrlDataDownloader()
+            override fun fetchText(url: String, maxBytes: Int) = real.fetchText(url, maxBytes)
+            override fun download(url: String, dest: File, maxBytes: Long) {
+                started.countDown()
+                while (true) Thread.sleep(50)
+            }
+        }
+        val repo = PlaceRepositoryImpl(
+            db.placeDao(), db.favoriteDao(), db.metaDao(), FavoriteBackup(mirrorFile), Dispatchers.IO,
+        )
+        val cancellable = PlaceDataUpdaterImpl(
+            context, db, stuck, repo, "file://${remoteRoot.path}/", Dispatchers.IO,
+        )
+        val job = launch(Dispatchers.Default) { cancellable.update() }
+        assertTrue(started.await(10, TimeUnit.SECONDS))
+        job.cancel()
+        withTimeout(5_000) { job.join() }
+
+        assertTrue(job.isCancelled)
+        assertEquals(assetCount, db.placeDao().count().toLong())
+        assertEquals(assetDate.toString(), db.metaDao().get(MetaEntity.KEY_DATA_DATE))
+        assertTrue(File(context.cacheDir, "data_update").exists().not())
+        // 취소 뒤에도 잠금이 풀려 다음 갱신이 정상 동작한다
+        assertEquals(DataUpdateResult.Updated(NEW_DATE, assetCount.toInt()), updater.update())
     }
 
     private suspend fun assertFailedAndUnchanged() {

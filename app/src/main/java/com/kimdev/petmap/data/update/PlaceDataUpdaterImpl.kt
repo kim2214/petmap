@@ -17,6 +17,10 @@ import com.kimdev.petmap.domain.model.DataUpdateResult
 import com.kimdev.petmap.domain.repository.PlaceDataUpdater
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -54,17 +58,21 @@ class PlaceDataUpdaterImpl @Inject constructor(
 
     private val mutex = Mutex()
 
+    /**
+     * 취소(WorkManager 가 Wi-Fi 끊김 등으로 작업을 멈추거나 설정 화면을 벗어남)되면 스레드를 인터럽트한다.
+     * 다운로드·해제·검증·복사 루프가 버퍼마다 인터럽트를 확인해 곧바로 멈추고, 교체 트랜잭션 도중이면 롤백된다.
+     * 소켓 read 자체는 인터럽트로 풀리지 않으므로 최악의 경우 읽기 타임아웃만큼 늦게 멈춘다.
+     */
     override suspend fun update(): DataUpdateResult = mutex.withLock {
-        withContext(ioDispatcher) {
-            val workDir = File(context.cacheDir, WORK_DIR)
-            try {
-                runUpdate(workDir)
-            } catch (e: Exception) {
-                Log.w(TAG, "데이터 갱신 실패", e)
-                DataUpdateResult.Failed(e)
-            } finally {
-                workDir.deleteRecursively()
-            }
+        val workDir = File(context.cacheDir, WORK_DIR)
+        try {
+            runInterruptible(ioDispatcher) { runUpdate(workDir) }
+        } catch (e: Exception) {
+            currentCoroutineContext().ensureActive() // 취소는 실패로 바꾸지 않고 그대로 전파한다
+            Log.w(TAG, "데이터 갱신 실패", e)
+            DataUpdateResult.Failed(e)
+        } finally {
+            withContext(NonCancellable + ioDispatcher) { workDir.deleteRecursively() }
         }
     }
 
@@ -95,14 +103,17 @@ class PlaceDataUpdaterImpl @Inject constructor(
         gz.delete()
 
         val currentCount = live.queryLong("SELECT COUNT(*) FROM places") ?: 0L
+        // 읽기 전용으로 열면 안 된다: 최신 SQLite(API 35+ 기기)의 quick_check 는 FTS4 색인 검증에 쓰기 연결이
+        // 필요해 "attempt to write a readonly database" 로 무결성 검사가 항상 실패한다. 후보 파일은 작업 폴더의 사본이다.
         SQLiteDatabase.openDatabase(
             candidate.path, null,
-            SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS,
+            SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.NO_LOCALIZED_COLLATORS,
         ).use { src ->
             validate(src, manifest, identityHash, currentCount)
             replaceData(src)
         }
         placeRepository.onDataReplaced()
+        compactAfterReplace()
         Log.i(TAG, "데이터 갱신 완료: ${manifest.dataDate}, ${manifest.placeCount}곳")
         return DataUpdateResult.Updated(manifest.dataDate, manifest.placeCount)
     }
@@ -138,6 +149,19 @@ class PlaceDataUpdaterImpl @Inject constructor(
         }
     }
 
+    /**
+     * 교체 후 정리(실패해도 갱신 자체는 성공). FTS4 의 DELETE 는 옛 색인을 지우지 않고 삭제 표시만 쌓으므로
+     * 'optimize' 로 세그먼트를 합쳐 갱신할 때마다 색인이 불어나지 않게 한다. 큰 트랜잭션으로 수십 MB 로 커진
+     * WAL 파일은 체크포인트 후 TRUNCATE 로 되돌린다(읽는 중인 연결이 있으면 가능한 만큼만 — 다음 기회에 줄어든다).
+     */
+    private fun compactAfterReplace() {
+        val db = database.openHelper.writableDatabase
+        runCatching { db.execSQL("INSERT INTO ${PlaceFts.TABLE}(${PlaceFts.TABLE}) VALUES('optimize')") }
+            .onFailure { Log.w(TAG, "FTS optimize 실패", it) }
+        runCatching { db.query("PRAGMA wal_checkpoint(TRUNCATE)").use { it.moveToFirst() } }
+            .onFailure { Log.w(TAG, "WAL 체크포인트 실패", it) }
+    }
+
     private fun copyRows(src: SQLiteDatabase, dst: SupportSQLiteDatabase, table: String, columns: List<String>) {
         val cols = columns.joinToString(",")
         val stmt = dst.compileStatement(
@@ -145,6 +169,7 @@ class PlaceDataUpdaterImpl @Inject constructor(
         )
         src.rawQuery("SELECT $cols FROM $table", null).use { c ->
             while (c.moveToNext()) {
+                checkNotInterrupted()
                 stmt.clearBindings()
                 for (i in columns.indices) {
                     val index = i + 1
@@ -176,6 +201,11 @@ class PlaceDataUpdaterImpl @Inject constructor(
     private fun SQLiteDatabase.rawString(sql: String): String? =
         rawQuery(sql, null).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null }
 
+    /** 취소 확인 — [runInterruptible] 이 [InterruptedException] 을 취소로 바꿔 전파한다 */
+    private fun checkNotInterrupted() {
+        if (Thread.interrupted()) throw InterruptedException()
+    }
+
     private fun quote(column: String) = "`$column`"
 
     private fun File.sha256(): String {
@@ -183,6 +213,7 @@ class PlaceDataUpdaterImpl @Inject constructor(
         inputStream().use { input ->
             val buf = ByteArray(BUFFER)
             while (true) {
+                checkNotInterrupted()
                 val n = input.read(buf)
                 if (n < 0) break
                 digest.update(buf, 0, n)
@@ -197,6 +228,7 @@ class PlaceDataUpdaterImpl @Inject constructor(
                 val buf = ByteArray(BUFFER)
                 var total = 0L
                 while (true) {
+                    checkNotInterrupted()
                     val n = input.read(buf)
                     if (n < 0) break
                     total += n

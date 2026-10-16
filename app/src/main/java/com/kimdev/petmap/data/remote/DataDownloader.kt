@@ -33,6 +33,8 @@ class UrlDataDownloader @Inject constructor() : DataDownloader {
                 val buf = ByteArray(BUFFER)
                 var total = 0L
                 while (true) {
+                    // 취소 확인(갱신은 runInterruptible 안에서 돈다) — 수 MB 를 끝까지 받지 않고 멈춘다
+                    if (Thread.interrupted()) throw InterruptedException()
                     val n = src.read(buf)
                     if (n < 0) break
                     total += n
