@@ -85,6 +85,9 @@ fun ListScreen(
     val listState = rememberLazyListState()
     // 검색 조건이 바뀌면 새 결과를 처음부터 보여준다. drop(1): 최초 구성·회전 복원 시에는
     // 조건이 "바뀐" 게 아니므로 보던 위치를 유지한다.
+    // 결과는 조건 변경보다 늦게 도착한다 — 그때 LazyColumn 이 키 기준으로 옛 첫 항목을 붙잡아 그 새 위치로
+    // 스크롤해 버리므로(이름순 첫 장소가 거리순에선 8km 지점) 새 결과가 들어온 뒤에도 한 번 더 맨 위로 보낸다.
+    var scrollTopOnResult by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         snapshotFlow {
             listOf(
@@ -94,7 +97,18 @@ fun ListScreen(
         }
             .distinctUntilChanged()
             .drop(1)
-            .collect { listState.scrollToItem(0) }
+            .collect {
+                scrollTopOnResult = true
+                listState.scrollToItem(0)
+            }
+    }
+    // isLoading 도 키로 둔다 — 새 결과가 옛 결과와 같아도(places 불변) 로딩 종료 시점에 플래그를 내려,
+    // 나중의 추가 로드(append)가 맨 위로 튀지 않게 한다
+    LaunchedEffect(state.places, state.isLoading) {
+        if (scrollTopOnResult && !state.isLoading) {
+            scrollTopOnResult = false
+            listState.scrollToItem(0)
+        }
     }
     // 하단 탭 "목록" 재선택 → 맨 위로
     LaunchedEffect(Unit) {
