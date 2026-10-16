@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kimdev.petmap.core.ads.AdsConsent
 import com.kimdev.petmap.core.common.TabReselectBus
 import com.kimdev.petmap.core.review.InAppReview
+import com.kimdev.petmap.core.update.InAppUpdate
 import com.kimdev.petmap.data.local.FontScale
 import com.kimdev.petmap.data.local.FontScaleStore
 import com.kimdev.petmap.data.local.ThemeMode
@@ -98,6 +99,9 @@ class MainActivity : ComponentActivity() {
         // 긍정 시그널(길찾기·공유)이 쌓인 뒤의 앱 실행에서만 인앱 리뷰 요청 (Play 설치 빌드에서만 실제 노출).
         // 구성 변경에 의한 Activity 재생성에서는 다시 묻지 않는다.
         if (savedInstanceState == null) InAppReview.maybeAsk(this)
+        // 새 버전 안내(유연 업데이트) — 받은 업데이트는 앱이 백그라운드로 갈 때 조용히 설치된다
+        val inAppUpdate = InAppUpdate(this)
+        if (savedInstanceState == null) inAppUpdate.checkOnLaunch()
         // 창 배경은 values(-night) 테마가 시스템 설정을 따른다 → 인앱에서 테마를 강제했으면 그 색으로 맞춘다
         when (themeStore.mode.value) {
             ThemeMode.LIGHT -> window.setBackgroundDrawableResource(R.color.window_bg_light)

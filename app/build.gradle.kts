@@ -215,6 +215,7 @@ dependencies {
     implementation(libs.play.services.ads)
     implementation(libs.user.messaging.platform) // 광고 동의(UMP)
     implementation(libs.play.review)             // 인앱 리뷰
+    implementation(libs.play.app.update)         // 인앱 업데이트(유연)
 
     // Firebase (Crashlytics + Analytics). 실제 동작은 google-services.json 이 있어야 활성화됨.
     implementation(platform(libs.firebase.bom))
