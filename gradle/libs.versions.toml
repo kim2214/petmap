@@ -29,7 +29,7 @@ room = "2.8.4"
 # 원격 데이터 갱신 주기 작업 (play-services-ads 가 이미 끌어오는 버전과 맞춤)
 work = "2.11.2"
 # Baseline Profile: 매크로벤치마크(생성기)와 Gradle 플러그인은 같은 버전을 쓴다
-benchmark = "1.4.1"
+benchmark = "1.5.0"
 profileinstaller = "1.4.1"
 uiautomator = "2.4.0"
 
@@ -103,7 +103,6 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-test = { id = "com.android.test", version.ref = "agp" }
 androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "benchmark" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
