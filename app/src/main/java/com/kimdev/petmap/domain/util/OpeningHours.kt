@@ -1,5 +1,6 @@
 package com.kimdev.petmap.domain.util
 
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 /**
@@ -10,11 +11,13 @@ import java.time.LocalDateTime
  *  - "월~금 09:00~18:00, 토 09:00~14:00"  (요일범위 + 복수 구간)
  *  - "월~수, 금 09:00~20:00"  (시간 없는 요일 세그먼트는 다음 세그먼트의 시간을 상속)
  *  - "토~일, 법정공휴일 08:30~13:30"  (공휴일 표기는 요일로 배정하지 않음)
- *  - "매일 15:00~11:00"  (자정 넘김)
+ *  - "매일 15:00~11:00", "18:00~25:00"  (자정 넘김 — 넘긴 부분은 시작한 요일의 영업으로 본다)
+ *  - "월~금 10:00~19:00, 토 변동"  (시간 없는 요일 세그먼트는 그 요일 판단불가, "금 휴진"이면 휴무)
  *  - "매일 00:00~24:00", "24시간", "상시 개방", "연중무휴"
  *  - "연중무휴 09:00~18:00"  (무휴 키워드가 있어도 시간표가 있으면 시간표를 따름)
  *  - "매일 11:00~21:00 브레이크타임 15:00~17:00"  (쉼표 유무와 무관, 키워드 뒤 구간은 휴게)
- * 휴무일 예: "매주 일요일", "매주 토, 일", "연중무휴", "법정공휴일"
+ * 휴무일 예: "매주 일요일", "매주 토, 일", "연중무휴", "법정공휴일",
+ *  "2, 4째주 일요일"·"첫째 셋째주 토요일"·"매달 마지막 주 토요일"(날짜로 판정), "격주 일요일"(판단 안 함)
  */
 object OpeningHours {
     private const val WD = "월화수목금토일" // index 0..6 = 월(Mon)..일(Sun)
@@ -37,6 +40,11 @@ object OpeningHours {
 
     // 정보성 표기 — 뒤의 시간은 영업 구간도 휴게 구간도 아니므로 무시
     private val INFO_KEYWORDS = listOf("라스트오더", "주문마감", "입장마감")
+
+    // 시간 없는 요일 세그먼트가 이 표기를 담으면 그 요일은 휴무("월~토 10:00~20:00, 금 휴진")
+    private val CLOSED_KEYWORDS = listOf("휴무", "휴진", "휴관", "휴업", "정기휴일")
+
+    private const val DAY_MINUTES = 24 * 60
 
     /**
      * 요일 하루치 표. [hours] 는 영업 구간 표기("09:00~18:00" 또는 "24시간"),
@@ -63,7 +71,13 @@ object OpeningHours {
         val breakRanges: List<Pair<Int, Int>>,
         val breakTexts: List<String>,
         val alwaysOpen: Boolean,
-    )
+    ) {
+        /** 영업 시간도 상시 표기도 없다 — "토 변동"처럼 그 요일 영업 여부를 알 수 없거나, [isClosedMarker] */
+        val isTimeless: Boolean get() = openRanges.isEmpty() && !alwaysOpen
+
+        /** "금 휴진" — 시간 없이 휴무만 적은 세그먼트 */
+        val isClosedMarker: Boolean get() = isTimeless && CLOSED_KEYWORDS.any { raw.contains(it) }
+    }
 
     private fun MatchResult.toMinutes(): Pair<Int, Int> =
         (groupValues[1].toInt() * 60 + groupValues[2].toInt()) to
@@ -102,7 +116,7 @@ object OpeningHours {
         // 세그먼트는 뒤 세그먼트의 시간을 상속한다(실 데이터의 약 6%가 이 표기).
         for (i in segs.indices.reversed()) {
             val s = segs[i]
-            val empty = s.openRanges.isEmpty() && !s.alwaysOpen && s.breakRanges.isEmpty()
+            val empty = s.isTimeless && s.breakRanges.isEmpty() && !s.isClosedMarker && !s.raw.contains("변동")
             if (empty && i + 1 < segs.size && hasDaySignal(s.raw)) {
                 val next = segs[i + 1]
                 segs[i] = s.copy(
@@ -129,9 +143,10 @@ object OpeningHours {
         }
         val segments = parseSegments(operatingTime)
         val table = (0..6).map { day ->
-            val closed = closedDays != null && !closedDays.contains("무휴") &&
-                isClosedToday(closedDays, day)
             val applies = segments.filter { segmentAppliesToDay(it.raw, day) }
+            // n째주·마지막 주 휴무는 날짜마다 달라 요일 표에 휴무로 적지 않는다(원문 휴무일 표기가 함께 보인다)
+            val closed = closedRules(closedDays).any { it.day == day && it.kind == ClosedKind.WEEKLY } ||
+                applies.any { it.isClosedMarker }
             val hours = applies.flatMap {
                 if (it.alwaysOpen) listOf(ALWAYS_OPEN_LABEL) else it.openTexts
             }.distinct()
@@ -147,39 +162,123 @@ object OpeningHours {
 
     /** true=영업중, false=영업종료/휴무, null=정보없음·판단불가 */
     fun isOpenNow(operatingTime: String?, closedDays: String?, now: LocalDateTime): Boolean? {
-        val today = now.dayOfWeek.value - 1 // 월=0 .. 일=6
+        val date = now.toLocalDate()
+        val today = date.dayOfWeek.value - 1 // 월=0 .. 6=일
+        val yesterday = (today + 6) % 7
+        val rules = closedRules(closedDays)
+        val closedToday = rules.any { it.closesOn(date) }
 
-        if (closedDays != null && !closedDays.contains("무휴") && isClosedToday(closedDays, today)) {
-            return false
-        }
-
-        if (operatingTime.isNullOrBlank()) return null
+        if (operatingTime.isNullOrBlank()) return if (closedToday) false else null
         if (!TIME.containsMatchIn(operatingTime)) {
+            if (closedToday) return false
             return if (ALWAYS_OPEN.any { operatingTime.contains(it) }) true else null
         }
 
         val nowMin = now.hour * 60 + now.minute
-        val segments = parseSegments(operatingTime).filter { segmentAppliesToDay(it.raw, today) }
+        val segments = parseSegments(operatingTime)
 
+        // 어젯밤 시작해 자정을 넘긴 영업("금 18:00~02:00" 의 토요일 새벽)은 어제 요일·휴무 기준으로 본다.
+        // 오늘이 휴무여도 어젯밤 영업의 연장이면 영업중이다.
+        if (rules.none { it.closesOn(date.minusDays(1)) }) {
+            val spill = segments.filter { segmentAppliesToDay(it.raw, yesterday) }
+                .flatMap { it.openRanges }
+                .any { (open, close) -> nowMin < spillMinutes(open, close) }
+            if (spill) return true
+        }
+        if (closedToday) return false
+
+        val todays = segments.filter { segmentAppliesToDay(it.raw, today) }
+        if (todays.any { it.isClosedMarker }) return false
         // 브레이크/휴게 구간이 영업 구간과 겹치므로 먼저 확인한다.
-        if (segments.any { s -> s.breakRanges.any { inTimeRange(nowMin, it.first, it.second) } }) {
+        if (todays.any { s -> s.breakRanges.any { inTimeRange(nowMin, it.first, it.second) } }) {
             return false
         }
-        for (s in segments) {
+        for (s in todays) {
             if (s.alwaysOpen) return true
-            if (s.openRanges.any { inTimeRange(nowMin, it.first, it.second) }) return true
+            if (s.openRanges.any { (open, close) -> nowMin >= open && nowMin < todayEnd(open, close) }) return true
         }
+        // 오늘 해당하는 세그먼트가 "토 변동"처럼 시간 없는 것뿐이면 판단할 수 없다
+        if (todays.isNotEmpty() && todays.all { it.isTimeless }) return null
         // 시간표는 있으나 지금은 영업 구간 밖(오늘 해당 없음 포함)
         return false
     }
 
-    private fun isClosedToday(closedDays: String, today: Int): Boolean {
-        // "2,4째주 일요일" / "변동" 등 복잡/불확실 패턴은 휴무로 단정하지 않음
-        if (closedDays.contains("째주") || closedDays.contains("변동")) return false
-        val c = WD[today]
-        if (closedDays.contains("${c}요일")) return true
-        // "매주 토, 일" 처럼 구분자에 둘러싸인 단일 요일 문자
-        return Regex("""(^|[\s,/·])$c([\s,/·]|요일|$)""").containsMatchIn(closedDays)
+    /** 자정을 넘기는 구간인지 — "22:00~02:00", "18:00~25:00", "00:00~00:00"(종일) */
+    private fun crossesMidnight(open: Int, close: Int) = close <= open || close > DAY_MINUTES
+
+    /** 시작한 날 안에서의 종료 시각(분) */
+    private fun todayEnd(open: Int, close: Int) = if (crossesMidnight(open, close)) DAY_MINUTES else close
+
+    /** 다음 날 새벽으로 넘어간 부분의 종료 시각(분). 넘기지 않으면 0 */
+    private fun spillMinutes(open: Int, close: Int) = when {
+        close > DAY_MINUTES -> close - DAY_MINUTES
+        close <= open -> close
+        else -> 0
+    }
+
+    private enum class ClosedKind { WEEKLY, NTH_WEEK, LAST_WEEK, IRREGULAR }
+
+    /** 휴무 규칙 하나: [day] 요일(0=월)이 [kind] 방식으로 쉰다. NTH_WEEK 면 [weeks] 번째 그 요일 */
+    private data class ClosedRule(val day: Int, val kind: ClosedKind, val weeks: Set<Int> = emptySet()) {
+        fun closesOn(date: LocalDate): Boolean {
+            if (date.dayOfWeek.value - 1 != day) return false
+            val nth = (date.dayOfMonth - 1) / 7 + 1 // 이 달의 몇 번째 그 요일인지
+            return when (kind) {
+                ClosedKind.WEEKLY -> true
+                ClosedKind.NTH_WEEK -> nth in weeks
+                ClosedKind.LAST_WEEK -> date.dayOfMonth + 7 > date.lengthOfMonth()
+                ClosedKind.IRREGULAR -> false // 격주·변동은 어느 날인지 알 수 없어 휴무로 단정하지 않는다
+            }
+        }
+    }
+
+    // "일요일" 또는 구분자로 둘러싸인 한 글자 요일("매주 토, 일"). "1월1일"·"공휴일"의 월/일은 제외된다.
+    private val CLOSED_DAY = Regex("""([월화수목금토일])요일|(?<![^\s,/·(])([월화수목금토일])(?![^\s,/·)])""")
+
+    // "2, 4째주"·"1째주, 3째주"·"2, 4번째" 의 한 자리 숫자 ("매월 10일, 4째주" 의 10 은 날짜라 제외)
+    private val ORDINAL_DIGIT = Regex("""(?<!\d)([1-5])(?!\d)(?=[\d\s,·째주번]*(?:째|번째))""")
+    private val ORDINAL_WORD = Regex("""(첫|둘|셋|넷|다섯)\s*(?:째|번째)""")
+    private val ORDINAL_WORDS = listOf("첫", "둘", "셋", "넷", "다섯")
+    private val SEPARATORS_ONLY = Regex("""[\s,/·]*""")
+
+    /**
+     * 휴무일 원문을 요일별 규칙으로 나눈다. 요일 앞의 문맥(직전 요일 이후 텍스트)으로 방식을 정한다:
+     * "2, 4째주"·"첫째"·"2번째" → n째주, "마지막" → 마지막 주, "격주"·"변동" → 판단 안 함, 그 밖은 매주.
+     * "격주 일, 월"·"매주 토, 일" 처럼 구분자만 사이에 둔 요일은 앞 요일의 방식을 이어받는다.
+     * 요일 뒤에 "(넷째주 제외)"·"변동" 이 붙으면 판단하지 않는다.
+     */
+    private fun closedRules(closedDays: String?): List<ClosedRule> {
+        if (closedDays.isNullOrBlank() || closedDays.contains("무휴")) return emptyList()
+        val rules = mutableListOf<ClosedRule>()
+        var prevEnd = 0
+        var prev: ClosedRule? = null
+        for (m in CLOSED_DAY.findAll(closedDays)) {
+            val letter = (m.groups[1] ?: m.groups[2])!!.value[0]
+            val context = closedDays.substring(prevEnd, m.range.first)
+            val after = closedDays.substring(m.range.last + 1).substringBefore(',')
+            val qualified = closedKindOf(context)
+            var rule = when {
+                qualified != null -> qualified.copy(day = WD.indexOf(letter))
+                prev != null && SEPARATORS_ONLY.matches(context) -> prev.copy(day = WD.indexOf(letter))
+                else -> ClosedRule(WD.indexOf(letter), ClosedKind.WEEKLY)
+            }
+            if (after.contains("제외") || after.contains("변동")) rule = rule.copy(kind = ClosedKind.IRREGULAR)
+            rules += rule
+            prev = rule
+            prevEnd = m.range.last + 1
+        }
+        return rules
+    }
+
+    /** 요일 앞 문맥의 휴무 방식. 방식을 나타내는 표기가 없으면 null(매주 또는 앞 요일 상속) */
+    private fun closedKindOf(context: String): ClosedRule? {
+        if (context.contains("격주") || context.contains("변동")) return ClosedRule(0, ClosedKind.IRREGULAR)
+        if (context.contains("마지막")) return ClosedRule(0, ClosedKind.LAST_WEEK)
+        val weeks = ORDINAL_DIGIT.findAll(context).map { it.groupValues[1].toInt() }.toSet() +
+            ORDINAL_WORD.findAll(context).map { ORDINAL_WORDS.indexOf(it.groupValues[1]) + 1 }.toSet()
+        if (weeks.isNotEmpty()) return ClosedRule(0, ClosedKind.NTH_WEEK, weeks)
+        if (context.contains("매주")) return ClosedRule(0, ClosedKind.WEEKLY)
+        return null
     }
 
     /** 요일 신호(매일/평일/주말/요일 문자)가 있는지. "공휴일"의 '일'은 요일이 아니므로 제거 후 판단. */

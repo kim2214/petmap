@@ -211,4 +211,85 @@ class OpeningHoursTest {
         assertEquals("08:30~13:30", table[6].hours)   // 일
         assertEquals("08:40~18:00", table[0].hours)   // 월
     }
+
+    // 2024-06: 1일=토. 일요일은 2·9·16·23·30일(30일이 마지막 주), 토요일은 1·8·15·22·29일
+    private fun on(month: Int, day: Int, hour: Int = 12) = LocalDateTime.of(2024, month, day, hour, 0)
+
+    @Test fun `자정 넘김 영업은 시작한 요일 기준 - 다음 날 새벽만 영업`() {
+        val ot = "금 18:00~02:00"
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(28, 23)))   // 금 23시
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(29, 1)))    // 토 01시 = 금요일 영업의 연장
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(28, 1)))   // 금 01시 = 목요일 밤(영업 없음)
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(29, 3)))
+    }
+
+    @Test fun `어젯밤 영업의 연장이면 오늘이 휴무여도 영업중`() {
+        assertEquals(true, OpeningHours.isOpenNow("매일 18:00~02:00", "매주 토요일", at(29, 1)))  // 토 01시
+        assertEquals(false, OpeningHours.isOpenNow("매일 18:00~02:00", "매주 토요일", at(29, 20))) // 토 20시
+        assertEquals(false, OpeningHours.isOpenNow("매일 18:00~02:00", "매주 토요일", at(30, 1)))  // 일 01시 = 토(휴무) 밤
+    }
+
+    @Test fun `24시 넘김 표기 25시 26시`() {
+        assertEquals(true, OpeningHours.isOpenNow("매일 22:00~25:00", null, at(24, 23)))
+        assertEquals(true, OpeningHours.isOpenNow("매일 22:00~25:00", null, at(25, 0, 30)))
+        assertEquals(false, OpeningHours.isOpenNow("매일 22:00~25:00", null, at(25, 1, 30)))
+        assertEquals(true, OpeningHours.isOpenNow("월~금 11:00~21:00, 토 11:00~26:00", null, at(30, 1))) // 일 01시
+    }
+
+    @Test fun `시간 없는 요일 세그먼트 - 변동은 판단불가, 휴진은 휴무`() {
+        val ot = "월~금 10:00~19:00, 토 변동"
+        assertNull(OpeningHours.isOpenNow(ot, null, at(29, 12)))           // 토
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(30, 12)))  // 일 = 시간표에 없음
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(28, 12)))
+
+        val withClosed = "월~토 10:00~20:00, 금 휴진"
+        assertEquals(false, OpeningHours.isOpenNow(withClosed, null, at(28, 12))) // 금
+        assertEquals(true, OpeningHours.isOpenNow(withClosed, null, at(27, 12)))  // 목
+        assertEquals(true, OpeningHours.weeklySchedule(withClosed, null)!![4].isClosed)
+    }
+
+    @Test fun `n째주 휴무는 그 주의 요일만`() {
+        val cd = "2, 4째주 일요일"
+        assertEquals(false, OpeningHours.isOpenNow("매일 10:00~20:00", cd, on(6, 9)))  // 둘째 일요일
+        assertEquals(false, OpeningHours.isOpenNow("매일 10:00~20:00", cd, on(6, 23))) // 넷째 일요일
+        assertEquals(true, OpeningHours.isOpenNow("매일 10:00~20:00", cd, on(6, 2)))   // 첫째 일요일
+        assertEquals(true, OpeningHours.isOpenNow("매일 10:00~20:00", cd, on(6, 16)))
+        // 요일 표에는 매주 휴무만 적는다
+        assertEquals(false, OpeningHours.weeklySchedule("매일 10:00~20:00", cd)!![6].isClosed)
+    }
+
+    @Test fun `매주 휴무와 n째주 휴무가 섞여도 매주 휴무를 잃지 않는다`() {
+        val cd = "매주 화요일, 2, 4째주 일요일"
+        assertEquals(false, OpeningHours.isOpenNow("매일 10:00~20:00", cd, on(6, 25))) // 화
+        assertEquals(false, OpeningHours.isOpenNow("매일 10:00~20:00", cd, on(6, 9)))
+        assertEquals(true, OpeningHours.isOpenNow("매일 10:00~20:00", cd, on(6, 16)))
+        assertEquals(true, OpeningHours.weeklySchedule("매일 10:00~20:00", cd)!![1].isClosed)
+    }
+
+    @Test fun `서수 표기 변형 - 첫째 셋째, 번째, 날짜 숫자 무시`() {
+        val ot = "매일 10:00~20:00"
+        assertEquals(false, OpeningHours.isOpenNow(ot, "매주 일요일, 매주 첫째 셋째주 토요일 휴무", on(6, 15))) // 셋째 토
+        assertEquals(true, OpeningHours.isOpenNow(ot, "매주 일요일, 매주 첫째 셋째주 토요일 휴무", on(6, 8)))   // 둘째 토
+        assertEquals(false, OpeningHours.isOpenNow(ot, "매달 2, 4번째 토요일", on(6, 22)))
+        assertEquals(true, OpeningHours.isOpenNow(ot, "매달 2, 4번째 토요일", on(6, 29)))
+        assertEquals(false, OpeningHours.isOpenNow(ot, "매월 10일, 4째주 일요일", on(6, 23)))
+        assertEquals(true, OpeningHours.isOpenNow(ot, "매월 10일, 4째주 일요일", on(6, 9)))      // 10 은 날짜
+    }
+
+    @Test fun `마지막 주 휴무`() {
+        val ot = "매일 10:00~20:00"
+        val cd = "매주 일요일, 법정공휴일, 매달 마지막 주 토요일"
+        assertEquals(false, OpeningHours.isOpenNow(ot, cd, on(6, 29))) // 마지막 토
+        assertEquals(true, OpeningHours.isOpenNow(ot, cd, on(6, 22)))
+        assertEquals(false, OpeningHours.isOpenNow(ot, cd, on(6, 23))) // 매주 일
+    }
+
+    @Test fun `격주와 제외 표기는 휴무로 단정하지 않는다`() {
+        val ot = "매일 10:00~20:00"
+        assertEquals(true, OpeningHours.isOpenNow(ot, "격주 일요일", on(6, 9)))
+        assertEquals(true, OpeningHours.isOpenNow(ot, "격주 일, 월", on(6, 10)))   // 월도 격주
+        assertEquals(false, OpeningHours.isOpenNow(ot, "매주 일요일, 격주 토요일", on(6, 9)))
+        assertEquals(true, OpeningHours.isOpenNow(ot, "매주 일요일, 격주 토요일", on(6, 8)))
+        assertEquals(true, OpeningHours.isOpenNow(ot, "매주 일요일(넷째주 제외), 법정공휴일", on(6, 9)))
+    }
 }
