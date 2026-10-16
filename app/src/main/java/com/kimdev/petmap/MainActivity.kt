@@ -95,8 +95,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        // 광고 동의(UMP) 수집 → 동의되면 광고 SDK 초기화
-        AdsConsent.gather(this)
         // 긍정 시그널(길찾기·공유)이 쌓인 뒤의 앱 실행에서만 인앱 리뷰 요청 (Play 설치 빌드에서만 실제 노출).
         // 구성 변경에 의한 Activity 재생성에서는 다시 묻지 않는다.
         if (savedInstanceState == null) InAppReview.maybeAsk(this)
@@ -148,6 +146,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        // 광고 동의(UMP) 수집 → 동의되면 광고 SDK 초기화. 반드시 setContent 뒤, 첫 프레임 이후에 시작한다:
+        // UMP 가 백그라운드 스레드에서 WebView·창 관련 초기화를 하는 동안 메인 스레드가 창 장식(decor)을
+        // 만들면 content 컨테이너를 못 찾아 setContent 가 죽는다(새로 설치한 첫 실행에서 약 20% 재현).
+        window.decorView.post { AdsConsent.gather(this) }
     }
 }
 
