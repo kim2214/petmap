@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-지방행정 인허가 데이터(LOCALDATA) "동물병원" → build_db.py 입력 CSV 생성.
+지방행정 인허가 데이터(LOCALDATA) "동물병원"·"동물약국" → build_db.py 입력 CSV 생성.
 
 한국문화정보원 데이터셋에 빠진 동물병원을 채우기 위한 보조 입력이다. 전국 인허가 목록 중
 영업/정상 상태이고 좌표가 있는 곳만 넣는다(약 5,300곳). 기본 데이터셋과 이름·150m 이내로 겹치면
 build_db.py 가 기본 데이터셋 쪽을 유지하므로 **마지막 인자**로 넘긴다.
 
 사용법:
-    python3 tools/fetch_hospitals.py [--out=<CSV 경로>] [--csv=<로컬 원본 CSV>]
-    # 기본 출력: tools/data/hospitals.csv
+    python3 tools/fetch_hospitals.py [--dataset=animal_pharmacies] [--out=<CSV 경로>] [--csv=<로컬 원본 CSV>]
+    # 기본 출력: tools/data/hospitals.csv (동물약국은 tools/data/pharmacies.csv)
+    # 동물약국: 인허가 "동물용의약품 판매업"(영업/정상 약 13,700곳 — 대부분 일반 약국이 함께 등록) 중 기본 데이터셋에
+    #   없는 곳을 채운다. 동물병원과 같은 방식으로 마지막 쪽 인자로 넘긴다.
     # 원본: https://file.localdata.go.kr/file/animal_hospitals/info (data.go.kr 15045050 "바로가기")
     #       브라우저 헤더가 없으면 403 이 나서 UA·Referer 를 붙여 받는다.
 
@@ -28,6 +30,11 @@ import urllib.request
 # LOCALDATA 파일 다운로드: /file/<dataset>/info 페이지, /file/download/<dataset>/info 가 CSV
 LOCALDATA = "https://file.localdata.go.kr/file"
 DATASET = "animal_hospitals"
+# 데이터셋 → (카테고리3 = build_db.category_name 이 HOSPITAL/PHARMACY 로 매핑하는 값, 기본 출력 파일)
+DATASETS = {
+    "animal_hospitals": ("동물병원", "tools/data/hospitals.csv"),
+    "animal_pharmacies": ("동물약국", "tools/data/pharmacies.csv"),
+}
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -123,7 +130,7 @@ def read_source(path):
     raise SystemExit(f"오류: {path} 를 UTF-8/CP949 로 읽을 수 없음")
 
 
-def to_rows(source_rows):
+def to_rows(source_rows, kind="동물병원"):
     """영업/정상 + 좌표 있는 행 → build_db 입력 행. (제외 건수도 함께 돌려준다)"""
     out, skipped_status, skipped_coord = [], 0, 0
     for r in source_rows:
@@ -148,7 +155,7 @@ def to_rows(source_rows):
             "시설명": (r.get("사업장명") or "").strip(),
             "카테고리1": "반려의료",
             "카테고리2": "반려동물 서비스",
-            "카테고리3": "동물병원",
+            "카테고리3": kind,
             "위도": f"{lat:.7f}",
             "경도": f"{lng:.7f}",
             # 도로명주소가 없는 인허가 건은 지번주소로 채운다(지역 브라우징이 주소 첫 토큰을 쓴다)
@@ -176,19 +183,23 @@ def download(path, dataset=DATASET):
 
 def main():
     args = dict(a.split("=", 1) for a in sys.argv[1:] if a.startswith("--") and "=" in a)
-    out_path = args.get("--out", "tools/data/hospitals.csv")
+    dataset = args.get("--dataset", DATASET)
+    if dataset not in DATASETS:
+        raise SystemExit(f"오류: --dataset 은 {', '.join(DATASETS)} 중 하나")
+    kind, default_out = DATASETS[dataset]
+    out_path = args.get("--out", default_out)
     src = args.get("--csv")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     if not src:
-        src = os.path.join(os.path.dirname(out_path) or ".", f"{DATASET}_source.csv")
-        print(f"다운로드: {LOCALDATA}/download/{DATASET}/info")
-        download(src)
-    rows, skipped_status, skipped_coord = to_rows(read_source(src))
+        src = os.path.join(os.path.dirname(out_path) or ".", f"{dataset}_source.csv")
+        print(f"다운로드: {LOCALDATA}/download/{dataset}/info")
+        download(src, dataset)
+    rows, skipped_status, skipped_coord = to_rows(read_source(src), kind)
     with open(out_path, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=OUT_COLUMNS)
         w.writeheader()
         w.writerows(rows)
-    print(f"✓ {out_path}: 동물병원 {len(rows)}곳 (영업 외 제외 {skipped_status}, 좌표·주소 없음 제외 {skipped_coord})")
+    print(f"✓ {out_path}: {kind} {len(rows)}곳 (영업 외 제외 {skipped_status}, 좌표·주소 없음 제외 {skipped_coord})")
 
 
 if __name__ == "__main__":

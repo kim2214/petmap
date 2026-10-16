@@ -102,6 +102,34 @@ class SameBuildingDupTest(unittest.TestCase):
         self.assertFalse(b.same_building_dup(b.core_name("대구동물메디컬센터"), b.core_name("대구24시 야간응급연합동물병원")))
         self.assertFalse(b.same_building_dup(b.core_name("꼬마동물병원"), b.core_name("초이스동물병원")))
 
+    def test_address_key(self):
+        self.assertEqual(b.address_key("부산광역시 금정구 장전온천천로 48, 부산대지하철역 1층 (장전동)"),
+                         b.address_key("부산광역시  금정구 장전온천천로 48"))
+        self.assertEqual(b.address_key("강원도 춘천시 중앙로 1 (2층)"), "강원특별자치도 춘천시 중앙로 1")
+        self.assertEqual(b.address_key(None), "")
+
+    def test_same_building_dup_pharmacy(self):
+        def dup(x, y):
+            return b.same_building_dup(b.core_name(x, "PHARMACY"), b.core_name(y, "PHARMACY"), "PHARMACY")
+        # 체인 접두어·'동물약국' 표기 차이
+        self.assertTrue(dup("휴베이스 안녕약국", "안녕약국"))
+        self.assertTrue(dup("메디팜빛고을약국", "빛고을약국"))
+        self.assertTrue(dup("셀메드건강약국", "건강약국"))
+        self.assertTrue(dup("대저 동물약국 혜유약국", "혜유약국"))
+        self.assertTrue(dup("튼튼동물약국", "튼튼약국"))
+        # 이름이 다른 이웃 약국은 묶지 않는다
+        self.assertFalse(dup("봄약국", "지약국"))
+        self.assertFalse(dup("튼튼약국", "세계로약국"))
+        self.assertTrue(dup("조은온누리약국", "조은약국"))
+        # 2글자 동네 이름으로 시작하는 다른 약국은 묶지 않는다
+        self.assertFalse(dup("별내우리약국", "별내약국"))
+        self.assertFalse(dup("삼산현대약국", "삼산 동물약국"))
+        self.assertFalse(dup("반월당약국", "반월당경북약국"))
+        # 병원 규칙은 그대로(뒷부분 일치 불인정)
+        self.assertFalse(b.same_building_dup(b.core_name("아이러브펫신도림"), b.core_name("신도림동물병원")))
+        self.assertTrue(b.pharmacy_alias_dup("부평 동물약국"))
+        self.assertFalse(b.pharmacy_alias_dup("새정성약국"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,7 +31,7 @@
 - 식약처 "반려동물 동반출입 음식점" 목록은 tools/fetch_restaurants.py 가 지오코딩해 같은 컬럼 형식의
   CSV 로 만들어 준다. 좌표가 지오코딩 결과라 기본 데이터셋과 좌표가 조금 달라도 같은 가게일 수 있으므로,
   **정규화한 이름이 같고 150m 안**이면 중복으로 보고 먼저 온 파일을 유지한다.
-- 지방행정 인허가 "동물병원"은 tools/fetch_hospitals.py 가 같은 형식으로 만든다(마지막 입력). 동물병원은 추가로
+- 지방행정 인허가 "동물병원"·"동물약국"은 tools/fetch_hospitals.py 가 같은 형식으로 만든다(마지막 입력들). 동물병원·약국은 추가로
   **같은 건물(30m) 안에서 일반어("24시"·"동물병원" 등)를 뺀 이름이 같거나 앞부분이 겹치면** 중복으로 본다
   (same_building_dup — 데이터셋 간 표기 차이 흡수).
 - --closed: tools/fetch_closures.py 의 인허가 폐업 목록(동물병원·동물약국). 같은 업종·같은 이름·100m 안이면 뺀다.
@@ -251,29 +251,56 @@ def near(lat1, lng1, lat2, lng2, meters=150.0):
 # "루시드 동물메디컬센터")를 흡수한다. 다른 업종은 같은 건물에 다른 가게가 흔해("롯데마트 X점" ↔ "다이소 롯데마트X점")
 # 적용하지 않는다.
 SAME_BUILDING_METERS = 30.0
-SAME_BUILDING_CATEGORIES = ("HOSPITAL",)
-GENERIC_NAME_WORDS = ("24시", "동물메디컬센터", "동물의료센터", "동물병원", "메디컬센터", "의료센터")
+# 동물약국도 인허가 데이터(fetch_hospitals.py --dataset=animal_pharmacies)와 표기가 갈린다("온누리약국" ↔ "온누리동물약국").
+SAME_BUILDING_CATEGORIES = ("HOSPITAL", "PHARMACY")
+GENERIC_NAME_WORDS = {
+    "HOSPITAL": ("24시", "동물메디컬센터", "동물의료센터", "동물병원", "메디컬센터", "의료센터"),
+    # "온누리"는 체인 표기("조은온누리약국" ↔ "조은약국")
+    "PHARMACY": ("24시", "동물약국", "온누리", "약국"),
+}
 
 
-def core_name(name):
+def core_name(name, category="HOSPITAL"):
     """느슨한 중복 판정용 이름: 괄호를 떼지 않은 정규화 + 업종 일반어 제거 (2글자 미만이면 빈 값)."""
     n = re.sub(r"\(주\)|㈜|주식회사", "", name)
     n = re.sub(r"[^0-9A-Za-z가-힣]", "", n).lower()
-    for w in GENERIC_NAME_WORDS:
+    for w in GENERIC_NAME_WORDS.get(category, ()):
         n = n.replace(w, "")
     return n if len(n) >= 2 else ""
 
 
-def same_building_dup(core_a, core_b):
+def same_building_dup(core_a, core_b, category="HOSPITAL"):
     """핵심 이름이 같거나, 짧은 쪽(3글자 이상)이 긴 쪽의 앞부분이면 같은 곳 (지점명·24시 표기 차이 흡수).
     포함이 아니라 앞부분만 보는 이유: "신도림" ↔ "아이러브펫신도림점", "대구" ↔ "대구야간응급연합"처럼
-    지명만 겹치는 다른 병원을 묶지 않기 위해서다."""
+    지명만 겹치는 다른 병원을 묶지 않기 위해서다.
+    약국은 체인 접두어("휴베이스 안녕약국" ↔ "안녕약국", "메디팜빛고을약국" ↔ "빛고을약국")가 앞에 붙으므로
+    뒷부분 일치도 같은 곳으로 보고, 일반어를 뗀 이름이 짧아("건강", "용봉") 뒷부분은 2글자부터 인정한다.
+    앞부분 일치는 약국엔 쓰지 않는다 — "반월당약국" ↔ "반월당경북약국"처럼 동네 이름으로 시작하는 다른 약국이
+    같은 건물(역사·상가)에 흔하다."""
     if not core_a or not core_b:
         return False
     if core_a == core_b:
         return True
     short, long_ = sorted((core_a, core_b), key=len)
+    if category == "PHARMACY":
+        return len(short) >= 2 and long_.endswith(short)
     return len(short) >= 3 and long_.startswith(short)
+
+
+# 인허가 동물약국 중 "부평동물약국"처럼 상호 대신 '○○동물약국'으로 등록된 곳이 기존 약국 바로 옆(10m)에 있으면
+# 같은 약국의 등록명으로 본다. 거리만으로 묶지 않는 이유: 병원 앞 같은 건물에 약국 여러 곳이 나란히 있는 일이 흔하다.
+PHARMACY_ALIAS_METERS = 10.0
+
+
+def pharmacy_alias_dup(name):
+    """상호가 '○○동물약국' 형태인지 (기존 약국 10m 안이면 같은 곳으로 본다)"""
+    return "동물약국" in name.replace(" ", "")
+
+
+def address_key(road):
+    """같은 곳 판정용 도로명주소: 쉼표·괄호 뒤 상세(층·호·동명)를 떼고 공백 정리 + 시/도 현행화."""
+    base = re.split(r"[,(]", road or "")[0]
+    return normalize_sido(re.sub(r"\s+", " ", base).strip())
 
 
 def grid_cell(lat, lng):
@@ -362,6 +389,8 @@ def main():
     rows = {}  # id -> tuple (dedup: 첫 등장 유지 — 먼저 준 파일이 우선)
     by_name = {}  # normalize_name -> [(lat, lng)] (좌표가 다른 같은 가게 판정용)
     by_cell = {}  # grid_cell -> [(lat, lng, category, core_name)] (같은 건물·표기 다른 이름 판정용)
+    # (정규화 이름, 도로명주소) — 데이터셋마다 좌표가 수백 m 어긋나도(지오코딩 차이) 이름·주소가 같으면 같은 곳
+    by_name_addr = set()
     for csv_path in csv_paths:
         file_rows = read_rows(csv_path)
         if not file_rows:
@@ -372,7 +401,7 @@ def main():
                 f"오류: {csv_path} 에 동반 가능 여부 컬럼({' / '.join(PET_ALLOWED_COLUMNS)})이 없음 — "
                 "동반 가능 장소만 담는 앱 취지상 이 데이터셋은 넣을 수 없다"
             )
-        added = filtered = near_dups = building_dups = closed_dups = 0
+        added = filtered = near_dups = addr_dups = building_dups = closed_dups = 0
         for r in file_rows:
             if (r.get(pet_col) or "").strip() != "Y":
                 filtered += 1
@@ -393,16 +422,24 @@ def main():
             if key and any(near(lat, lng, la, ln) for la, ln in by_name.get(key, ())):
                 near_dups += 1
                 continue
+            addr = address_key(meaningful(r.get("도로명주소")))
+            if key and addr and (key, addr) in by_name_addr:
+                addr_dups += 1
+                continue
             category = category_name(r.get("카테고리3"), r.get("카테고리1"))
             if closed and is_closed(closed, category, name, lat, lng):
                 if pid not in closed_ids:
                     closed_ids.add(pid)
                     closed_dups += 1
                 continue
-            core = core_name(name)
+            core = core_name(name, category)
             ci, cj = grid_cell(lat, lng)
-            if core and category in SAME_BUILDING_CATEGORIES and any(
-                cat == category and same_building_dup(core, c) and near(lat, lng, la, ln, SAME_BUILDING_METERS)
+            alias = category == "PHARMACY" and pharmacy_alias_dup(name)
+            if category in SAME_BUILDING_CATEGORIES and any(
+                cat == category and (
+                    (core and same_building_dup(core, c, category) and near(lat, lng, la, ln, SAME_BUILDING_METERS))
+                    or (alias and near(lat, lng, la, ln, PHARMACY_ALIAS_METERS))
+                )
                 for di in (-1, 0, 1) for dj in (-1, 0, 1)
                 for la, ln, cat, c in by_cell.get((ci + di, cj + dj), ())
             ):
@@ -439,10 +476,12 @@ def main():
             )
             if key:
                 by_name.setdefault(key, []).append((lat, lng))
+                if addr:
+                    by_name_addr.add((key, addr))
             by_cell.setdefault((ci, cj), []).append((lat, lng, category, core))
             added += 1
         print(f"  {os.path.basename(csv_path)}: 동반가능 Y 이외 제외 {filtered}건, 신규 반영 {added}건, "
-              f"이름·150m 중복 제외 {near_dups}건, 같은 건물·비슷한 이름 중복 제외 {building_dups}건"
+              f"이름·150m 중복 제외 {near_dups}건, 같은 이름·주소 중복 제외 {addr_dups}건, 같은 건물·비슷한 이름 중복 제외 {building_dups}건"
               + (f", 인허가 폐업 제외 {closed_dups}곳" if closed else ""))
 
 

@@ -25,8 +25,14 @@ description: 공공데이터 CSV로 프리빌트 Room DB(app/src/main/assets/pet
    동물병원 보강: 지방행정 인허가 "동물병원"(전국 약 1만 건 중 영업/정상·좌표 있는 약 5,300곳) →
    `python3 tools/fetch_hospitals.py` 가 받아 `tools/data/hospitals.csv` 를 만든다(키 불필요, 원본 좌표 EPSG:5174 를
    WGS84 로 변환 — `tools/test_fetch_hospitals.py`). 원본은 file.localdata.go.kr 이며 브라우저 UA·Referer 가 없으면 403.
-   **마지막(네 번째) 인자**로 넘긴다 — 기본 데이터셋과 겹치는 약 3,400곳은 이름·150m 또는
-   같은 건물(30m)·비슷한 이름(`same_building_dup`, 동물병원만) 규칙으로 걸러지고 약 1,870곳이 새로 들어간다.
+   **네 번째 인자**로 넘긴다 — 기본 데이터셋과 겹치는 약 3,400곳은 이름·150m, 이름·도로명주소, 또는
+   같은 건물(30m)·비슷한 이름(`same_building_dup`) 규칙으로 걸러지고 약 1,800곳이 새로 들어간다.
+   동물약국 보강: 인허가 "동물용의약품 판매업"(영업/정상 약 13,700곳, 대부분 일반 약국이 함께 등록) →
+   `python3 tools/fetch_hospitals.py --dataset=animal_pharmacies` → `tools/data/pharmacies.csv`, **마지막(다섯 번째) 인자**.
+   약국 중복 규칙: 일반어("동물약국"·"온누리"·"약국"·"24시")를 뗀 이름이 같거나 뒷부분이 같으면(체인 접두어 "휴베이스"·"메디팜")
+   30m 안 같은 곳, 앞부분 일치는 쓰지 않는다("반월당약국" ↔ "반월당경북약국"은 다른 곳). "○○동물약국" 등록명은 기존 약국
+   10m 안이면 같은 곳. 2026-10 기준 약 5,700곳이 새로 들어간다(전체 약국 약 13,100곳).
+   모든 입력 공통: 좌표가 150m 넘게 어긋나도 정규화 이름·도로명주소(쉼표·괄호 앞)가 같으면 같은 곳(`address_key`).
    폐업 정리: `python3 tools/fetch_closures.py` → `tools/data/closed.csv`(인허가 동물병원·동물약국 중 폐업·취소이고
    같은 이름의 영업 기록이 100m 안에 없는 곳). `build_db.py --closed=tools/data/closed.csv` 로 넘기면 같은 업종·이름·100m 안의
    장소를 뺀다(2026-10 기준 약 1,400곳). 휴업은 빼지 않는다.

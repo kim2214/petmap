@@ -1,7 +1,7 @@
 # 🐾 PetMap
 
 지도를 이용해 **반려동물과 함께 이용 가능한 카페·식당·시설**을 찾아주는 Android 앱.
-공공데이터(한국문화정보원 문화시설·액티비티, 식약처 반려동물 동반출입 음식점, 지방행정 인허가 동물병원)를 정제한 약 25,200개 장소를 지도와 목록으로 보여줍니다.
+공공데이터(한국문화정보원 문화시설·액티비티, 식약처 반려동물 동반출입 음식점, 지방행정 인허가 동물병원·동물약국)를 정제한 약 30,800개 장소를 지도와 목록으로 보여줍니다.
 
 > 현재 상태: **스토어 배포 운영 중** (versionName 1.9.1 / versionCode 11) — AdMob 광고·UMP 동의·Crashlytics·인앱 리뷰 연동.
 
@@ -118,7 +118,7 @@ Crashlytics·Analytics 가 연동돼 있으나, **본인 Firebase 프로젝트�
 
 API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 소스로** 사용한다.
 
-- `app/src/main/assets/petmap.db` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" + "문화 여가 활동 시설(액티비티)" 데이터셋(+ 선택: 식약처 "반려동물 동반출입 음식점" 지오코딩 결과, 지방행정 인허가 "동물병원" 영업 중 목록)을 정제해 넣은 SQLite DB(v10 — 주차·이용료·애견 추가요금·장소설명, 시/도 명칭 현행화, 법인 표기("(주)" 등) 제거·`sortKey` 이름순 정렬 키, `meta` 데이터 기준일 포함, 실내/실외 여부는 **nullable = 정보 없음**, `maxPetKg` 는 "입장 가능 동물 크기" 문구를 숫자화한 최대 체중). `이름+좌표`(및 같은 이름 150m 이내) 기준 중복 제거 후 **동반 가능(Y) 장소만 약 25,200개**를 수록한다(동반 불가 N 은 제외). 인허가 데이터에 폐업으로 기록된 동물병원·동물약국(약 1,400곳)은 뺀다. 식약처 음식점 약 2,640곳(식당 1,836·카페/제과 약 800)은 2026-03 시행 반려동물 동반출입 음식점 등록 업소로, 좌표는 네이버 Geocoding 결과이며 크기·실내외 조건은 정보 없음(null)으로 들어간다. 동물병원은 한국문화정보원 데이터에 인허가 데이터에만 있는 약 1,870곳을 더하고 폐업 약 410곳을 빼 약 5,900곳이다 — 좌표는 원본 EPSG:5174 를 `tools/fetch_hospitals.py` 가 WGS84 로 변환(기존 데이터 대비 중앙값 오차 약 5m), 같은 건물(30m) 안의 표기만 다른 병원("24시"·지점명·괄호 차이)은 중복으로 본다.
+- `app/src/main/assets/petmap.db` — 한국문화정보원 "전국 반려동물 동반 가능 문화시설" + "문화 여가 활동 시설(액티비티)" 데이터셋(+ 선택: 식약처 "반려동물 동반출입 음식점" 지오코딩 결과, 지방행정 인허가 "동물병원"·"동물약국" 영업 중 목록)을 정제해 넣은 SQLite DB(v10 — 주차·이용료·애견 추가요금·장소설명, 시/도 명칭 현행화, 법인 표기("(주)" 등) 제거·`sortKey` 이름순 정렬 키, `meta` 데이터 기준일 포함, 실내/실외 여부는 **nullable = 정보 없음**, `maxPetKg` 는 "입장 가능 동물 크기" 문구를 숫자화한 최대 체중). `이름+좌표`(및 같은 이름 150m 이내) 기준 중복 제거 후 **동반 가능(Y) 장소만 약 30,800개**를 수록한다(동반 불가 N 은 제외). 인허가 데이터에 폐업으로 기록된 동물병원·동물약국(약 1,400곳)은 뺀다. 식약처 음식점 약 2,640곳(식당 1,836·카페/제과 약 800)은 2026-03 시행 반려동물 동반출입 음식점 등록 업소로, 좌표는 네이버 Geocoding 결과이며 크기·실내외 조건은 정보 없음(null)으로 들어간다. 동물병원은 한국문화정보원 데이터에 인허가 데이터에만 있는 약 1,800곳을 더하고 폐업 약 410곳을 빼 약 5,860곳이다 — 좌표는 원본 EPSG:5174 를 `tools/fetch_hospitals.py` 가 WGS84 로 변환(기존 데이터 대비 중앙값 오차 약 5m), 같은 건물(30m) 안의 표기만 다른 병원("24시"·지점명·괄호 차이)은 중복으로 본다. 동물약국은 인허가 "동물용의약품 판매업" 영업 중 목록(대부분 일반 약국이 함께 등록)에서 약 5,700곳을 더해 약 13,100곳이다 — 체인 접두어("휴베이스"·"메디팜" 등)·"온누리" 표기 차이와 기존 약국 10m 안의 "○○동물약국" 등록명은 중복으로 본다. 데이터셋 간 좌표가 수백 m 어긋나도 이름·도로명주소가 같으면 같은 곳으로 본다.
 - 첫 실행 시 Room `createFromAsset` 로 에셋 DB를 즉시 로드(파싱/시딩/색인 구축 없음).
 - 지도/목록/검색은 모두 **로컬 Room 쿼리**다. 네트워크는 장소 데이터 원격 갱신에만 쓴다(아래).
 - **원격 데이터 갱신 (앱 업데이트 없이)**: `tools/publish_db.py` 가 에셋 DB 를 gzip 해
@@ -156,11 +156,12 @@ API 통신 부담을 최소화하기 위해 **미리 만든 Room DB를 단일 �
    ```bash
    python3 tools/fetch_restaurants.py            # → tools/data/restaurants.csv (좌표 캐시 재사용)
    python3 tools/fetch_hospitals.py              # → tools/data/hospitals.csv (지방행정 인허가 동물병원, 키 불필요)
+   python3 tools/fetch_hospitals.py --dataset=animal_pharmacies   # → tools/data/pharmacies.csv (인허가 동물약국)
    python3 tools/fetch_closures.py               # → tools/data/closed.csv (인허가 폐업 동물병원·동물약국)
    ```
 3. 빌드 스크립트 실행 → `assets/petmap.db` 재생성 (여러 CSV 를 순서대로, 먼저 준 파일이 중복 시 우선):
    ```bash
-   python3 tools/build_db.py --data-date=YYYY-MM-DD [--closed=tools/data/closed.csv] "<반려동물 CSV>" "<액티비티 CSV>" [tools/data/restaurants.csv] [tools/data/hospitals.csv]
+   python3 tools/build_db.py --data-date=YYYY-MM-DD [--closed=tools/data/closed.csv] "<반려동물 CSV>" "<액티비티 CSV>" [tools/data/restaurants.csv] [tools/data/hospitals.csv] [tools/data/pharmacies.csv]
    # 출력: app/src/main/assets/petmap.db (고유 장소 N건)
    ```
 4. 기존 설치에 전달하는 방법은 둘 중 하나:

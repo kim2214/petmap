@@ -31,7 +31,7 @@ com.kimdev.petmap
 │   │   ├── ThemeStore            # 라이트/다크/시스템 테마 (SharedPreferences)
 │   │   ├── PetProfileStore       # 내 반려견 체중 (SharedPreferences) → PetFilter.MY_PET 기준값
 │   │   ├── dao/    PlaceDao(뷰포트·그리드 집계·FTS 검색), FavoriteDao, MetaDao
-│   │   └── entity/ PlaceEntity(약 25,200행, 실내/실외 nullable, maxPetKg, sortKey), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
+│   │   └── entity/ PlaceEntity(약 30,800행, 실내/실외 nullable, maxPetKg, sortKey), FavoriteEntity, MetaEntity(data_date 등 에셋 메타)
 │   ├── mapper/     Entity ↔ Domain 변환
 │   ├── remote/     DataManifest(원격 manifest.json), DataDownloader(URLConnection — https/file)
 │   ├── update/     PlaceDataUpdaterImpl(다운로드·검증·트랜잭션 교체), PlaceDataUpdateWorker(하루 1회, Wi-Fi)
