@@ -49,6 +49,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -125,6 +129,16 @@ fun DetailScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val place = state.place
+    val snackbarHostState = remember { SnackbarHostState() }
+    val resources = LocalResources.current
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                DetailEvent.FavoriteWriteFailed ->
+                    snackbarHostState.showSnackbar(resources.getString(R.string.favorite_write_failed))
+            }
+        }
+    }
 
     // 히어로 헤더와 같은 색에서 시작해 스크롤하면 표면색으로 전환되는 고정 앱바.
     // 장소 이름은 헤더가 앱바 아래로 밀려 들어간 만큼(overlappedFraction)만 나타난다.
@@ -133,6 +147,7 @@ fun DetailScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

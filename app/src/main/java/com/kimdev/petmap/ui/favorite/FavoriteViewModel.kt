@@ -48,6 +48,8 @@ enum class FavoriteSort { RECENT, NAME, DISTANCE }
 sealed interface FavoriteEvent {
     /** 가까운순을 골랐지만 위치를 얻지 못함(권한은 있음) */
     data object LocationUnavailable : FavoriteEvent
+    /** 즐겨찾기 쓰기 실패(저장 공간 부족·DB I/O 오류) — 목록은 그대로, 스낵바로만 알린다 */
+    data object FavoriteWriteFailed : FavoriteEvent
 }
 
 data class RecentUiState(
@@ -138,7 +140,21 @@ class FavoriteViewModel @Inject constructor(
 
     /** 최근 본 장소에서 하트 — 즐겨찾기 목록과 달리 카드가 사라지지 않으므로 단순 토글 */
     fun toggleFavorite(place: Place) {
-        viewModelScope.launch { repository.toggleFavorite(place) }
+        writeFavorite { repository.toggleFavorite(place) }
+    }
+
+    /**
+     * 즐겨찾기 쓰기 공용 래퍼. DAO 예외(SQLiteFullException 등)를 삼키지 않으면 viewModelScope 의
+     * 미처리 예외로 앱이 죽는다 → 로그 + [FavoriteEvent.FavoriteWriteFailed] 로 알리고 끝낸다.
+     */
+    private fun writeFavorite(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            runCatching { block() }.onFailure { e ->
+                if (e is CancellationException) throw e
+                Log.w(TAG, "즐겨찾기 저장 실패", e)
+                _events.send(FavoriteEvent.FavoriteWriteFailed)
+            }
+        }
     }
 
     fun clearRecent() = recentPlaceStore.clear()
@@ -193,11 +209,19 @@ class FavoriteViewModel @Inject constructor(
      * 화면 스코프가 아닌 viewModelScope 에서 실행해, 스낵바 도중 화면을 떠나도 삭제가 끊기지 않는다.
      */
     suspend fun removeFavorite(placeId: String): FavoriteSnapshot? =
-        viewModelScope.async { repository.removeFavorite(placeId) }.await()
+        viewModelScope.async {
+            // 실패하면 null(= 지우지 못함) 로 돌려 실행취소 스낵바를 띄우지 않고, 실패만 알린다
+            runCatching { repository.removeFavorite(placeId) }.getOrElse { e ->
+                if (e is CancellationException) throw e
+                Log.w(TAG, "즐겨찾기 삭제 실패", e)
+                _events.send(FavoriteEvent.FavoriteWriteFailed)
+                null
+            }
+        }.await()
 
     /** 실행취소: 메모·추가 시각까지 삭제 직전 상태로 되살린다 */
     fun restoreFavorite(snapshot: FavoriteSnapshot) {
-        viewModelScope.launch { repository.restoreFavorite(snapshot) }
+        writeFavorite { repository.restoreFavorite(snapshot) }
     }
 
     private companion object {

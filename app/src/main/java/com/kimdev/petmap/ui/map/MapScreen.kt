@@ -266,6 +266,9 @@ fun MapScreen(
                 MapEvent.NoResults -> scope.launch {
                     snackbarHostState.showSnackbar(resources.getString(R.string.map_no_results))
                 }
+                MapEvent.FavoriteWriteFailed -> scope.launch {
+                    snackbarHostState.showSnackbar(resources.getString(R.string.favorite_write_failed))
+                }
                 MapEvent.LoadFailed -> scope.launch {
                     val result = snackbarHostState.showSnackbar(
                         message = resources.getString(R.string.map_load_failed),

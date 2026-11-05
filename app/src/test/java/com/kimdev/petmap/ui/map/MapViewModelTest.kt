@@ -433,6 +433,37 @@ class MapViewModelTest {
         }
 
     @Test
+    fun `마커 모드에서 필터를 바꿔 0건이 되면 옛 마커를 비우고 0곳으로 알린다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(
+                testPlace("행복카페", lat = 37.50, lng = 127.00, category = PlaceCategory.ETC),
+                testPlace("행복정원", lat = 35.10, lng = 129.00, category = PlaceCategory.ETC),
+            )
+            val vm = viewModel()
+            advanceUntilIdle()
+            val received = mutableListOf<MapEvent>()
+            val job = launch { vm.events.toList(received) }
+            vm.submitSearch("행복")
+            advanceUntilIdle()
+            assertEquals(2, vm.uiState.value.searchMarkers?.count)
+
+            vm.toggleCategory(PlaceCategory.HOSPITAL) // 결과 중 동물병원은 없다
+            advanceUntilIdle()
+
+            // 필터는 동물병원인데 지도엔 카페 마커가 남아 있으면 안 된다
+            assertTrue(vm.uiState.value.clusters.isEmpty())
+            assertEquals(SearchMarkers("행복", 0, truncated = false), vm.uiState.value.searchMarkers)
+            assertFalse(vm.uiState.value.isLoading)
+            assertTrue(received.contains(MapEvent.NoResults))
+            assertEquals(0, received.count { it is MapEvent.FitPlaces && it.places.isEmpty() })
+
+            vm.toggleCategory(PlaceCategory.HOSPITAL) // 필터를 풀면 같은 검색어로 결과가 돌아온다
+            advanceUntilIdle()
+            assertEquals(2, vm.uiState.value.searchMarkers?.count)
+            job.cancel()
+        }
+
+    @Test
     fun `검색 확정 결과가 0건이면 마커 모드에 들어가지 않고 기존 마커를 유지한다`() =
         runTest(mainDispatcherRule.testDispatcher) {
             repo.dataset = listOf(testPlace("a", lat = 37.50, lng = 127.00))

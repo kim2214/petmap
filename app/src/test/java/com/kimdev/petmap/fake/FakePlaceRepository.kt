@@ -72,7 +72,11 @@ class FakePlaceRepository : PlaceRepository {
 
     override suspend fun getDataInfo(): DataInfo = DataInfo(dataDate = null, placeCount = dataset.size)
 
+    /** 설정하면 즐겨찾기 쓰기(toggle/remove/restore/memo)가 이 예외를 던진다 (디스크 부족 등 시뮬레이션) */
+    var favoriteWriteFailure: Throwable? = null
+
     override suspend fun updateFavoriteMemo(placeId: String, memo: String?) {
+        favoriteWriteFailure?.let { throw it }
         memos[placeId] = memo?.trim()?.takeIf { it.isNotEmpty() }
     }
 
@@ -223,11 +227,13 @@ class FakePlaceRepository : PlaceRepository {
     override fun observeFavoriteIds(): Flow<Set<String>> = favorites
 
     override suspend fun toggleFavorite(place: Place) {
+        favoriteWriteFailure?.let { throw it }
         favorites.value = if (place.id in favorites.value) favorites.value - place.id
         else favorites.value + place.id
     }
 
     override suspend fun removeFavorite(placeId: String): FavoriteSnapshot? {
+        favoriteWriteFailure?.let { throw it }
         if (placeId !in favorites.value) return null
         val place = dataset.find { it.id == placeId } ?: return null
         favorites.value = favorites.value - placeId
@@ -235,6 +241,7 @@ class FakePlaceRepository : PlaceRepository {
     }
 
     override suspend fun restoreFavorite(snapshot: FavoriteSnapshot) {
+        favoriteWriteFailure?.let { throw it }
         favorites.value = favorites.value + snapshot.place.id
         memos[snapshot.place.id] = snapshot.place.memo
     }

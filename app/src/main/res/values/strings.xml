@@ -97,6 +97,7 @@
     <!-- 즐겨찾기 접근성 라벨 -->
     <string name="favorite_add">즐겨찾기 추가</string>
     <string name="favorite_remove">즐겨찾기 해제</string>
+    <string name="favorite_write_failed">즐겨찾기를 저장하지 못했어요. 저장 공간을 확인해 주세요</string>
 
     <!-- 반려동물 동반 정보 -->
     <string name="pet_indoor_allowed">실내 가능</string>

@@ -83,6 +83,8 @@ data class ListUiState(
 sealed interface ListEvent {
     /** 권한은 있지만 위치를 얻지 못함(위치 서비스 꺼짐 등) */
     data object LocationUnavailable : ListEvent
+    /** 즐겨찾기 쓰기 실패(저장 공간 부족·DB I/O 오류) — 하트는 그대로, 스낵바로만 알린다 */
+    data object FavoriteWriteFailed : ListEvent
 }
 
 private data class SearchKey(
@@ -215,16 +217,21 @@ class ListViewModel @Inject constructor(
             // 한도를 꽉 채워 돌아왔다면 DB 에 더 남아 있을 수 있다(필터 후 개수가 아니라 조회 개수로 판단)
             FetchResult(visible.take(pageLimit), hasMore = fetched.size >= fetchLimit)
         }.onSuccess { result ->
+            val canLoadMore = result.hasMore && pageLimit < MAX_LIMIT
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     hasLoaded = true,
                     isLoadingMore = false,
                     places = result.places.withFavorites(favoriteIds),
-                    canLoadMore = result.hasMore && pageLimit < MAX_LIMIT,
+                    canLoadMore = canLoadMore,
                     reachedLimit = result.hasMore && pageLimit >= MAX_LIMIT,
                 )
             }
+            // 영업중 필터는 조회 후 걸러지므로 한 페이지가 덜 찰 수 있다. 화면은 "목록 개수가 바뀌어야"
+            // 다음 페이지를 요청하기 때문에, 더 가져와도 영업중 장소가 그대로면 거기서 멈춰 뒤쪽 장소가
+            // 조용히 숨는다 → 페이지가 찰 때까지(또는 상한까지) 여기서 이어서 불러온다.
+            if (key.openNowOnly && canLoadMore && result.places.size < pageLimit) loadMore()
         }.onFailure { e ->
             // 취소(조건 변경으로 이전 조회가 밀려남)는 실패가 아니다 — 삼키면 교체된 검색의
             // 로딩 상태를 죽이고 isError 를 잘못 세운다(지도 쪽과 동일 패턴).
@@ -392,7 +399,14 @@ class ListViewModel @Inject constructor(
     }
 
     fun toggleFavorite(place: Place) {
-        viewModelScope.launch { repository.toggleFavorite(place) }
+        viewModelScope.launch {
+            // DAO 쓰기 예외(SQLiteFullException 등)를 삼키지 않으면 viewModelScope 의 미처리 예외로 앱이 죽는다
+            runCatching { repository.toggleFavorite(place) }.onFailure { e ->
+                if (e is CancellationException) throw e
+                Log.w(TAG, "즐겨찾기 저장 실패", e)
+                _events.send(ListEvent.FavoriteWriteFailed)
+            }
+        }
     }
 
     /** 검색어·필터·정렬을 SavedStateHandle 에 저장(프로세스 사망 대비). */

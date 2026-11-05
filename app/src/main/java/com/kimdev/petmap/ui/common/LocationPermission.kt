@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import android.content.Context
 import android.content.pm.PackageManager
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -60,8 +61,10 @@ class LocationPermissionController internal constructor(
     }
 
     /**
-     * 화면 첫 진입 시 1회 자동 요청. 거부 후 탭 전환·회전으로 재구성돼도 다시 묻지 않는다
-     * (requestedOnce 가 rememberSaveable). 영구 거부 상태에서는 다이얼로그를 띄우지 않는다.
+     * 첫 진입 시 1회 자동 요청. "한 번 물었음"은 앱 단위(SharedPreferences)로 남겨, 거부 후 탭 전환·회전은
+     * 물론 "지도에서 보기"로 push 된 포커스 지도(별도 백스택 엔트리)나 다음 콜드 스타트에서도 다시 묻지 않는다.
+     * Android 11+ 는 두 번째 거부를 영구 거부로 보므로, 자동 요청이 두 번 뜨면 그것만으로 권한이 막힌다.
+     * 영구 거부 상태에서는 다이얼로그를 띄우지 않는다.
      */
     fun requestOnFirstEntry() {
         if (granted || requestedOnce()) return
@@ -81,8 +84,10 @@ fun rememberLocationPermission(
     onResult: (granted: Boolean) -> Unit = {},
 ): LocationPermissionController {
     val context = LocalContext.current
-    // rememberSaveable: 탭 전환·회전으로 화면이 재구성될 때마다 거부한 권한을 다시 묻지 않는다.
-    var requestedOnce by rememberSaveable { mutableStateOf(false) }
+    // 자동 요청을 이미 했는지는 앱 단위로 기억한다(SharedPreferences). rememberSaveable 만으로는 화면(백스택
+    // 엔트리)마다 초기화돼 포커스 지도·콜드 스타트에서 또 묻고, 두 번째 거부가 영구 거부가 된다.
+    val prefs = remember(context) { context.getSharedPreferences(PERMISSION_PREFS, Context.MODE_PRIVATE) }
+    var requestedOnce by rememberSaveable { mutableStateOf(prefs.getBoolean(KEY_ASKED_ONCE, false)) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     val permissions = rememberMultiplePermissionsState(
         listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
@@ -100,7 +105,10 @@ fun rememberLocationPermission(
         LocationPermissionController(
             permissions = permissions,
             requestedOnce = { requestedOnce },
-            markRequested = { requestedOnce = true },
+            markRequested = {
+                requestedOnce = true
+                prefs.edit { putBoolean(KEY_ASKED_ONCE, true) }
+            },
             showSettingsDialog = { showSettingsDialog = true },
         )
     }
@@ -130,6 +138,9 @@ fun rememberLocationSource(controller: LocationPermissionController): LocationSo
     }
     return source
 }
+
+private const val PERMISSION_PREFS = "location_permission"
+private const val KEY_ASKED_ONCE = "asked_once"
 
 private fun Context.hasAnyLocationPermission(): Boolean =
     listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION).any {

@@ -150,6 +150,8 @@ fun ListScreen(
             when (event) {
                 ListEvent.LocationUnavailable ->
                     snackbarHostState.showSnackbar(resources.getString(R.string.list_location_unavailable))
+                ListEvent.FavoriteWriteFailed ->
+                    snackbarHostState.showSnackbar(resources.getString(R.string.favorite_write_failed))
             }
         }
     }

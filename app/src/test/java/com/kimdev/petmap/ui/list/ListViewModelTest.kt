@@ -12,6 +12,8 @@ import com.kimdev.petmap.fake.FakeRecentSearchStore
 import com.kimdev.petmap.fake.testPlace
 import com.kimdev.petmap.util.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -462,6 +464,41 @@ class ListViewModelTest {
         assertTrue(vm.uiState.value.canLoadMore)
         assertFalse(vm.uiState.value.isLoadingMore)
     }
+
+    @Test
+    fun `영업중 결과가 희소하면 화면 요청 없이 페이지가 찰 때까지(또는 끝까지) 이어서 불러온다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            // 450곳 중 영업중은 1곳: 400건을 가져와도 목록은 1건 그대로라 화면은 다음 로드를 요청하지 않는다
+            repo.dataset = listOf(testPlace("open", operatingTime = "24시간")) + (1..449).map { testPlace("p$it") }
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            vm.setOpenNowOnly(true)
+            advanceUntilIdle()
+
+            assertEquals(listOf("open"), vm.uiState.value.places.map { it.id })
+            assertEquals(800, repo.lastSearchLimit) // 400 → 800 으로 이어서 조회해 끝까지 봤다
+            assertFalse(vm.uiState.value.canLoadMore)
+            assertFalse(vm.uiState.value.isLoadingMore)
+        }
+
+    @Test
+    fun `즐겨찾기 쓰기가 실패하면 크래시 대신 FavoriteWriteFailed 이벤트를 보낸다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("a"))
+            val vm = viewModel()
+            advanceUntilIdle()
+            val received = mutableListOf<ListEvent>()
+            val job = launch { vm.events.toList(received) }
+
+            repo.favoriteWriteFailure = IllegalStateException("database or disk is full")
+            vm.toggleFavorite(testPlace("a"))
+            advanceUntilIdle()
+
+            assertEquals(listOf<ListEvent>(ListEvent.FavoriteWriteFailed), received)
+            assertFalse(vm.uiState.value.places.single().isFavorite)
+            job.cancel()
+        }
 
     @Test
     fun `추가 로드가 실패하면 목록은 두고 loadMoreFailed 로 알리며 다시 시도하면 같은 페이지를 요청한다`() =

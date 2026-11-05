@@ -105,6 +105,8 @@ sealed interface MapEvent {
     data class FitRegion(val region: Region, val bounds: GeoBounds) : MapEvent
     /** 지역 선택했지만 장소가 없음 */
     data class RegionEmpty(val region: Region) : MapEvent
+    /** 즐겨찾기 쓰기 실패(저장 공간 부족·DB I/O 오류) — 하트는 그대로, 스낵바로만 알린다 */
+    data object FavoriteWriteFailed : MapEvent
 }
 
 @OptIn(FlowPreview::class)
@@ -285,7 +287,14 @@ class MapViewModel @Inject constructor(
     }
 
     fun toggleFavorite(place: Place) {
-        viewModelScope.launch { repository.toggleFavorite(place) }
+        viewModelScope.launch {
+            // DAO 쓰기 예외(SQLiteFullException 등)를 삼키지 않으면 viewModelScope 의 미처리 예외로 앱이 죽는다
+            runCatching { repository.toggleFavorite(place) }.onFailure { e ->
+                if (e is CancellationException) throw e
+                Log.w(TAG, "즐겨찾기 저장 실패", e)
+                _events.send(MapEvent.FavoriteWriteFailed)
+            }
+        }
     }
 
     fun onSearchQueryChange(q: String) {
@@ -340,18 +349,29 @@ class MapViewModel @Inject constructor(
                     limit = SEARCH_MARKERS_LIMIT + 1,
                 )
             }.onSuccess { found ->
-                // 0건이면 마커 모드에 들어가지 않는다 — 기존 마커를 지우고 "0곳 표시 중" 을 띄우는 대신
-                // 자동완성의 "검색 결과가 없어요" 안내 + NoResults 스낵바만으로 충분하다
-                if (found.isEmpty()) {
-                    _uiState.update { it.copy(isLoading = false) }
-                    _events.send(MapEvent.NoResults)
-                    return@onSuccess
-                }
                 val truncated = found.size > SEARCH_MARKERS_LIMIT
+                // 영업중 필터가 켜져 있으면 검색 결과가 있어도 지금 영업 중인 곳이 없을 수 있다
                 val shown = found.take(SEARCH_MARKERS_LIMIT).openNowFiltered()
                 if (shown.isEmpty()) {
-                    // 검색 결과는 있지만 지금 영업 중인 곳이 없음
-                    _uiState.update { it.copy(isLoading = false) }
+                    val reapplying = _uiState.value.searchMarkers != null
+                    if (reapplying) {
+                        // 마커 모드에서 필터를 바꿔 같은 검색어를 다시 뿌렸는데 0건: 옛 필터의 마커·pill 이
+                        // 남아 있으면 "필터는 동물병원인데 지도엔 카페" 가 된다 → 마커를 비우고 0곳으로 알린다
+                        places = emptyList()
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                clusters = emptyList(),
+                                canResearch = false,
+                                isAggregated = false,
+                                searchMarkers = SearchMarkers(query, 0, truncated = false),
+                            )
+                        }
+                    } else {
+                        // 최초 확정이 0건이면 마커 모드에 들어가지 않는다 — 보던 마커를 지우고 "0곳 표시 중"을
+                        // 띄우는 대신 자동완성의 "검색 결과가 없어요" 안내 + NoResults 스낵바만으로 충분하다
+                        _uiState.update { it.copy(isLoading = false) }
+                    }
                     _events.send(MapEvent.NoResults)
                     return@onSuccess
                 }

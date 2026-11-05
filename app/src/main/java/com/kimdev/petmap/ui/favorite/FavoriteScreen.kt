@@ -109,6 +109,8 @@ fun FavoriteScreen(
             when (event) {
                 FavoriteEvent.LocationUnavailable ->
                     snackbarHostState.showSnackbar(resources.getString(R.string.list_location_unavailable))
+                FavoriteEvent.FavoriteWriteFailed ->
+                    snackbarHostState.showSnackbar(resources.getString(R.string.favorite_write_failed))
             }
         }
     }

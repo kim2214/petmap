@@ -10,6 +10,9 @@ import com.kimdev.petmap.util.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import org.junit.Assert.assertNull
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -33,6 +36,23 @@ class FavoriteViewModelTest {
         location: UserLocation? = null,
         saved: SavedStateHandle = SavedStateHandle(),
     ) = FavoriteViewModel(repo, store, FakeLocationProvider(location), saved)
+
+    @Test
+    fun `즐겨찾기 삭제·복원 쓰기가 실패하면 크래시 대신 이벤트로 알리고 삭제는 null 을 돌려준다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.setFavorites(setOf("a"))
+            val vm = viewModel()
+            val received = mutableListOf<FavoriteEvent>()
+            val job = launch { vm.events.toList(received) }
+            repo.favoriteWriteFailure = IllegalStateException("database or disk is full")
+
+            assertNull(vm.removeFavorite("a")) // 실행취소 스낵바를 띄우지 않는다
+            vm.toggleFavorite(testPlace("b"))
+            advanceUntilIdle()
+
+            assertEquals(2, received.count { it == FavoriteEvent.FavoriteWriteFailed })
+            job.cancel()
+        }
 
     @Test
     fun `최근 본 장소는 최신 우선이고 사라진 장소는 빠진다`() = runTest(mainDispatcherRule.testDispatcher) {

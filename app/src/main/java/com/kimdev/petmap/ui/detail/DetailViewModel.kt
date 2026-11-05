@@ -1,5 +1,6 @@
 package com.kimdev.petmap.ui.detail
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,12 +9,16 @@ import com.kimdev.petmap.domain.model.Place
 import com.kimdev.petmap.domain.repository.PlaceRepository
 import com.kimdev.petmap.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,6 +27,12 @@ data class DetailUiState(
     val isLoading: Boolean = true,
     val place: Place? = null,
 )
+
+/** 상세 화면의 일회성 이벤트 (상태에 담고 consume 하지 않는 이유는 MapEvent 참고) */
+sealed interface DetailEvent {
+    /** 즐겨찾기·메모 쓰기 실패(저장 공간 부족·DB I/O 오류) — 화면은 그대로, 스낵바로만 알린다 */
+    data object FavoriteWriteFailed : DetailEvent
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -35,6 +46,9 @@ class DetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
+
+    private val _events = Channel<DetailEvent>(Channel.BUFFERED)
+    val events: Flow<DetailEvent> = _events.receiveAsFlow()
 
     init {
         viewModelScope.launch {
@@ -70,11 +84,29 @@ class DetailViewModel @Inject constructor(
 
     fun toggleFavorite() {
         val place = _uiState.value.place ?: return
-        viewModelScope.launch { repository.toggleFavorite(place) }
+        writeFavorite { repository.toggleFavorite(place) }
     }
 
     /** 즐겨찾기 메모 저장 (빈 문자열이면 삭제) */
     fun saveMemo(memo: String) {
-        viewModelScope.launch { repository.updateFavoriteMemo(placeId, memo) }
+        writeFavorite { repository.updateFavoriteMemo(placeId, memo) }
+    }
+
+    /**
+     * 즐겨찾기 쓰기 공용 래퍼. DAO 예외(SQLiteFullException 등)를 삼키지 않으면 viewModelScope 의
+     * 미처리 예외로 앱이 죽는다 → 로그 + [DetailEvent.FavoriteWriteFailed] 로 알리고 끝낸다.
+     */
+    private fun writeFavorite(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            runCatching { block() }.onFailure { e ->
+                if (e is CancellationException) throw e
+                Log.w(TAG, "즐겨찾기 저장 실패", e)
+                _events.send(DetailEvent.FavoriteWriteFailed)
+            }
+        }
+    }
+
+    private companion object {
+        const val TAG = "DetailViewModel"
     }
 }
