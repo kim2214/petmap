@@ -228,7 +228,7 @@ interface PlaceDao {
     suspend fun getCoordsInRegion(region: String): List<LatLngRow>
 
     /**
-     * FTS 검색. places_fts 는 Migration(2,3) 이 만든 비-엔티티 FTS4 테이블이라
+     * FTS 검색. places_fts 는 에셋에 동봉된 비-엔티티 FTS4 테이블이라
      * Room 이 컴파일타임에 스키마를 알 수 없으므로 RawQuery 로 실행한다.
      * SQL/바인딩은 [com.kimdev.petmap.data.repository.PlaceRepositoryImpl] 에서 구성한다.
      */

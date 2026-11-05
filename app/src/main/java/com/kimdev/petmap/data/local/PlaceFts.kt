@@ -1,6 +1,7 @@
 package com.kimdev.petmap.data.local
 
 import androidx.sqlite.db.SupportSQLiteDatabase
+import java.util.Locale
 
 /**
  * 이름/주소 검색용 FTS4 색인(`places_fts`) 관리.
@@ -11,8 +12,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *   예) "100세약국" → 색인 "1 0 0 세 약 국",  검색 "약국" → MATCH `"약 국"` → 매칭.
  *
  * `places_fts` 는 Room 엔티티가 아닌 비-엔티티 테이블이다(docid == places.rowid).
- * 에셋 DB(v3)에 색인이 동봉되며(tools/build_db.py 의 fts_index/build_fts 가 이 파일과 동일 로직),
- * 구버전 설치(v2)만 [MIGRATION_2_3] 이 구축한다. 검색은 PlaceDao.searchByFts(RawQuery)로 실행한다.
+ * 색인은 에셋 DB 와 원격 갱신 파일에 동봉되어 오며(tools/build_db.py 의 fts_index/build_fts), 앱은 검색어만
+ * 같은 규칙으로 변환한다. 검색은 PlaceDao.searchByFts(RawQuery)로 실행한다.
+ *
+ * **색인 글자 규칙은 build_db.py 의 `str.isalnum()` 과 같아야 한다** — 유니코드 문자(L*)·십진숫자(Nd)·
+ * 문자형 숫자(Nl, 로마숫자 Ⅱ)·기타 숫자(No, ①·½·²). Kotlin 의 isLetterOrDigit 은 Nl/No 를 빼서
+ * "만의골보리밥Ⅱ" 같은 이름에서 색인(ⅱ 포함)과 검색어(ⅱ 제외)가 어긋났다. 소문자화도 파이썬 lower() 처럼
+ * 코드포인트 단위 문자열 변환을 쓴다. 두 구현은 tools/fts_golden.json 을 공유하는 테스트로 고정한다.
  */
 object PlaceFts {
     const val TABLE = "places_fts"
@@ -22,7 +28,7 @@ object PlaceFts {
         db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS $TABLE USING fts4(name, roadAddress)")
     }
 
-    /** places 전체를 다시 색인한다(첫 실행 마이그레이션 / 원격 갱신 후). */
+    /** places 전체를 다시 색인한다. 앱 런타임에선 쓰지 않는다 — 계측 테스트 픽스처(PlaceTestData)용. */
     fun rebuild(db: SupportSQLiteDatabase) {
         db.beginTransaction()
         try {
@@ -43,15 +49,23 @@ object PlaceFts {
         }
     }
 
-    /** 색인 텍스트: 한 필드의 글자(한글/영문/숫자)를 공백으로 분리한 유니그램. */
-    fun index(field: String?): String = buildString {
-        if (field == null) return@buildString
-        for (ch in field) {
-            if (ch.isLetterOrDigit()) {
-                if (isNotEmpty()) append(' ')
-                append(ch.lowercaseChar())
-            }
+    /** 색인 텍스트: 한 필드의 글자(문자·숫자)를 공백으로 분리한 유니그램. */
+    fun index(field: String?): String =
+        field?.let { unigrams(it).joinToString(" ") }.orEmpty()
+
+    /** 색인 대상 글자를 코드포인트 단위로 소문자화해 나열한다 (보조 평면 한자도 한 글자로 센다) */
+    private fun unigrams(text: String): List<String> = buildList {
+        text.codePoints().forEach { cp ->
+            if (isIndexable(cp)) add(String(Character.toChars(cp)).lowercase(Locale.ROOT))
         }
+    }
+
+    /** 파이썬 str.isalnum() 과 같은 판정 (L*·Nd·Nl·No) */
+    private fun isIndexable(cp: Int): Boolean = Character.isLetter(cp) || when (Character.getType(cp)) {
+        Character.DECIMAL_DIGIT_NUMBER.toInt(),
+        Character.LETTER_NUMBER.toInt(),
+        Character.OTHER_NUMBER.toInt() -> true
+        else -> false
     }
 
     /**
@@ -61,7 +75,7 @@ object PlaceFts {
      */
     fun match(raw: String): String? {
         val phrases = raw.trim().split(Regex("\\s+")).mapNotNull { word ->
-            val chars = word.filter { it.isLetterOrDigit() }.map { it.lowercaseChar() }
+            val chars = unigrams(word)
             if (chars.isEmpty()) null else chars.joinToString(" ", prefix = "\"", postfix = "\"")
         }
         return if (phrases.isEmpty()) null else phrases.joinToString(" ")

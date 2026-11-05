@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -57,9 +58,13 @@ class FavoriteBackup internal constructor(private val file: File) {
                 }
             )
         }
-        // 임시 파일에 쓴 뒤 rename — 쓰는 도중 죽어도 기존 미러가 깨지지 않게 한다
+        // 임시 파일에 쓴 뒤 rename — 쓰는 도중 죽어도 기존 미러가 깨지지 않게 한다.
+        // rename 전에 fsync 한다: 안 하면 전원 차단 시 rename 만 디스크에 남고 내용은 잘린 파일이 될 수 있다.
         val tmp = File(file.parentFile, "$FILE_NAME.tmp")
-        tmp.writeText(array.toString())
+        FileOutputStream(tmp).use { out ->
+            out.write(array.toString().toByteArray(Charsets.UTF_8))
+            out.fd.sync()
+        }
         if (!tmp.renameTo(file)) {
             // 같은 볼륨의 rename 은 기존 파일을 덮지만, 실패하는 파일시스템도 있어 삭제 후 재시도.
             // 그것도 실패하면 임시 파일을 남기지 않고 예외로 알린다(기존 미러는 이미 삭제된 상태 —
@@ -72,31 +77,44 @@ class FavoriteBackup internal constructor(private val file: File) {
         }
     }
 
-    /** 미러를 읽는다. 파일 없음/손상 시 빈 목록 (복원을 조용히 건너뛴다). */
+    /**
+     * 미러를 읽는다. 파일이 없으면 빈 목록.
+     *
+     * 손상(잘린 JSON 등)이면 빈 목록을 돌려주되 원본을 [CORRUPT_NAME] 으로 옮겨 둔다. 그대로 두면 복원이
+     * 건너뛰어진 뒤 다음 즐겨찾기 변경이 미러를 현재 DB 내용(대개 0~1건)으로 덮어 원래 기록이 영영 사라진다.
+     */
     @Synchronized
-    fun read(): List<FavoriteEntity> = runCatching {
+    fun read(): List<FavoriteEntity> {
         if (!file.exists()) return emptyList()
-        val array = JSONArray(file.readText())
-        buildList {
-            for (i in 0 until array.length()) {
-                val o = array.getJSONObject(i)
-                add(
-                    FavoriteEntity(
-                        id = o.getString("id"),
-                        name = o.getString("name"),
-                        category = o.getString("category"),
-                        roadAddress = o.getString("roadAddress"),
-                        lat = o.getDouble("lat"),
-                        lng = o.getDouble("lng"),
-                        phone = if (o.has("phone")) o.getString("phone") else null,
-                        // v4 이전 미러에는 없는 필드 — 기본값으로 폴백
-                        memo = if (o.has("memo")) o.getString("memo") else null,
-                        addedAt = o.optLong("addedAt", 0L),
+        return runCatching {
+            val array = JSONArray(file.readText())
+            buildList {
+                for (i in 0 until array.length()) {
+                    val o = array.getJSONObject(i)
+                    add(
+                        FavoriteEntity(
+                            id = o.getString("id"),
+                            name = o.getString("name"),
+                            category = o.getString("category"),
+                            roadAddress = o.getString("roadAddress"),
+                            lat = o.getDouble("lat"),
+                            lng = o.getDouble("lng"),
+                            phone = if (o.has("phone")) o.getString("phone") else null,
+                            // v4 이전 미러에는 없는 필드 — 기본값으로 폴백
+                            memo = if (o.has("memo")) o.getString("memo") else null,
+                            addedAt = o.optLong("addedAt", 0L),
+                        )
                     )
-                )
+                }
             }
+        }.getOrElse { e ->
+            Log.w(TAG, "즐겨찾기 미러 손상 → $CORRUPT_NAME 로 보관", e)
+            val dst = File(file.parentFile, CORRUPT_NAME)
+            dst.delete()
+            if (!file.renameTo(dst)) file.delete()
+            emptyList()
         }
-    }.getOrDefault(emptyList())
+    }
 
     /**
      * Room 이 [dbFile] 을 지우고 에셋을 재복사하기 전에(= 파일 버전이 [currentVersion] 미만) 그 안의
@@ -184,5 +202,7 @@ class FavoriteBackup internal constructor(private val file: File) {
     private companion object {
         const val TAG = "FavoriteBackup"
         const val FILE_NAME = "favorites_backup.json"
+        /** 손상된 미러 보관 이름 (수동 복구용, 같은 files/ 라 Auto Backup 에도 실린다) */
+        const val CORRUPT_NAME = "$FILE_NAME.corrupt"
     }
 }

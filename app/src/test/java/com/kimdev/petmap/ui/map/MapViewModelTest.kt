@@ -577,6 +577,26 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `같은 줌에서의 팬은 재클러스터링하지 않고 줌이 바뀌면 다시 묶는다`() = runTest(mainDispatcherRule.testDispatcher) {
+        // 약 55m 떨어진 두 곳: 줌 18 에선 따로, 줌 16 에선 한 셀로 묶인다 (둘 다 같은 조회 반경 버킷)
+        repo.dataset = listOf(testPlace("a", lat = 37.50010, lng = 127.0001), testPlace("b", lat = 37.50060, lng = 127.0001))
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.researchHere(37.5, 127.0, 18.0)
+        advanceUntilIdle()
+        val before = vm.uiState.value.clusters
+        assertEquals(2, before.size)
+
+        vm.onCameraMove(37.5002, 127.0002, 18.0) // 같은 줌 팬 → 결과 인스턴스 그대로
+        advanceUntilIdle()
+        assertTrue(before === vm.uiState.value.clusters)
+
+        vm.onCameraMove(37.5002, 127.0002, 16.0) // 같은 버킷 안의 줌 변경 → 다시 묶는다
+        advanceUntilIdle()
+        assertEquals(1, vm.uiState.value.clusters.size)
+    }
+
+    @Test
     fun `멀리 이동하면 canResearch true, 다시 검색하면 false`() = runTest(mainDispatcherRule.testDispatcher) {
         repo.dataset = listOf(testPlace("a"))
         val vm = viewModel()

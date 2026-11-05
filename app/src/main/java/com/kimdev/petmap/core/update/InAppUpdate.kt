@@ -78,6 +78,11 @@ class InAppUpdate(private val activity: ComponentActivity) : DefaultLifecycleObs
 
     override fun onStart(owner: LifecycleOwner) {
         manager.registerListener(installListener)
+        // 리스너는 등록 이후의 "변화"만 알린다 — 백그라운드에 있는 동안 다운로드가 끝났으면 이벤트가 오지 않아
+        // 다음 onStop 에도 설치하지 못하고 콜드 스타트까지 미뤄진다. 돌아올 때마다 현재 상태를 다시 확인한다.
+        manager.appUpdateInfo.addOnSuccessListener { info ->
+            if (info.installStatus() == InstallStatus.DOWNLOADED) downloaded = true
+        }
     }
 
     override fun onStop(owner: LifecycleOwner) {

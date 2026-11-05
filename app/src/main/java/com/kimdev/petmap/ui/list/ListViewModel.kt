@@ -137,13 +137,19 @@ class ListViewModel @Inject constructor(
 
     init {
         seedAndLocate()
-        // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장
+        // 검색어/카테고리/정렬/필터 변경을 디바운스하여 재조회 + 상태 저장.
+        // 디바운스는 타이핑에만 건다 — 첫 조회와 칩·정렬 탭까지 250ms 기다리면 매번 반 박자 늦게 반응한다.
         viewModelScope.launch {
+            var lastQuery: String? = null
             _uiState
                 .map { it.searchKey() }
                 .distinctUntilChanged()
                 .onEach { persist(it) }
-                .debounce(250)
+                .debounce { key ->
+                    val typing = lastQuery != null && key.query != lastQuery
+                    lastQuery = key.query
+                    if (typing) SEARCH_DEBOUNCE_MS else 0L
+                }
                 .collect { key ->
                     // 조건이 바뀌면 페이지를 처음부터 다시 센다
                     pageLimit = PAGE_SIZE
@@ -269,8 +275,17 @@ class ListViewModel @Inject constructor(
             // (검색 플로우는 별도 launch 에서 돌아가므로 이 지연이 목록 로딩을 막지 않는다)
             if (userLocation == null) userLocation = locationProvider.currentLocation()
             _uiState.update { it.copy(hasLocation = userLocation != null) }
-            // 위치를 뒤늦게 확보했고 거리순 정렬이 켜져 있으면 거리 반영을 위해 재조회
-            if (userLocation != null && _uiState.value.sortByDistance) refreshSearch()
+            when {
+                !_uiState.value.sortByDistance -> Unit
+                // 위치를 뒤늦게 확보했고 거리순 정렬이 켜져 있으면 거리 반영을 위해 재조회
+                userLocation != null -> refreshSearch()
+                // 프로세스 재생성으로 거리순이 복원됐는데 위치를 못 얻음: 칩만 켜진 채 전국 이름순이 나오고,
+                // 0건이면 "내 주변 30km 안에 없어요" 라는 틀린 안내가 뜬다 → 거리순을 끄고 알린다
+                else -> {
+                    setSortByDistance(false)
+                    _events.send(ListEvent.LocationUnavailable)
+                }
+            }
         }
     }
 
@@ -424,6 +439,7 @@ class ListViewModel @Inject constructor(
         private const val TAG = "ListViewModel"
 
         /** 한 페이지 크기와 총 상한. 상한에 닿으면 검색어·필터로 좁히도록 안내한다. */
+        private const val SEARCH_DEBOUNCE_MS = 250L
         private const val PAGE_SIZE = 200
         private const val MAX_LIMIT = 2000
 

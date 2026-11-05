@@ -62,7 +62,7 @@ import re
 import sqlite3
 import sys
 
-ROOM_IDENTITY_HASH = "f73e8da48ecee6b464710547abbab63e"  # app/schemas/**/9.json 의 identityHash
+ROOM_IDENTITY_HASH = "f73e8da48ecee6b464710547abbab63e"  # app/schemas/**/<DB_VERSION>.json 의 identityHash (현재 10.json)
 DB_VERSION = 10  # v10: 동물병원 인허가(LOCALDATA) 보강. v9: sortKey(이름순 정렬 키) + 법인 표기 제거. v8: 시/도 정규화. v7: maxPetKg. v6: 실내/실외 nullable. 앱 PetMapDatabase.VERSION 과 동일
 
 # 앱이 읽는 meta 키 (MetaEntity.KEY_DATA_DATE)
@@ -129,7 +129,8 @@ def category_name(raw, raw_group=""):
 
 
 def fts_index(field):
-    """앱 PlaceFts.index() 와 동일: 글자(한글/영문/숫자) 유니그램을 공백으로 분리, 소문자화."""
+    """앱 PlaceFts.index() 와 동일: isalnum 글자(L*·Nd·Nl·No) 유니그램을 공백으로 분리, 소문자화.
+    규칙을 바꾸면 tools/fts_golden.json 과 두 쪽 테스트(test_build_db·PlaceFtsTest)를 함께 고친다."""
     if not field:
         return ""
     return " ".join(ch.lower() for ch in field if ch.isalnum())

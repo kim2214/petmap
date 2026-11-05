@@ -185,6 +185,10 @@ class MapViewModel @Inject constructor(
     private var places: List<Place> = emptyList()
     // 카메라 이동 시 재클러스터링 잡. 연속 이동하면 이전 계산을 취소하고 최신 것만 반영.
     private var clusterJob: Job? = null
+    // 지금 화면의 clusters 를 만든 입력(장소 목록 인스턴스, 줌). 격자는 절대 좌표·장소 평균 위도·줌으로만
+    // 정해져 카메라 중심과 무관하다 → 같은 줌에서의 팬(Follow 모드의 GPS 지터 포함)은 결과가 같아 생략한다.
+    private var clusteredPlaces: List<Place>? = null
+    private var clusteredZoom = Double.NaN
     // 데이터 조회 잡. 취소하지 않으면 먼저 시작한 조회가 늦게 끝나 오래된 결과가 최신을 덮어쓴다.
     private var fetchJob: Job? = null
     // 검색 확정(마커 모드 진입/갱신) 잡. fetchJob 과 별도로 들어야 clearSearch 가 "진행 중인 검색"만
@@ -381,6 +385,8 @@ class MapViewModel @Inject constructor(
                 }
                 places = shown
                 val clusters = withContext(defaultDispatcher) { clusterPlaces(shown, lastZoom) }
+                clusteredPlaces = shown
+                clusteredZoom = lastZoom
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -481,9 +487,15 @@ class MapViewModel @Inject constructor(
         }
         // 클러스터링(최대 수백 개 좌표 연산)은 백그라운드에서 수행해 지도 제스처 중 메인 스레드 부담을 줄인다.
         val snapshot = places
+        if (snapshot === clusteredPlaces && zoom == clusteredZoom) {
+            if (_uiState.value.canResearch != stale) _uiState.update { it.copy(canResearch = stale) }
+            return
+        }
         clusterJob?.cancel()
         clusterJob = viewModelScope.launch {
             val clusters = withContext(defaultDispatcher) { clusterPlaces(snapshot, zoom) }
+            clusteredPlaces = snapshot
+            clusteredZoom = zoom
             _uiState.update { it.copy(clusters = clusters, canResearch = stale) }
         }
     }
@@ -635,6 +647,8 @@ class MapViewModel @Inject constructor(
             val shown = loaded.openNowFiltered()
             places = shown
             val clusters = withContext(defaultDispatcher) { clusterPlaces(shown, lastZoom) }
+            clusteredPlaces = shown
+            clusteredZoom = lastZoom
             _uiState.update {
                 it.copy(isLoading = false, clusters = clusters, canResearch = false, isAggregated = false)
             }

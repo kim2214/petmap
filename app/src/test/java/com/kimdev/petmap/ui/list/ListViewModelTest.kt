@@ -14,7 +14,9 @@ import com.kimdev.petmap.util.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -110,8 +112,9 @@ class ListViewModelTest {
         vm.setOpenNowOnly(true)
         advanceUntilIdle()
 
-        // 같은 SavedStateHandle 로 재생성(프로세스 사망 후 복원 시나리오)
-        val restored = viewModel(savedState = saved)
+        // 같은 SavedStateHandle 로 재생성(프로세스 사망 후 복원 시나리오).
+        // 위치가 있어야 거리순이 유지된다 (위치를 못 얻으면 끄는 동작은 별도 테스트)
+        val restored = viewModel(location = UserLocation(37.5, 127.0), savedState = saved)
         advanceUntilIdle()
         val s = restored.uiState.value
         assertEquals("카페", s.query)
@@ -203,6 +206,39 @@ class ListViewModelTest {
 
         assertEquals(0, repo.searchNearbyCount)
         assertTrue(repo.searchCount >= 1)
+    }
+
+    @Test
+    fun `복원된 거리순인데 위치를 못 얻으면 거리순을 끄고 알린다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("a"))
+        val saved = SavedStateHandle(mapOf("list_sort_by_distance" to true))
+        val vm = viewModel(location = null, savedState = saved)
+        val received = mutableListOf<ListEvent>()
+        val job = launch { vm.events.toList(received) }
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.sortByDistance)
+        assertEquals(listOf<ListEvent>(ListEvent.LocationUnavailable), received)
+        assertEquals(listOf("a"), vm.uiState.value.places.map { it.id })
+        job.cancel()
+    }
+
+    @Test
+    fun `첫 조회와 칩 탭은 디바운스 없이 바로, 타이핑만 기다린다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.dataset = listOf(testPlace("카페", category = PlaceCategory.CAFE))
+        val vm = viewModel()
+        runCurrent()
+        assertEquals(1, repo.searchCount) // 첫 조회 즉시
+
+        vm.toggleCategory(PlaceCategory.CAFE)
+        runCurrent()
+        assertEquals(2, repo.searchCount) // 칩 탭 즉시
+
+        vm.onQueryChange("카")
+        runCurrent()
+        assertEquals(2, repo.searchCount) // 타이핑은 대기
+        advanceTimeBy(300)
+        assertEquals(3, repo.searchCount)
     }
 
     @Test

@@ -229,6 +229,13 @@ class OpeningHoursTest {
         assertEquals(false, OpeningHours.isOpenNow("매일 18:00~02:00", "매주 토요일", at(30, 1)))  // 일 01시 = 토(휴무) 밤
     }
 
+    @Test fun `어제 요일에 휴진 표기가 있으면 어젯밤 영업의 연장으로 보지 않는다`() {
+        val ot = "월~토 18:00~02:00, 금 휴진"
+        assertEquals(false, OpeningHours.isOpenNow(ot, null, at(29, 1)))   // 토 01시 = 금(휴진) 밤
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(28, 1)))    // 금 01시 = 목요일 영업의 연장
+        assertEquals(true, OpeningHours.isOpenNow(ot, null, at(29, 20)))   // 토 20시
+    }
+
     @Test fun `24시 넘김 표기 25시 26시`() {
         assertEquals(true, OpeningHours.isOpenNow("매일 22:00~25:00", null, at(24, 23)))
         assertEquals(true, OpeningHours.isOpenNow("매일 22:00~25:00", null, at(25, 0, 30)))

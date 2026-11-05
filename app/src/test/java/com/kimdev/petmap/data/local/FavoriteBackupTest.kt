@@ -67,6 +67,19 @@ class FavoriteBackupTest {
     }
 
     @Test
+    fun `손상된 미러는 corrupt 로 옮겨 두고 다음 기록이 원본을 덮지 않는다`() {
+        file.writeText("[{\"id\":\"a\",\"name\":\"잘린") // 전원 차단으로 잘린 파일
+        assertTrue(backup.read().isEmpty())
+
+        val corrupt = File(dir, "favorites_backup.json.corrupt")
+        assertTrue(corrupt.exists())
+        assertFalse(file.exists())
+        backup.write(listOf(entity("b")))
+        assertEquals("[{\"id\":\"a\",\"name\":\"잘린", corrupt.readText())
+        assertEquals(listOf("b"), backup.read().map { it.id })
+    }
+
+    @Test
     fun `동시에 여러 스레드가 써도 미러는 살아 있고 어느 한 스냅샷과 일치한다`() {
         // 수정 전: 임시 파일 이름이 고정이라 rename 이 서로 어긋나 file.delete() 뒤 미러가 사라지거나
         // 다른 스레드가 쓰는 중인 임시 파일을 옮겨 절반짜리 JSON 이 남을 수 있었다.

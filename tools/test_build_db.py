@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """build_db.py 의 순수 함수 테스트: python3 -m unittest tools/test_build_db.py"""
+import json
 import os
 import sys
 import unittest
@@ -129,6 +130,19 @@ class SameBuildingDupTest(unittest.TestCase):
         self.assertFalse(b.same_building_dup(b.core_name("아이러브펫신도림"), b.core_name("신도림동물병원")))
         self.assertTrue(b.pharmacy_alias_dup("부평 동물약국"))
         self.assertFalse(b.pharmacy_alias_dup("새정성약국"))
+
+
+
+class FtsGoldenTest(unittest.TestCase):
+    """앱 PlaceFtsTest 와 같은 골든(tools/fts_golden.json)을 공유한다 — 두 구현이 갈리면 둘 중 하나가 실패한다."""
+
+    def test_matches_shared_golden(self):
+        path = os.path.join(os.path.dirname(__file__), "fts_golden.json")
+        with open(path, encoding="utf-8") as f:
+            cases = json.load(f)["cases"]
+        self.assertGreater(len(cases), 5)
+        for c in cases:
+            self.assertEqual(c["index"], b.fts_index(c["input"]), c["note"])
 
 
 if __name__ == "__main__":

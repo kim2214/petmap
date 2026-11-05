@@ -81,7 +81,6 @@
     <string name="filter_my_pet_format">내 아이(%1$skg) 가능</string>
     <string name="pet_weight_title">내 반려견 체중</string>
     <string name="pet_weight_desc">등록하면 "내 아이 가능" 필터로 체중 제한에 맞는 곳만 볼 수 있어요. 기기에만 저장돼요.</string>
-    <string name="pet_weight_unset">미등록</string>
     <string name="pet_weight_value_format">%1$skg</string>
     <string name="pet_weight_hint">예: 5.5</string>
     <string name="pet_weight_unit">kg</string>

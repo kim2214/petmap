@@ -179,8 +179,10 @@ object OpeningHours {
 
         // 어젯밤 시작해 자정을 넘긴 영업("금 18:00~02:00" 의 토요일 새벽)은 어제 요일·휴무 기준으로 본다.
         // 오늘이 휴무여도 어젯밤 영업의 연장이면 영업중이다.
-        if (rules.none { it.closesOn(date.minusDays(1)) }) {
-            val spill = segments.filter { segmentAppliesToDay(it.raw, yesterday) }
+        // 어제 요일에 "금 휴진" 같은 휴무 표기가 붙어 있으면 어젯밤 영업 자체가 없었다(오늘 판정과 같은 기준).
+        val yesterdays = segments.filter { segmentAppliesToDay(it.raw, yesterday) }
+        if (rules.none { it.closesOn(date.minusDays(1)) } && yesterdays.none { it.isClosedMarker }) {
+            val spill = yesterdays
                 .flatMap { it.openRanges }
                 .any { (open, close) -> nowMin < spillMinutes(open, close) }
             if (spill) return true

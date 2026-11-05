@@ -31,8 +31,8 @@ import kotlinx.coroutines.flow.map
 @Composable
 fun PetMapNavHost(
     navController: NavHostController,
-    tabReselects: Flow<String> = emptyFlow(),
     modifier: Modifier = Modifier,
+    tabReselects: Flow<String> = emptyFlow(),
 ) {
     NavHost(
         navController = navController,

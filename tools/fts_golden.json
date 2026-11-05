@@ -1,0 +1,60 @@
+{
+  "_comment": "FTS 유니그램 색인 골든. tools/build_db.py fts_index 와 앱 PlaceFts.index 가 모두 이 기대값을 만족해야 한다 (test_build_db.FtsGoldenTest, PlaceFtsTest). 규칙을 바꾸면 기대값을 다시 생성한다.",
+  "cases": [
+    {
+      "input": "100세약국",
+      "index": "1 0 0 세 약 국",
+      "note": "숫자+한글"
+    },
+    {
+      "input": "CU 편의점!",
+      "index": "c u 편 의 점",
+      "note": "영문 대문자·구두점·공백"
+    },
+    {
+      "input": "만의골보리밥Ⅱ",
+      "index": "만 의 골 보 리 밥 ⅱ",
+      "note": "로마숫자(Nl) — isLetterOrDigit 과 갈리던 글자"
+    },
+    {
+      "input": "①번 출구",
+      "index": "① 번 출 구",
+      "note": "원문자(No)"
+    },
+    {
+      "input": "½ 가격 m²",
+      "index": "½ 가 격 m ²",
+      "note": "분수·위첨자(No)"
+    },
+    {
+      "input": "Ｃａｆｅ 전각",
+      "index": "ｃ ａ ｆ ｅ 전 각",
+      "note": "전각 영문"
+    },
+    {
+      "input": "스타-벅스 (강남)",
+      "index": "스 타 벅 스 강 남",
+      "note": "하이픈·괄호"
+    },
+    {
+      "input": "🐶 멍멍카페",
+      "index": "멍 멍 카 페",
+      "note": "이모지는 제외"
+    },
+    {
+      "input": "𠀀한자",
+      "index": "𠀀 한 자",
+      "note": "보조 평면 한자(서로게이트 쌍)"
+    },
+    {
+      "input": "İstanbul",
+      "index": "i̇ s t a n b u l",
+      "note": "소문자화가 두 글자가 되는 문자"
+    },
+    {
+      "input": "",
+      "index": "",
+      "note": "빈 문자열"
+    }
+  ]
+}
