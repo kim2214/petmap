@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -219,14 +220,17 @@ class MapViewModel @Inject constructor(
             _uiState.map { it.searchQuery }
                 .distinctUntilChanged()
                 .debounce(250)
-                .collect { q ->
+                // collectLatest: 조회 중 검색어가 바뀌면 이전 조회를 취소한다 — 순차 collect 는 끝난 조회 결과를
+                // 검색어와 무관하게 저장해, ✕ 로 비우거나 결과를 고른 직후 옛 목록이 뒤늦게 다시 떴다.
+                .collectLatest { q ->
                     // 검색 실패로 collector 가 취소되면 자동완성이 영구 중단되므로 예외를 흡수한다.
                     // 확정된 검색어(마커로 표시 중)와 같으면 자동완성 목록을 다시 띄우지 않는다.
                     val results = if (q.isBlank() || q.trim() == _uiState.value.searchMarkers?.query) emptyList()
                     else runCatching { repository.search(q.trim(), limit = 8) }
                         .onFailure { Log.w(TAG, "search failed: ${it.message}") }
                         .getOrDefault(emptyList())
-                    _uiState.update { it.copy(searchResults = results) }
+                    // 취소 지점 없이 끝난 조회라도 그 사이 검색어가 바뀌었으면(디바운스 전) 버린다
+                    _uiState.update { if (it.searchQuery.trim() == q.trim()) it.copy(searchResults = results) else it }
                 }
         }
         // 최근 검색어 관찰

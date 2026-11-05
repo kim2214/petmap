@@ -60,6 +60,7 @@ import com.kimdev.petmap.ui.onboarding.OnboardingPrefs
 import com.kimdev.petmap.ui.onboarding.OnboardingScreen
 import javax.inject.Inject
 import com.kimdev.petmap.ui.navigation.PetMapNavHost
+import com.kimdev.petmap.ui.navigation.Routes
 import com.kimdev.petmap.ui.navigation.TopLevelDestination
 import com.kimdev.petmap.ui.theme.PetMapTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -163,10 +164,19 @@ private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivit
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
-    // 앱 실행 중 딥링크(https://kim2214.github.io/petmap/place?id=… 또는 petmap://place/{id}) 수신 → 상세로 이동.
+    // 앱 실행 중 딥링크(https://kim2214.github.io/petmap/place?id=… 또는 petmap://place/{id}) 수신 → 상세로 push.
     // 콜드 스타트 딥링크는 NavHost 가 Activity 인텐트에서 자동 처리한다.
+    // handleDeepLink 를 쓰지 않는다: 브라우저·메신저가 붙이는 FLAG_ACTIVITY_NEW_TASK 를 보면 CLEAR_TASK 로
+    // Activity 를 재시작해 검색어·카메라·ViewModel 이 전부 사라지고, 아니어도 백스택을 지도→상세 합성 스택으로
+    // 바꿔 보던 화면으로 돌아갈 수 없었다. 직접 navigate 하면 뒤로가기로 원래 화면에 복귀한다.
     DisposableEffect(navController) {
-        val listener = Consumer<Intent> { intent -> navController.handleDeepLink(intent) }
+        val listener = Consumer<Intent> { intent ->
+            val placeId = intent.data?.toString()?.let(Routes::placeIdFromDeepLink) ?: return@Consumer
+            val current = navController.currentBackStackEntry
+            val alreadyOpen = current?.destination?.route == Routes.DETAIL_PATTERN &&
+                current.arguments?.getString(Routes.DETAIL_ARG_ID) == placeId
+            if (!alreadyOpen) navController.navigate(Routes.detail(placeId)) { launchSingleTop = true }
+        }
         activity.addOnNewIntentListener(listener)
         onDispose { activity.removeOnNewIntentListener(listener) }
     }

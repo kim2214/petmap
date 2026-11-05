@@ -65,8 +65,13 @@ class FakePlaceRepository : PlaceRepository {
     /** 설정하면 ensureSeeded 가 이 예외를 던진다 (에셋 DB 준비 실패 시뮬레이션) */
     var seedFailure: Throwable? = null
 
+    /** 설정하면 ensureSeeded 가 완료될 때까지 기다린다 (시딩 중 동작 검증) */
+    var seedGate: CompletableDeferred<Unit>? = null
+    var lastBoundsCenter: Pair<Double, Double>? = null
+
     override suspend fun ensureSeeded() {
         ensureSeededCount++
+        seedGate?.await()
         seedFailure?.let { throw it }
     }
 
@@ -92,6 +97,7 @@ class FakePlaceRepository : PlaceRepository {
         lastCategories = categories
         lastPetFilters = petFilters
         lastBoundsLimit = limit
+        lastBoundsCenter = centerLat to centerLng
         return dataset.filterBy("", categories, petFilters, myPetKg).take(limit)
     }
 

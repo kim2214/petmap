@@ -300,8 +300,10 @@ fun MapScreen(
 
     // 카메라가 움직일 때마다 로컬 재클러스터링 + 데이터가 오래됐는지 판단("다시 검색" 노출).
     // 데이터 재조회는 자동으로 하지 않고 사용자가 버튼을 눌렀을 때만 수행한다(통신·DB 부담 ↓).
-    LaunchedEffect(state.isSeeding) {
-        if (state.isSeeding) return@LaunchedEffect
+    // 시딩 중에도 보고한다: 프로세스 재생성 시 카메라는 Saver 로 복원되지만 ViewModel 은 새로 만들어져
+    // 기본 위치(서울)로 첫 조회를 하고, 같은 줌 버킷이면 재조회도 없어 빈 지도 + "다시 검색"만 남았다.
+    // ViewModel 은 시딩 중엔 위치만 기억했다가 시딩이 끝나면 그 위치로 첫 조회를 한다.
+    LaunchedEffect(Unit) {
         snapshotFlow { cameraPositionState.position }
             .debounce(180)
             .collect { pos ->

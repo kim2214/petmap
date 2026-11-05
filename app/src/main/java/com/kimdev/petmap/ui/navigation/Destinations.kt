@@ -58,6 +58,29 @@ object Routes {
 
     /** 공유 텍스트에 넣는 상세 링크 (HTTPS App Link). */
     fun detailDeepLink(placeId: String) = "https://$APP_LINK_HOST$APP_LINK_PATH?id=${Uri.encode(placeId)}"
+
+    /**
+     * 상세 딥링크(HTTPS App Link 또는 구버전 petmap:// 스킴)에서 장소 id 를 꺼낸다. 우리 링크가 아니면 null.
+     *
+     * 앱 실행 중 수신한 인텐트를 NavController.handleDeepLink 에 넘기지 않고 직접 상세로 navigate 하기 위한
+     * 파서다 — handleDeepLink 는 외부 앱이 붙이는 FLAG_ACTIVITY_NEW_TASK 를 보면 CLEAR_TASK 로 Activity 를
+     * 통째로 재시작하고, 아니어도 백스택을 합성 스택(지도→상세)으로 갈아치워 보던 화면으로 돌아갈 수 없었다.
+     * android.net.Uri 가 아닌 java.net.URI 를 써서 JVM 단위 테스트로 고정한다.
+     */
+    fun placeIdFromDeepLink(url: String): String? {
+        val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return null
+        return when {
+            uri.scheme.equals("https", ignoreCase = true) && uri.host.equals(APP_LINK_HOST, ignoreCase = true) &&
+                uri.path == APP_LINK_PATH ->
+                uri.rawQuery?.split('&')?.firstNotNullOfOrNull { pair ->
+                    val (k, v) = pair.split('=', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+                    if (k == "id") runCatching { java.net.URLDecoder.decode(v, "UTF-8") }.getOrNull() else null
+                }
+            uri.scheme.equals("petmap", ignoreCase = true) && uri.host == "place" ->
+                uri.path?.removePrefix("/")
+            else -> null
+        }?.takeIf { it.isNotBlank() }
+    }
 }
 
 /** 하단 탭 항목. 컬러 일러스트 아이콘(브랜드 커스텀)을 사용. */

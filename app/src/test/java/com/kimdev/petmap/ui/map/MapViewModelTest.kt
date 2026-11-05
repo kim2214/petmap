@@ -17,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -216,6 +217,44 @@ class MapViewModelTest {
 
         assertEquals(listOf("cafe1"), vm.uiState.value.searchResults.map { it.id })
     }
+
+    @Test
+    fun `시딩 중에 보고된 카메라 위치로 첫 조회를 한다 (프로세스 재생성 시 복원 카메라)`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("busan", lat = 35.10, lng = 129.00))
+            val gate = CompletableDeferred<Unit>()
+            repo.seedGate = gate
+            val vm = viewModel()
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isSeeding)
+
+            vm.onCameraMove(35.10, 129.00, 16.0) // 화면이 복원된 카메라를 시딩 중에 보고
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(35.10 to 129.00, repo.lastBoundsCenter)
+            assertEquals(1, vm.uiState.value.clusters.sumOf { it.count })
+        }
+
+    @Test
+    fun `자동완성 조회 중에 검색어를 비우면 늦게 끝난 결과를 버린다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("카페"))
+            val vm = viewModel()
+            advanceUntilIdle()
+            val gate = CompletableDeferred<Unit>()
+            repo.searchGate = gate
+
+            vm.onSearchQueryChange("카페")
+            advanceTimeBy(300) // 디바운스 통과 → 조회가 gate 에서 대기
+            vm.clearSearch()
+            gate.complete(Unit)
+            advanceTimeBy(10) // 빈 검색어의 디바운스(250ms)가 닿기 전에 옛 조회가 끝난다
+
+            assertTrue(vm.uiState.value.searchResults.isEmpty())
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.searchResults.isEmpty())
+        }
 
     @Test
     fun `검색어를 비우면 결과도 비워진다`() = runTest(mainDispatcherRule.testDispatcher) {

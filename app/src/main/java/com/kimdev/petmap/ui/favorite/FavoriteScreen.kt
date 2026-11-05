@@ -32,10 +32,11 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxDefaults
+import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -325,7 +326,10 @@ private fun RecentContent(
 
 /**
  * 양방향으로 밀어 지우는 행. 밀기는 보조 동작이라 스크린리더용 동작("최근 본 목록에서 지우기")도 단다.
- * 지운 행은 목록에서 빠지며 컴포지션을 떠나므로 상태를 되돌릴 필요가 없고, 실행취소로 돌아오면 새 상태로 그려진다.
+ *
+ * 상태는 saveable 이 아닌 [remember] 로 만든다. rememberSwipeToDismissBoxState 는 rememberSaveable 이고
+ * LazyColumn 은 컴포지션을 떠난 키의 저장 상태를 지우지 않아, 실행취소로 같은 id 의 행이 돌아오면
+ * "이미 밀린" 값으로 복원돼 onDismiss 가 다시 불리며 곧바로 또 지워졌다.
  */
 @Composable
 private fun SwipeToRemove(
@@ -333,7 +337,8 @@ private fun SwipeToRemove(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val state = rememberSwipeToDismissBoxState()
+    val positionalThreshold = SwipeToDismissBoxDefaults.positionalThreshold
+    val state = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, positionalThreshold) }
     val removeLabel = stringResource(R.string.recent_remove_action)
     SwipeToDismissBox(
         state = state,
