@@ -74,7 +74,13 @@ class PlaceDataUpdaterImpl @Inject constructor(
     override suspend fun update(): DataUpdateResult = mutex.withLock {
         val workDir = File(context.cacheDir, WORK_DIR)
         try {
-            runInterruptible(ioDispatcher) { runUpdate(workDir) }
+            runInterruptible(ioDispatcher) { runUpdate(workDir) }.also { result ->
+                // 새 데이터에서 id 가 바뀐 장소의 즐겨찾기를 다시 잇는다(교체 자체는 끝났으니 실패해도 갱신은 성공)
+                if (result is DataUpdateResult.Updated) {
+                    runCatching { placeRepository.relinkOrphanFavorites() }
+                        .onFailure { Log.w(TAG, "갱신 후 즐겨찾기 재연결 실패", it) }
+                }
+            }
         } catch (e: Exception) {
             currentCoroutineContext().ensureActive() // 취소는 실패로 바꾸지 않고 그대로 전파한다
             Log.w(TAG, "데이터 갱신 실패", e)

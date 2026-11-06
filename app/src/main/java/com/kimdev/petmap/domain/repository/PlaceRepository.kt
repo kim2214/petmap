@@ -118,6 +118,10 @@ interface PlaceRepository {
      */
     suspend fun getRegionBounds(region: Region): GeoBounds?
 
+    /**
+     * 장소 하나. 옛 공유 링크의 id(예전 데이터 갱신으로 바뀐 id)면 같은 장소를 지금 id 로 돌려줄 수 있다 —
+     * 즐겨찾기·최근 본 장소는 요청한 id 가 아니라 돌려받은 장소의 id 로 맞춘다.
+     */
     suspend fun getPlace(id: String): Place?
 
     /** 여러 장소를 [ids] 순서 그대로 (없는 ID 는 빠진다 — 데이터 갱신으로 사라진 최근 본 장소 등) */

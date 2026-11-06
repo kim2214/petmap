@@ -6,11 +6,13 @@ import androidx.sqlite.db.SupportSQLiteQuery
 import com.kimdev.petmap.core.common.IoDispatcher
 import com.kimdev.petmap.data.local.FavoriteBackup
 import com.kimdev.petmap.data.local.PlaceFts
+import com.kimdev.petmap.data.local.SamePlaceMatcher
 import com.kimdev.petmap.data.local.dao.FavoriteDao
 import com.kimdev.petmap.data.local.dao.MetaDao
 import com.kimdev.petmap.data.local.dao.OPEN_24H_SQL
 import com.kimdev.petmap.data.local.dao.PlaceDao
 import com.kimdev.petmap.data.local.entity.MetaEntity
+import com.kimdev.petmap.data.local.entity.PlaceEntity
 import com.kimdev.petmap.data.mapper.toDomain
 import com.kimdev.petmap.data.mapper.toFavoriteEntity
 import com.kimdev.petmap.domain.model.DataInfo
@@ -74,6 +76,58 @@ class PlaceRepositoryImpl @Inject constructor(
         placeDao.count()
         runCatching { restoreFavoritesIfNeeded() }
             .onFailure { Log.w(TAG, "즐겨찾기 미러 복원 실패", it) }
+        runCatching { relinkOrphanFavorites() }
+            .onFailure { Log.w(TAG, "끊긴 즐겨찾기 재연결 실패", it) }
+    }
+
+    /**
+     * 장소 데이터에 없는 즐겨찾기를 같은 장소(정규화 이름·150m — [SamePlaceMatcher])의 지금 id 로 다시 잇는다.
+     * 예전 데이터 갱신(v9 법인 표기 정제 등)으로 id 가 바뀌어 "데이터에서 빠진 장소" 스냅샷으로 떨어진 즐겨찾기를
+     * 되살린다. 메모·추가 시각은 그대로, 표시 정보는 지금 장소 것으로. 이미 새 id 로도 담겨 있으면 옛 항목을 합친다
+     * (메모는 비어 있는 쪽을 채운다). 앱 시작(ensureSeeded)과 원격 데이터 교체 뒤에 부른다. 끊긴 게 없으면 아무 것도
+     * 쓰지 않는다(미러 기록 없음). @return 다시 이은 개수
+     */
+    suspend fun relinkOrphanFavorites(): Int {
+        // 이을 곳부터 찾는다 — 진짜 폐업한 즐겨찾기만 남아 있으면 앱을 켤 때마다 미러를 다시 쓰지 않게
+        val matches = withContext(ioDispatcher) {
+            favoriteDao.getOrphans().mapNotNull { orphan ->
+                findSamePlace(orphan.name, orphan.lat, orphan.lng)?.let { orphan to it }
+            }
+        }
+        if (matches.isEmpty()) return 0
+        return writeFavorites {
+            withContext(ioDispatcher) {
+                val favorites = favoriteDao.getAll().associateBy { it.id }.toMutableMap()
+                var relinked = 0
+                for ((orphan, match) in matches) {
+                    if (orphan.id !in favorites) continue // 그 사이 지워졌다
+                    val existing = favorites[match.id]
+                    if (existing != null) {
+                        if (existing.memo == null && orphan.memo != null) favoriteDao.updateMemo(match.id, orphan.memo)
+                        favoriteDao.deleteById(orphan.id)
+                    } else {
+                        val moved = orphan.copy(
+                            id = match.id, name = match.name, category = match.category,
+                            roadAddress = match.roadAddress, lat = match.lat, lng = match.lng, phone = match.phone,
+                        )
+                        favoriteDao.replace(orphan.id, moved)
+                        favorites[match.id] = moved
+                    }
+                    favorites.remove(orphan.id)
+                    relinked++
+                }
+                if (relinked > 0) Log.i(TAG, "끊긴 즐겨찾기 ${relinked}건을 지금 장소로 다시 연결")
+                relinked
+            }
+        }
+    }
+
+    /** 이름·좌표로 지금 데이터의 같은 장소를 찾는다 (정규화 이름 같고 150m 안, 가장 가까운 곳) */
+    private suspend fun findSamePlace(name: String, lat: Double, lng: Double): PlaceEntity? {
+        val dLat = SamePlaceMatcher.MAX_METERS / 111_000.0
+        val dLng = SamePlaceMatcher.MAX_METERS / (111_000.0 * max(0.1, cos(Math.toRadians(lat))))
+        val candidates = placeDao.getInBox(lat - dLat, lat + dLat, lng - dLng, lng + dLng)
+        return SamePlaceMatcher.pick(name, lat, lng, candidates, { it.name }, { it.lat }, { it.lng })
     }
 
     override suspend fun getDataInfo(): DataInfo = withContext(ioDispatcher) {
@@ -444,8 +498,16 @@ class PlaceRepositoryImpl @Inject constructor(
      * 장소 데이터에 없으면 즐겨찾기 스냅샷으로 폴백한다 — 폐업 정리·원격 갱신으로 빠진 즐겨찾기를 눌렀을 때
      * "찾을 수 없음"으로 막히지 않고, 안내([Place.isOutdated])와 함께 저장된 정보·메모·하트 해제를 쓸 수 있게.
      */
+    /**
+     * 없으면 즐겨찾기 스냅샷, 그것도 없으면 옛 id(`이름_위도_경도`)가 가리키던 같은 장소를 지금 id 로 돌려준다 —
+     * 예전 데이터 갱신으로 id 가 바뀌기 전에 공유된 링크가 계속 열리게 한다. 돌려준 장소의 id 는 [id] 와 다를 수 있다.
+     */
     override suspend fun getPlace(id: String): Place? =
-        placeDao.getById(id)?.toDomain() ?: favoriteDao.getById(id)?.toDomain()
+        placeDao.getById(id)?.toDomain()
+            ?: favoriteDao.getById(id)?.toDomain()
+            ?: SamePlaceMatcher.parseLegacyId(id)
+                ?.let { (name, lat, lng) -> findSamePlace(name, lat, lng) }
+                ?.toDomain()
 
     override suspend fun getPlaces(ids: List<String>): List<Place> {
         if (ids.isEmpty()) return emptyList()

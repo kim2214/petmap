@@ -62,7 +62,11 @@ class DetailViewModel @Inject constructor(
                     runCatching { repository.getPlace(placeId) }.getOrNull()
                 },
                 repository.observeFavorites(),
-            ) { place, favorites -> place to favorites.find { it.id == placeId } }
+            ) { place, favorites ->
+                // 옛 공유 링크는 지금 id 가 다른 같은 장소로 열린다 → 하트·메모는 실제 장소 id 로 맞춘다
+                val id = place?.id ?: placeId
+                place to favorites.find { it.id == id }
+            }
                 .collect { (loaded, favorite) ->
                     // 보고 있는 중에 갱신으로 장소가 빠지면(즐겨찾기도 아니면) 화면을 비우지 않고 이전 정보를 둔다
                     val base = loaded ?: _uiState.value.place
@@ -76,7 +80,7 @@ class DetailViewModel @Inject constructor(
                         opened = true
                         // 실제로 열린 장소만 "최근 본"에 남긴다(없는 ID 딥링크 등은 제외). 데이터에서 빠져 즐겨찾기
                         // 스냅샷으로만 열린 장소도 제외 — 최근 본 목록(places 조회)엔 안 보이면서 자리만 차지한다.
-                        if (!loaded.isOutdated) recentPlaceStore.add(placeId)
+                        if (!loaded.isOutdated) recentPlaceStore.add(loaded.id)
                     }
                 }
         }
@@ -89,7 +93,8 @@ class DetailViewModel @Inject constructor(
 
     /** 즐겨찾기 메모 저장 (빈 문자열이면 삭제) */
     fun saveMemo(memo: String) {
-        writeFavorite { repository.updateFavoriteMemo(placeId, memo) }
+        val id = _uiState.value.place?.id ?: placeId // 옛 링크로 열렸으면 지금 id
+        writeFavorite { repository.updateFavoriteMemo(id, memo) }
     }
 
     /**

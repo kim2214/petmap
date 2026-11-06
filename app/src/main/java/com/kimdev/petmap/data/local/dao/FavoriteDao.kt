@@ -35,6 +35,17 @@ interface FavoriteDao {
     @Query("SELECT COUNT(*) FROM favorites")
     suspend fun count(): Int
 
+    /** 지금 장소 데이터에 없는 즐겨찾기 (데이터에서 빠졌거나, 예전 데이터 갱신으로 id 가 바뀐 곳) */
+    @Query("SELECT f.* FROM favorites f LEFT JOIN places p ON p.id = f.id WHERE p.id IS NULL")
+    suspend fun getOrphans(): List<FavoriteEntity>
+
+    /** 즐겨찾기 하나의 id 를 바꾼다 (메모·추가 시각 등은 [replacement] 가 들고 온다) */
+    @Transaction
+    suspend fun replace(oldId: String, replacement: FavoriteEntity) {
+        deleteById(oldId)
+        insert(replacement)
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<FavoriteEntity>)
 

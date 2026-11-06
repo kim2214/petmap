@@ -260,4 +260,73 @@ class PlaceRepositoryImplTest {
         assertEquals(listOf("p3", "p1"), repo.getPlaces(listOf("p3", "없는id", "p1")).map { it.id })
         assertEquals(emptyList<String>(), repo.getPlaces(emptyList()).map { it.id })
     }
+
+    // ── 끊긴 id 복구 폴백 (예전 데이터 갱신으로 id 가 바뀐 공유 링크·즐겨찾기) ──
+
+    @Test
+    fun getPlace_legacyId_resolvesToSamePlaceNearby() = runBlocking {
+        db.insertPlace("행복카페_37.50005_127.0", name = "행복카페", lat = 37.50005, lng = 127.0)   // 약 6m
+        db.insertPlace("행복카페_37.501_127.0", name = "행복카페", lat = 37.501, lng = 127.0)       // 약 111m
+        db.insertPlace("불행카페_37.5_127.0", name = "불행카페", lat = 37.5, lng = 127.0)
+
+        // 법인 표기 정제 전(v8) 링크: 이름이 달라도 정규화 이름이 같고 가장 가까운 곳으로 열린다
+        assertEquals("행복카페_37.50005_127.0", repo.getPlace("(주)행복카페_37.5_127.0")?.id)
+        // 150m 밖이거나 id 형식이 아니면 찾지 않는다
+        assertNull(repo.getPlace("행복카페_37.6_127.0"))
+        assertNull(repo.getPlace("없는장소"))
+    }
+
+    @Test
+    fun relinkOrphanFavorites_movesFavoriteToCurrentId_keepingMemoAndOrder() = runBlocking {
+        db.insertPlace("행복카페_37.50005_127.0", name = "행복카페", lat = 37.50005, lng = 127.0, roadAddress = "새 주소")
+        db.favoriteDao().insert(
+            FavoriteEntity("(주)행복카페_37.5_127.0", "(주)행복카페", "CAFE", "옛 주소", 37.5, 127.0, null, memo = "메모", addedAt = 123L),
+        )
+
+        assertEquals(1, repo.relinkOrphanFavorites())
+
+        val fav = db.favoriteDao().getAll().single()
+        assertEquals("행복카페_37.50005_127.0", fav.id)
+        assertEquals("메모", fav.memo)
+        assertEquals(123L, fav.addedAt)
+        assertEquals("새 주소", fav.roadAddress) // 표시 정보는 지금 장소 것
+        assertEquals(listOf("행복카페_37.50005_127.0"), backup.read().map { it.id }) // 미러도 새 id
+        assertTrue(db.favoriteDao().getOrphans().isEmpty())
+    }
+
+    @Test
+    fun relinkOrphanFavorites_mergesIntoExistingFavorite_fillingMissingMemo() = runBlocking {
+        db.insertPlace("행복카페_37.50005_127.0", name = "행복카페", lat = 37.50005, lng = 127.0)
+        db.favoriteDao().insert(FavoriteEntity("행복카페_37.50005_127.0", "행복카페", "CAFE", "주소", 37.50005, 127.0, null))
+        db.favoriteDao().insert(
+            FavoriteEntity("(주)행복카페_37.5_127.0", "(주)행복카페", "CAFE", "주소", 37.5, 127.0, null, memo = "옛 메모"),
+        )
+
+        assertEquals(1, repo.relinkOrphanFavorites())
+
+        val fav = db.favoriteDao().getAll().single()
+        assertEquals("행복카페_37.50005_127.0", fav.id)
+        assertEquals("옛 메모", fav.memo)
+    }
+
+    @Test
+    fun relinkOrphanFavorites_leavesTrulyGonePlaces_withoutTouchingMirror() = runBlocking {
+        db.insertPlace("다른곳_37.5_127.0", name = "다른곳", lat = 37.5, lng = 127.0)
+        db.favoriteDao().insert(FavoriteEntity("폐업카페_37.5_127.0", "폐업카페", "CAFE", "주소", 37.5, 127.0, null))
+
+        assertEquals(0, repo.relinkOrphanFavorites())
+
+        assertEquals(listOf("폐업카페_37.5_127.0"), db.favoriteDao().getAll().map { it.id }) // 스냅샷으로 남는다
+        assertTrue("잇지 못했으면 미러를 쓰지 않는다", !mirrorFile.exists())
+    }
+
+    @Test
+    fun ensureSeeded_relinksOrphanFavorites() = runBlocking {
+        db.insertPlace("행복카페_37.50005_127.0", name = "행복카페", lat = 37.50005, lng = 127.0)
+        db.favoriteDao().insert(FavoriteEntity("(주)행복카페_37.5_127.0", "(주)행복카페", "CAFE", "주소", 37.5, 127.0, null))
+
+        repo.ensureSeeded()
+
+        assertEquals(listOf("행복카페_37.50005_127.0"), db.favoriteDao().getAll().map { it.id })
+    }
 }

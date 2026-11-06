@@ -197,7 +197,11 @@ class FakePlaceRepository : PlaceRepository {
             .take(limit)
     }
 
-    override suspend fun getPlace(id: String): Place? = dataset.find { it.id == id }
+    /** 옛 id → 지금 id (실제 구현의 SamePlaceMatcher 폴백 흉내) */
+    val legacyAliases = mutableMapOf<String, String>()
+
+    override suspend fun getPlace(id: String): Place? =
+        dataset.find { it.id == id } ?: legacyAliases[id]?.let { now -> dataset.find { it.id == now } }
 
     override suspend fun getPlaces(ids: List<String>): List<Place> =
         ids.mapNotNull { id -> dataset.find { it.id == id } }

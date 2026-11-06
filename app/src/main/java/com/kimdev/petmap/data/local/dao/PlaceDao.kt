@@ -38,6 +38,10 @@ interface PlaceDao {
     @Query("SELECT * FROM places WHERE id IN (:ids)")
     suspend fun getByIds(ids: List<String>): List<PlaceEntity>
 
+    /** 좌표 박스 안의 장소 (끊긴 id 를 같은 장소로 잇는 후보 조회 — SamePlaceMatcher) */
+    @Query("SELECT * FROM places WHERE lat BETWEEN :minLat AND :maxLat AND lng BETWEEN :minLng AND :maxLng")
+    suspend fun getInBox(minLat: Double, maxLat: Double, minLng: Double, maxLng: Double): List<PlaceEntity>
+
     /**
      * 지도 뷰포트(위/경도 박스) 안의 장소. 중심에서 가까운 순으로 제한.
      * 카테고리 다중 필터: catCount 가 0 이면 전체, 아니면 category IN (cats).

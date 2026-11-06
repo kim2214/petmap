@@ -35,6 +35,22 @@ class DetailViewModelTest {
     }
 
     @Test
+    fun `옛 공유 링크로 열면 하트·메모·최근 본 장소는 지금 id 로 맞춘다`() = runTest(mainDispatcherRule.testDispatcher) {
+        repo.legacyAliases["(주)a_37.5_127.0"] = "a"
+        repo.setFavorites(setOf("a"))
+        val vm = viewModel("(주)a_37.5_127.0")
+        advanceUntilIdle()
+
+        assertEquals("a", vm.uiState.value.place?.id)
+        assertTrue(vm.uiState.value.place!!.isFavorite)
+        assertEquals(listOf("a"), recent.recent.value)
+
+        vm.saveMemo("메모")
+        advanceUntilIdle()
+        assertEquals("메모", repo.memos["a"])
+    }
+
+    @Test
     fun `없는 장소는 최근 본 장소에 남기지 않는다`() = runTest(mainDispatcherRule.testDispatcher) {
         viewModel("missing")
         advanceUntilIdle()
