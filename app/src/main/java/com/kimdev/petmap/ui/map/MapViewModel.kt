@@ -315,7 +315,8 @@ class MapViewModel @Inject constructor(
         _uiState.update { it.copy(searchQuery = q) }
     }
 
-    fun clearSearch() {
+    /** @param refetch 마커를 내린 뒤 뷰포트 조회로 복귀할지. 곧이어 다른 경로가 조회할 때(지역 선택)는 false */
+    fun clearSearch(refetch: Boolean = true) {
         val hadMarkers = _uiState.value.searchMarkers != null
         val hadPendingSearch = searchJob?.isActive == true
         searchJob?.cancel()
@@ -329,7 +330,7 @@ class MapViewModel @Inject constructor(
             )
         }
         // 검색 마커를 내리면 원래의 뷰포트 조회로 복귀한다
-        if (hadMarkers) fetch()
+        if (hadMarkers && refetch) fetch()
     }
 
     /**
@@ -488,6 +489,9 @@ class MapViewModel @Inject constructor(
             _uiState.update { it.copy(canResearch = stale) }
             return
         }
+        // 조회(필터 변경 등)가 진행 중이면 옛 places 로 다시 묶지 않는다 — 조회가 먼저 끝나 새 결과를 올린 뒤
+        // 이 잡이 늦게 끝나면 필터 적용 전 마커로 덮어쓴다. 조회 결과는 완료 시점의 줌으로 묶이므로 생략해도 된다.
+        if (fetchJob?.isActive == true || searching) return
         // 클러스터링(최대 수백 개 좌표 연산)은 백그라운드에서 수행해 지도 제스처 중 메인 스레드 부담을 줄인다.
         val snapshot = places
         if (snapshot === clusteredPlaces && zoom == clusteredZoom) {
@@ -547,7 +551,9 @@ class MapViewModel @Inject constructor(
                 _events.send(MapEvent.RegionEmpty(region))
                 return@launch
             }
-            if (_uiState.value.searchMarkers != null) clearSearch()
+            // 카메라가 지역에 도착하면 FitRegion 처리부가 researchHere 로 조회한다 — 여기서 또 조회하면
+            // 현재 화면 기준 조회가 하나 더 나갔다가 곧바로 취소된다(로딩 깜빡임·DB 낭비)
+            if (_uiState.value.searchMarkers != null) clearSearch(refetch = false)
             _events.send(MapEvent.FitRegion(region, bounds))
         }
     }
@@ -613,6 +619,7 @@ class MapViewModel @Inject constructor(
         // 아직 마커 모드에 들어가기 전인 검색 확정도 취소한다 — 늦게 끝나면 옛 필터로 마커 모드에 들어간다.
         fetchJob?.cancel()
         searchJob?.cancel()
+        expandJob?.cancel()
         loadedCenterLat = lastCenterLat
         loadedCenterLng = lastCenterLng
         loadedZoom = lastZoom
@@ -676,8 +683,13 @@ class MapViewModel @Inject constructor(
      * 저줌 집계 클러스터 탭: 셀 범위를 재조회해 실제 장소 목록으로 펼친다.
      * (집계 클러스터는 개별 좌표가 없어 지금까지는 줌인만 가능했다)
      */
+    // 집계 셀 펼치기 잡. 새 펼치기·재조회(필터 변경)가 오면 취소한다 — 늦게 끝난 옛 요청이 옛 필터의
+    // 목록 시트를 띄우거나, 셀을 연달아 탭했을 때 시트가 두 번 교체되지 않게.
+    private var expandJob: Job? = null
+
     fun expandAggregatedCell(cell: GeoClusterCell) {
-        viewModelScope.launch {
+        expandJob?.cancel()
+        expandJob = viewModelScope.launch {
             runCatching {
                 repository.getPlacesInCell(
                     cell = cell,

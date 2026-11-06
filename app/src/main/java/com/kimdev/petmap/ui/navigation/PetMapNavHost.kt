@@ -108,7 +108,8 @@ fun PetMapNavHost(
             LicensesScreen(onBack = dropUnlessResumed { navController.popBackStack() })
         }
         composable(Routes.ONBOARDING) {
-            OnboardingScreen(onFinish = { navController.popBackStack() })
+            // 설정 → "온보딩 다시 보기"에서 '시작하기'를 두 번 누르면 설정까지 pop 되던 것을 막는다
+            OnboardingScreen(onFinish = dropUnlessResumed { navController.popBackStack() })
         }
         composable(
             route = Routes.DETAIL_PATTERN,

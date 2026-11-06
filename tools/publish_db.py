@@ -87,11 +87,15 @@ def publish(site_repo, db_path, force=False):
     os.makedirs(out_dir, exist_ok=True)
     previous = read_manifest(out_dir)
 
-    name = f"petmap-{data_date}.db.gz"
-    gz_path = os.path.join(out_dir, name)
-    tmp_path = gz_path + ".tmp"
+    tmp_path = os.path.join(out_dir, f"petmap-{data_date}.db.gz.tmp")
     gzip_file(db_path, tmp_path)
     sha256 = sha256_of(tmp_path)
+    # 같은 기준일을 다른 내용으로 강제 게시하면 파일명에 해시를 붙인다. 이름이 같으면 gz 가 그 자리에서 바뀌어,
+    # CDN 이 캐시한 옛 매니페스트(옛 sha256)를 받은 기기가 새 gz 와 대조해 "SHA-256 불일치"로 실패한다.
+    # (앱의 DataManifest 는 [A-Za-z0-9._-]+ 파일명을 받으므로 기존 설치에도 호환된다)
+    redo_same_date = bool(previous) and data_date == previous["dataDate"] and sha256 != previous["sha256"]
+    name = f"petmap-{data_date}-{sha256[:8]}.db.gz" if redo_same_date else f"petmap-{data_date}.db.gz"
+    gz_path = os.path.join(out_dir, name)
     # 기준일은 ISO(YYYY-MM-DD)라 문자열 비교가 곧 날짜 비교다
     if previous and data_date <= previous["dataDate"] and not force:
         same = data_date == previous["dataDate"] and sha256 == previous["sha256"]

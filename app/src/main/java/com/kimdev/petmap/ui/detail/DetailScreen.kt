@@ -541,6 +541,8 @@ private fun RowScope.QuickAction(
             label,
             style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
+            // 앱 글자 크기 1.3× + 시스템 최대 배율이면 5등분 칸에서 라벨이 잘린다 → 말줄임으로 표시
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
     }

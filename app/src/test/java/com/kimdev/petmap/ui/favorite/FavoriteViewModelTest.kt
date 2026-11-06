@@ -2,6 +2,7 @@ package com.kimdev.petmap.ui.favorite
 
 import androidx.lifecycle.SavedStateHandle
 import com.kimdev.petmap.core.location.UserLocation
+import com.kimdev.petmap.domain.model.PlaceCategory
 import com.kimdev.petmap.fake.FakeLocationProvider
 import com.kimdev.petmap.fake.FakePlaceRepository
 import com.kimdev.petmap.fake.FakeRecentPlaceStore
@@ -53,6 +54,25 @@ class FavoriteViewModelTest {
             assertEquals(2, received.count { it == FavoriteEvent.FavoriteWriteFailed })
             job.cancel()
         }
+
+    @Test
+    fun `검색어와 카테고리는 SavedStateHandle 로 복원된다`() = runTest(mainDispatcherRule.testDispatcher) {
+        val saved = SavedStateHandle()
+        val vm = viewModel(saved = saved)
+        vm.onQueryChange("카페")
+        vm.toggleCategory(PlaceCategory.CAFE)
+
+        val restored = viewModel(saved = saved)
+        restored.uiState.launchIn(backgroundScope)
+        advanceUntilIdle()
+        assertEquals("카페", restored.uiState.value.query)
+        assertEquals(setOf(PlaceCategory.CAFE), restored.uiState.value.selectedCategories)
+
+        restored.clearCategories()
+        assertEquals(emptySet<PlaceCategory>(), viewModel(saved = saved).let { v ->
+            v.uiState.launchIn(backgroundScope); advanceUntilIdle(); v.uiState.value.selectedCategories
+        })
+    }
 
     @Test
     fun `최근 본 장소는 최신 우선이고 사라진 장소는 빠진다`() = runTest(mainDispatcherRule.testDispatcher) {

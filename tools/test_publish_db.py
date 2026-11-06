@@ -98,6 +98,17 @@ class PublishTest(unittest.TestCase):
         _, forced = p.publish(self.site, self.db, force=True)
         self.assertEqual(forced["dataDate"], "2026-10-01")
 
+    def test_forced_same_date_republish_gets_new_file_name(self):
+        make_db(self.db, data_date="2026-10-14")
+        out_dir, first = p.publish(self.site, self.db)
+        self._rebuild("2026-10-14", places=4)
+        _, forced = p.publish(self.site, self.db, force=True)
+        # 같은 이름으로 덮으면 캐시된 옛 매니페스트의 sha 와 새 gz 가 어긋난다 → 이름을 바꾸고 옛 gz 도 남긴다
+        self.assertNotEqual(first["file"], forced["file"])
+        self.assertTrue(forced["file"].startswith("petmap-2026-10-14-"))
+        self.assertTrue(os.path.exists(os.path.join(out_dir, first["file"])))
+        self.assertEqual(forced["sha256"], p.sha256_of(os.path.join(out_dir, forced["file"])))
+
     def test_rejects_identity_hash_mismatch(self):
         make_db(self.db, identity_hash="other")
         with self.assertRaises(SystemExit):

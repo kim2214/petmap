@@ -183,6 +183,7 @@ fun MapScreen(
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val fitPaddingPx = with(LocalDensity.current) { FIT_BOUNDS_PADDING.roundToPx() }
     // 시스템 설정이 아니라 앱에 적용된 테마(설정에서 강제 가능)에 맞춰 지도 야간 모드를 켠다.
     val isDarkTheme = LocalIsDarkTheme.current
 
@@ -235,7 +236,7 @@ fun MapScreen(
                     } else {
                         CameraUpdate.fitBounds(
                             LatLngBounds(LatLng(b.minLat, b.minLng), LatLng(b.maxLat, b.maxLng)),
-                            FIT_BOUNDS_PADDING_PX,
+                            fitPaddingPx,
                         )
                     }
                     trackingMode = LocationTrackingMode.NoFollow
@@ -256,7 +257,7 @@ fun MapScreen(
                         val update = if (event.places.size == 1) {
                             CameraUpdate.scrollAndZoomTo(bounds.center, MapViewModel.FOCUS_ZOOM)
                         } else {
-                            CameraUpdate.fitBounds(bounds, FIT_BOUNDS_PADDING_PX)
+                            CameraUpdate.fitBounds(bounds, fitPaddingPx)
                         }
                         cameraPositionState.animate(update, CameraAnimation.Fly)
                     }
@@ -785,7 +786,8 @@ private const val CO_LOCATED_M = 25.0
 // 첫 진입 시 현재 위치로 이동할 때의 줌(동네 단위로 주변 장소가 보이는 수준).
 private const val INITIAL_LOCATION_ZOOM = 15.0
 // 검색 결과 범위 맞춤 시 가장자리 마커가 검색바·FAB 에 가리지 않도록 두는 여백(px)
-private const val FIT_BOUNDS_PADDING_PX = 160
+/** 결과 범위 맞춤 여백. px 상수면 기기 배율에 따라 가장자리 마커가 칩 줄에 가리거나(고배율) 여백이 과했다(저배율) */
+private val FIT_BOUNDS_PADDING = 56.dp
 
 /**
  * 지도 위 마커/클러스터 렌더링. [MapScreen] 본문에서 분리해, 지도와 무관한 상태 변경

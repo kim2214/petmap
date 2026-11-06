@@ -15,7 +15,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,7 +30,6 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -158,6 +158,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivity) {
     val navController = rememberNavController()
@@ -187,7 +188,9 @@ private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivit
     }
     // 키보드가 올라오면 배너·하단탭을 감춘다. 검색 중에는 결과·최근 검색어를 보여줄 공간이
     // 우선인데, 셋을 모두 키보드 위에 쌓으면 목록 영역이 한 줄도 안 남는다.
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    // isImeVisible: 인셋 높이(키보드 애니메이션 매 프레임 변함)가 아니라 표시 여부만 읽어, 키보드가 오르내리는
+    // 동안 Scaffold·탭·NavHost 전체가 프레임마다 다시 구성되지 않게 한다
+    val imeVisible = WindowInsets.isImeVisible
 
     Scaffold(
         // edge-to-edge(decorFitsSystemWindows=false)라 키보드가 콘텐츠·배너·하단탭을 덮는다.

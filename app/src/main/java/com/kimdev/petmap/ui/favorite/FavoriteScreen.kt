@@ -117,8 +117,8 @@ fun FavoriteScreen(
     }
     fun onSortSelected(sort: FavoriteSort) {
         if (sort == FavoriteSort.DISTANCE && !locationPermission.granted) {
-            pendingDistanceSort = true
-            locationPermission.request() // 시스템 요청 또는(영구 거부) 설정 안내
+            // 시스템 요청을 띄운 경우에만 대기 (영구 거부·설정 안내는 결과 콜백이 없어 플래그가 남는다)
+            pendingDistanceSort = locationPermission.request()
         } else {
             viewModel.selectSort(sort)
         }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -119,7 +120,11 @@ fun BannerAd(modifier: Modifier = Modifier, visible: Boolean = true) {
             },
     ) {
         if (adsReady) {
-            AndroidView(modifier = Modifier.fillMaxWidth(), factory = { adView })
+            // factory 는 한 번만 실행된다 → 크기가 바뀌어 AdView 를 새로 만들면 key 로 뷰도 교체해야 한다.
+            // 아니면 화면엔 destroy 된 옛 AdView 가 남고 새 AdView 는 붙지 않은 채 광고만 요청한다.
+            key(adView) {
+                AndroidView(modifier = Modifier.fillMaxWidth(), factory = { adView })
+            }
         }
     }
 }

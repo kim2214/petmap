@@ -215,9 +215,10 @@ fun ListScreen(
                                 // 권한은 있는데 위치만 없음 → 위치 재확보 시도
                                 granted -> viewModel.enableDistanceSortWithLocation()
                                 else -> {
-                                    // 허용되면 LaunchedEffect(granted) 가 거리순을 켠다
-                                    pendingDistanceSort = true
-                                    locationPermission.request() // 시스템 요청 또는(영구 거부) 설정 안내
+                                    // 시스템 요청을 띄운 경우에만 대기 — 허용되면 LaunchedEffect(granted) 가 거리순을 켠다.
+                                    // 영구 거부(설정 안내)면 결과 콜백이 없어 플래그가 남고, 나중에 설정에서 권한을 켜면
+                                    // 거리순이 저절로 켜졌다.
+                                    pendingDistanceSort = locationPermission.request()
                                 }
                             }
                         },

@@ -48,15 +48,21 @@ class LocationPermissionController internal constructor(
     /**
      * 사용자가 위치 기능을 명시적으로 눌렀을 때. 이미 허용됐으면 아무것도 하지 않는다
      * (호출 측이 granted 를 먼저 보고 기능을 실행한다).
+     *
+     * @return 시스템 권한 다이얼로그를 띄웠으면 true. 영구 거부로 설정 안내 다이얼로그를 띄운 경우엔 false —
+     *   그때는 결과 콜백(onResult)이 오지 않으므로, "허용되면 이어서 할 일"을 걸어 두면 안 된다
+     *   (나중에 시스템 설정에서 권한을 켜고 돌아왔을 때 엉뚱한 시점에 실행된다).
      */
-    fun request() {
-        when {
-            granted -> Unit
-            permissions.shouldShowRationale || !requestedOnce() -> {
-                markRequested()
-                permissions.launchMultiplePermissionRequest()
-            }
-            else -> showSettingsDialog() // 영구 거부 → 설정 안내
+    fun request(): Boolean = when {
+        granted -> false
+        permissions.shouldShowRationale || !requestedOnce() -> {
+            markRequested()
+            permissions.launchMultiplePermissionRequest()
+            true
+        }
+        else -> {
+            showSettingsDialog() // 영구 거부 → 설정 안내
+            false
         }
     }
 
@@ -128,7 +134,9 @@ fun rememberLocationSource(controller: LocationPermissionController): LocationSo
     val source = remember(context, controller) {
         object : FusedLocationSource(context) {
             override fun hasPermissions(): Boolean = context.hasAnyLocationPermission()
-            override fun onPermissionRequest() = controller.request()
+            override fun onPermissionRequest() {
+                controller.request()
+            }
         }
     }
     // 권한이 (방금) 허용되면 대기 중이던 활성화를 이어간다

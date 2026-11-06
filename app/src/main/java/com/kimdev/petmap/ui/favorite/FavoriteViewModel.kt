@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kimdev.petmap.core.location.LocationProvider
+import com.kimdev.petmap.ui.common.SavedFilters
 import com.kimdev.petmap.core.location.UserLocation
 import com.kimdev.petmap.data.local.RecentPlaceStore
 import com.kimdev.petmap.domain.model.FavoriteSnapshot
@@ -66,8 +67,11 @@ class FavoriteViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val selectedCategories = MutableStateFlow<Set<PlaceCategory>>(emptySet())
-    private val query = MutableStateFlow("")
+    // 프로세스 재생성 후에도 검색어·카테고리를 복원한다 (목록 탭과 같은 방식)
+    private val selectedCategories = MutableStateFlow(
+        SavedFilters.namesToCategories(savedStateHandle[KEY_CATEGORIES]),
+    )
+    private val query = MutableStateFlow(savedStateHandle[KEY_QUERY] ?: "")
 
     // 가까운순은 위치가 있어야 하므로 복원 시 RECENT 로 시작하고, 위치를 다시 얻으면 [selectSort] 가 켠다
     private val sort = MutableStateFlow(
@@ -194,14 +198,17 @@ class FavoriteViewModel @Inject constructor(
 
     fun onQueryChange(q: String) {
         query.value = q
+        savedStateHandle[KEY_QUERY] = q
     }
 
-    fun toggleCategory(category: PlaceCategory) = selectedCategories.update {
-        if (category in it) it - category else it + category
+    fun toggleCategory(category: PlaceCategory) {
+        selectedCategories.update { if (category in it) it - category else it + category }
+        savedStateHandle[KEY_CATEGORIES] = SavedFilters.categoriesToNames(selectedCategories.value)
     }
 
     fun clearCategories() {
         selectedCategories.value = emptySet()
+        savedStateHandle[KEY_CATEGORIES] = SavedFilters.categoriesToNames(emptySet())
     }
 
     /**
@@ -227,6 +234,8 @@ class FavoriteViewModel @Inject constructor(
     private companion object {
         const val TAG = "FavoriteViewModel"
         const val KEY_SORT = "favorite_sort"
+        const val KEY_QUERY = "favorite_query"
+        const val KEY_CATEGORIES = "favorite_categories"
 
         /** 이름순: 앱 목록 정렬(DB sortKey)과 같게 한글 → 영문 → 숫자 → 기타, 같은 묶음 안에선 한국어 정렬 */
         val NAME_ORDER: Comparator<String> = run {

@@ -162,6 +162,8 @@ class PlaceRepositoryImpl @Inject constructor(
         gridDivisions: Int,
         limit: Int,
     ): List<GeoClusterCell> {
+        // 반경·분할이 0 이하면 격자 크기가 0 이 되어 SQL 의 나눗셈이 NULL(전부 한 셀), 경계가 NaN 이 된다
+        require(radiusKm > 0 && gridDivisions > 0) { "radiusKm=$radiusKm, gridDivisions=$gridDivisions" }
         val latDelta = radiusKm / 111.0
         val lngDelta = radiusKm / (111.0 * max(0.1, cos(Math.toRadians(centerLat))))
         val minLat = centerLat - latDelta
