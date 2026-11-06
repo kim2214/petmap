@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -375,6 +376,24 @@ class MapViewModelTest {
             assertNull(vm.uiState.value.searchMarkers)
             assertEquals(3, vm.uiState.value.clusters.sumOf { it.count })
             job.cancel()
+        }
+
+    @Test
+    fun `검색 확정 진행 중에 줌 버킷이 바뀌어도 검색이 취소되지 않는다`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            repo.dataset = listOf(testPlace("행복카페", lat = 37.50, lng = 127.00))
+            val vm = viewModel()
+            advanceUntilIdle()
+            val gate = CompletableDeferred<Unit>()
+            repo.searchGate = gate
+
+            vm.submitSearch("행복")
+            runCurrent()
+            vm.onCameraMove(37.5, 127.0, 9.0) // 핀치 줌아웃 보고가 검색 확정 뒤에 도착 (버킷 변경)
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(1, vm.uiState.value.searchMarkers?.count)
         }
 
     @Test

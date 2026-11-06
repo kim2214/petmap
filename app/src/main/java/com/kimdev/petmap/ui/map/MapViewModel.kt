@@ -469,7 +469,10 @@ class MapViewModel @Inject constructor(
         // 줌 버킷이 바뀌면 조회 반경과 집계 격자 크기가 달라져, 지금 표시 중인 개수 자체가 의미를
         // 잃는다(예: 12km 격자로 센 개수를 4km 뷰에 그대로 남기면 오정보). 로컬 DB 쿼리라 비용이
         // 낮으므로 이 경우만 자동 재조회하고, 같은 줌에서의 팬 이동은 "다시 검색" 버튼을 유지한다.
-        if (_uiState.value.searchMarkers == null && radiusForZoom(zoom) != radiusForZoom(loadedZoom)) {
+        // 검색 확정이 진행 중이면 재조회하지 않는다 — fetch() 가 searchJob 을 취소해, 핀치 직후 검색 키를 누르면
+        // 검색이 조용히 사라졌다(스낵바도 없이 자동완성만 다시 뜸). 결과가 오면 FitPlaces 가 카메라를 다시 잡는다.
+        val searching = searchJob?.isActive == true
+        if (_uiState.value.searchMarkers == null && !searching && radiusForZoom(zoom) != radiusForZoom(loadedZoom)) {
             fetch()
             return
         }
