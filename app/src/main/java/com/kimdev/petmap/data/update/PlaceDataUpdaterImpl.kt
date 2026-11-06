@@ -1,5 +1,6 @@
 package com.kimdev.petmap.data.update
 
+import androidx.annotation.VisibleForTesting
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
@@ -57,6 +58,13 @@ class PlaceDataUpdaterImpl @Inject constructor(
 ) : PlaceDataUpdater {
 
     private val mutex = Mutex()
+
+    /**
+     * 테스트 전용: 교체 트랜잭션 안에서 행을 하나 복사하기 직전에 (테이블, 0부터 센 행 번호)로 불린다.
+     * 계측 테스트가 트랜잭션 도중의 취소·실패를 정확한 시점에 일으켜 롤백을 검증하는 데 쓴다. 운영에선 항상 null.
+     */
+    @VisibleForTesting
+    internal var beforeCopyRow: ((table: String, row: Long) -> Unit)? = null
 
     /**
      * 취소(WorkManager 가 Wi-Fi 끊김 등으로 작업을 멈추거나 설정 화면을 벗어남)되면 스레드를 인터럽트한다.
@@ -168,7 +176,9 @@ class PlaceDataUpdaterImpl @Inject constructor(
             "INSERT INTO $table($cols) VALUES(${columns.joinToString(",") { "?" }})",
         )
         src.rawQuery("SELECT $cols FROM $table", null).use { c ->
+            var row = 0L
             while (c.moveToNext()) {
+                beforeCopyRow?.invoke(table, row++)
                 checkNotInterrupted()
                 stmt.clearBindings()
                 for (i in columns.indices) {

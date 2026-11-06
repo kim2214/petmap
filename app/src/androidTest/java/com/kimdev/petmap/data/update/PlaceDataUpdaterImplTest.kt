@@ -37,6 +37,7 @@ import java.util.zip.GZIPOutputStream
  *  - 매니페스트 없음/같은 기준일 → 받지 않음.
  *  - SHA-256·identity_hash 불일치, 장소 수 급감 → 실패하고 기존 데이터 유지.
  *  - 다운로드 중 취소 → 곧바로 멈추고 기존 데이터 유지, 다음 갱신은 정상.
+ *  - 교체 트랜잭션 도중 취소·실패 → 롤백되어 places·FTS·meta 가 모두 이전 그대로(조인 포함), 다음 갱신은 정상.
  */
 @RunWith(AndroidJUnit4::class)
 class PlaceDataUpdaterImplTest {
@@ -187,6 +188,77 @@ class PlaceDataUpdaterImplTest {
         // 취소 뒤에도 잠금이 풀려 다음 갱신이 정상 동작한다
         assertEquals(DataUpdateResult.Updated(NEW_DATE, assetCount.toInt()), updater.update())
     }
+
+    @Test
+    fun cancelDuringReplaceTransaction_rollsBackEverything() = runBlocking {
+        publish(NEW_DATE) { src ->
+            src.execSQL("UPDATE places SET name = ? WHERE rowid = (SELECT MIN(rowid) FROM places)", arrayOf(RENAMED))
+            src.execSQL(
+                "UPDATE places_fts SET name = ? WHERE docid = (SELECT MIN(rowid) FROM places)",
+                arrayOf(PlaceFts.index(RENAMED)),
+            )
+        }
+        val before = snapshot()
+        val reached = CountDownLatch(1)
+        // places 는 이미 비우고 절반쯤 다시 채운 시점(DELETE 3개 + 복사 중)에 멈춰 선다 — 여기서 취소되면
+        // 커밋 없이 롤백돼야 한다. sleep 은 인터럽트(=취소)로만 깨어난다.
+        updater.beforeCopyRow = { table, row ->
+            if (table == "places" && row == assetCount / 2) {
+                reached.countDown()
+                while (true) Thread.sleep(50)
+            }
+        }
+        val job = launch(Dispatchers.Default) { updater.update() }
+        assertTrue("교체 트랜잭션에 들어가지 못함", reached.await(60, TimeUnit.SECONDS))
+        job.cancel()
+        withTimeout(10_000) { job.join() }
+
+        assertTrue(job.isCancelled)
+        assertEquals(before, snapshot())
+        assertTrue(File(context.cacheDir, "data_update").exists().not())
+
+        // 잠금·트랜잭션이 남지 않아 다음 갱신은 정상 교체된다
+        updater.beforeCopyRow = null
+        assertEquals(DataUpdateResult.Updated(NEW_DATE, assetCount.toInt()), updater.update())
+        assertEquals(listOf(RENAMED), search(RENAMED))
+    }
+
+    @Test
+    fun failureDuringReplaceTransaction_rollsBackAndReportsFailed() = runBlocking {
+        publish(NEW_DATE) {}
+        val before = snapshot()
+        // places 를 다 옮기고 FTS 색인을 옮기는 도중 실패 — places 만 새것, 색인은 반쯤인 상태가 커밋되면
+        // 검색 조인이 깨진다. 통째로 롤백돼야 한다.
+        updater.beforeCopyRow = { table, row ->
+            if (table == PlaceFts.TABLE && row == 10L) throw java.io.IOException("디스크 가득 참(시뮬레이션)")
+        }
+
+        val result = updater.update()
+
+        assertTrue("$result", result is DataUpdateResult.Failed)
+        assertEquals(before, snapshot())
+    }
+
+    /** places·FTS·meta 의 관측 가능한 상태: 행 수, 기준일, docid 조인 일치 수, 첫 장소 이름과 그 이름의 검색 결과 */
+    private suspend fun snapshot(): List<Any?> {
+        val live = db.openHelper.writableDatabase
+        fun long(sql: String) = live.query(sql).use { it.moveToFirst(); it.getLong(0) }
+        val firstName = live.query("SELECT name FROM places ORDER BY rowid LIMIT 1").use { it.moveToFirst(); it.getString(0) }
+        return listOf(
+            long("SELECT COUNT(*) FROM places"),
+            long("SELECT COUNT(*) FROM ${PlaceFts.TABLE}"),
+            long("SELECT COUNT(*) FROM places JOIN ${PlaceFts.TABLE} ON places.rowid = ${PlaceFts.TABLE}.docid"),
+            db.metaDao().get(MetaEntity.KEY_DATA_DATE),
+            firstName,
+            search(firstName),
+        )
+    }
+
+    private fun search(name: String): List<String> = db.openHelper.writableDatabase.query(
+        "SELECT places.name FROM places JOIN places_fts ON places.rowid = places_fts.docid " +
+            "WHERE places_fts MATCH ? AND places.name = ?",
+        arrayOf(PlaceFts.match(name), name),
+    ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
 
     private suspend fun assertFailedAndUnchanged() {
         val result = updater.update()
