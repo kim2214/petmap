@@ -6,11 +6,19 @@
 (identity_hash)/user_version 을 앱의 Room 스키마와 동일하게 맞춘다.
 
 사용법:
-    python3 tools/build_db.py [--data-date=YYYY-MM-DD] [--closed=<폐업 CSV>] "<CSV 경로>" ["<CSV 경로 2>" ...] [출력경로.db]
+    python3 tools/build_db.py [--data-date=YYYY-MM-DD] [--closed=<폐업 CSV>] [--previous=<이전 DB>|none] "<CSV 경로>" ["<CSV 경로 2>" ...] [출력경로.db]
     # 마지막 인자가 .db 로 끝나면 출력경로, 아니면 전부 입력 CSV
     # 출력경로 기본값: app/src/main/assets/petmap.db
     # --data-date: 수록 데이터 기준일(설정 화면 "데이터 갱신일"에 표시). 생략 시 오늘 날짜
     # --closed: tools/fetch_closures.py 가 만든 인허가 폐업 목록. 같은 업종·같은 이름·100m 안의 장소를 뺀다
+    # --previous: 장소 id 를 물려받을 이전 DB. 생략하면 덮어쓸 출력 파일(지금 앱이 쓰는 DB)을 쓴다. none 이면 끈다
+
+장소 id 안정화:
+- 새 장소의 id 는 `이름_위도_경도` 원문으로 만든다. 그대로 두면 상호 정제 규칙·지오코딩·원본 좌표 표기가 바뀔 때마다
+  id 가 달라져 즐겨찾기가 "데이터에서 빠진 장소"로 떨어지고, 공유 링크·최근 본 장소가 끊긴다.
+- 그래서 이전 DB 에 같은 장소가 있으면 그 id 를 물려받는다(carry_forward_ids). 같은 장소 판정은 중복 제거 규칙과 같다:
+  ① id 동일 ② 정규화 이름 같고 150m 안(가까운 것부터) ③ 정규화 이름·도로명주소 같음
+  ④ 동물병원·약국은 같은 건물(30m)·비슷한 이름. 이전 id 하나는 한 장소에만 물려준다.
 
 입력 CSV 규칙:
 - 여러 파일을 주면 순서대로 합친다. 같은 장소(이름+좌표)는 먼저 온 파일이 우선.
@@ -309,6 +317,113 @@ def grid_cell(lat, lng):
     return int(math.floor(lat * 1000)), int(math.floor(lng * 1000))
 
 
+
+def carry_forward_ids(current, previous):
+    """
+    이전 DB 의 장소 id 를 같은 장소에 물려준다 (장소 id 안정화 — 모듈 설명 참고).
+
+    current / previous: [{"id", "name", "category", "road", "lat", "lng"}] (road 는 normalize_sido 적용된 도로명주소)
+    반환: ({current id: 최종 id}, {"exact", "near", "address", "building", "new"} 건수)
+    단계마다 아직 짝이 없는 것끼리만 맞춘다 — 앞 단계(더 확실한 판정)가 우선이고, 이전 id 는 한 번만 쓴다.
+    짝이 없는 새 장소는 자기 id 를 쓰되, 그 id 를 다른 장소가 이미 물려받았으면 접미사(~2, ~3…)로 피한다.
+    """
+    final = {}
+    claimed = set()
+    stats = {"exact": 0, "near": 0, "address": 0, "building": 0, "new": 0}
+    prev_ids = {p["id"] for p in previous}
+
+    def take(cur, prev_id, kind):
+        final[cur["id"]] = prev_id
+        claimed.add(prev_id)
+        stats[kind] += 1
+
+    # ① id 동일
+    for c in current:
+        if c["id"] in prev_ids:
+            take(c, c["id"], "exact")
+
+    def pending():
+        return [c for c in current if c["id"] not in final]
+
+    def free_prev():
+        return [p for p in previous if p["id"] not in claimed]
+
+    # ② 정규화 이름 같고 150m 안 — 후보 쌍을 거리순으로 짝짓는다(가장 가까운 것끼리 먼저)
+    by_key = {}
+    for p in free_prev():
+        k = normalize_name(p["name"])
+        if k:
+            by_key.setdefault(k, []).append(p)
+    pairs = []
+    for c in pending():
+        for p in by_key.get(normalize_name(c["name"]), ()):
+            if near(c["lat"], c["lng"], p["lat"], p["lng"]):
+                d = (c["lat"] - p["lat"]) ** 2 + ((c["lng"] - p["lng"]) * math.cos(math.radians(c["lat"]))) ** 2
+                pairs.append((d, c["id"], p["id"]))
+    cur_by_id = {c["id"]: c for c in current}
+    for _, cid, pid in sorted(pairs):
+        if cid not in final and pid not in claimed:
+            take(cur_by_id[cid], pid, "near")
+
+    # ③ 정규화 이름 + 도로명주소 (데이터셋·지오코딩 차이로 좌표가 150m 넘게 어긋난 경우)
+    by_name_addr = {}
+    for p in free_prev():
+        k, a = normalize_name(p["name"]), address_key(p["road"])
+        if k and a:
+            by_name_addr.setdefault((k, a), []).append(p)
+    for c in pending():
+        for p in by_name_addr.get((normalize_name(c["name"]), address_key(c["road"])), ()):
+            if p["id"] not in claimed:
+                take(c, p["id"], "address")
+                break
+
+    # ④ 동물병원·약국: 같은 건물(30m)·비슷한 이름 ("24시" 접두어·지점명 표기 변경). 약 100m 격자로 이웃만 본다
+    by_cell = {}
+    for p in free_prev():
+        if p["category"] in SAME_BUILDING_CATEGORIES:
+            by_cell.setdefault(grid_cell(p["lat"], p["lng"]), []).append(p)
+    for c in pending():
+        if c["category"] not in SAME_BUILDING_CATEGORIES:
+            continue
+        cc = core_name(c["name"], c["category"])
+        if not cc:
+            continue
+        ci, cj = grid_cell(c["lat"], c["lng"])
+        for p in (p for di in (-1, 0, 1) for dj in (-1, 0, 1) for p in by_cell.get((ci + di, cj + dj), ())):
+            if p["id"] in claimed or p["category"] != c["category"]:
+                continue
+            pc = core_name(p["name"], p["category"])
+            if pc and same_building_dup(cc, pc, c["category"]) and near(
+                c["lat"], c["lng"], p["lat"], p["lng"], SAME_BUILDING_METERS
+            ):
+                take(c, p["id"], "building")
+                break
+
+    # 새 장소: 자기 id. 이미 다른 장소가 물려받은 id 와 겹치면 접미사로 피한다
+    for c in pending():
+        new_id, n = c["id"], 1
+        while new_id in claimed:
+            n += 1
+            new_id = f"{c['id']}~{n}"
+        final[c["id"]] = new_id
+        claimed.add(new_id)
+        stats["new"] += 1
+    return final, stats
+
+
+def read_previous_places(path):
+    """이전 DB 의 장소 목록 (carry_forward_ids 입력 형식). 파일이 없거나 places 가 없으면 빈 목록."""
+    if not path or not os.path.exists(path):
+        return []
+    db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        rows = db.execute("SELECT id, name, category, roadAddress, lat, lng FROM places").fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        db.close()
+    return [{"id": i, "name": n, "category": c, "road": r, "lat": la, "lng": ln} for i, n, c, r, la, ln in rows]
+
 # 데이터셋별로 이름이 다른 동반 가능 여부 컬럼 (하나는 반드시 존재해야 함)
 PET_ALLOWED_COLUMNS = ("반려동물 동반 가능정보", "애완동물 출입 여부")
 
@@ -375,6 +490,12 @@ def main():
         if "=" not in a:
             raise SystemExit("오류: --closed=<폐업 CSV> 형식으로 지정")
         closed = read_closed(a.split("=", 1)[1])
+    previous_path = None  # None = 출력 파일을 그대로 이전 DB 로 쓴다
+    for a in [a for a in args if a.startswith("--previous")]:
+        args.remove(a)
+        if "=" not in a:
+            raise SystemExit("오류: --previous=<이전 DB> 또는 --previous=none 형식으로 지정")
+        previous_path = a.split("=", 1)[1]
     closed_ids = set()  # 폐업으로 뺀 장소 id (원본 CSV 의 중복 행을 한 번만 센다)
     if not args:
         print(__doc__)
@@ -485,6 +606,23 @@ def main():
               f"이름·150m 중복 제외 {near_dups}건, 같은 이름·주소 중복 제외 {addr_dups}건, 같은 건물·비슷한 이름 중복 제외 {building_dups}건"
               + (f", 인허가 폐업 제외 {closed_dups}곳" if closed else ""))
 
+    # 장소 id 안정화: 지우기 전에 이전 DB(기본은 덮어쓸 출력 파일)에서 같은 장소의 id 를 물려받는다
+    if previous_path is None:
+        previous_path = out_path
+    previous = [] if previous_path == "none" else read_previous_places(previous_path)
+    if previous:
+        current = [
+            {"id": t[0], "name": t[1], "category": t[2], "road": t[3], "lat": t[5], "lng": t[6]}
+            for t in rows.values()
+        ]
+        mapping, stats = carry_forward_ids(current, previous)
+        rows = {mapping[t[0]]: (mapping[t[0]],) + t[1:] for t in rows.values()}
+        kept = sum(v for k, v in stats.items() if k != "new")
+        print(f"  id 물려받기({os.path.basename(previous_path)} {len(previous)}곳): 동일 {stats['exact']}, "
+              f"이름·150m {stats['near']}, 이름·주소 {stats['address']}, 같은 건물 {stats['building']}, "
+              f"새 id {stats['new']} → 이전 장소 중 {kept}곳 id 유지")
+    elif previous_path != "none":
+        print(f"  id 물려받기: 이전 DB 없음({previous_path}) — 모든 장소가 새 id")
 
     if os.path.exists(out_path):
         os.remove(out_path)

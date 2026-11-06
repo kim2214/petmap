@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """build_db.py 의 순수 함수 테스트: python3 -m unittest tools/test_build_db.py"""
+import contextlib
+import csv
+import io
 import json
 import os
+import sqlite3
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -144,6 +149,126 @@ class FtsGoldenTest(unittest.TestCase):
         for c in cases:
             self.assertEqual(c["index"], b.fts_index(c["input"]), c["note"])
 
+
+
+def place(pid, name, lat, lng, category="CAFE", road=""):
+    return {"id": pid, "name": name, "category": category, "road": road, "lat": lat, "lng": lng}
+
+
+class CarryForwardIdsTest(unittest.TestCase):
+    """장소 id 안정화: 다시 만든 DB 에서 같은 장소는 이전 id 를 물려받는다."""
+
+    def run_cf(self, current, previous):
+        mapping, stats = b.carry_forward_ids(current, previous)
+        self.assertEqual(len(set(mapping.values())), len(mapping), "최종 id 가 겹친다")
+        return mapping, stats
+
+    def test_same_id_is_kept(self):
+        mapping, stats = self.run_cf([place("a", "행복카페", 37.5, 127.0)], [place("a", "행복카페", 37.5, 127.0)])
+        self.assertEqual({"a": "a"}, mapping)
+        self.assertEqual(1, stats["exact"])
+
+    def test_name_cleanup_or_regeocode_keeps_id(self):
+        # 법인 표기 정제(v9)·좌표 표기/지오코딩 변화로 원문 id 가 바뀌어도 같은 곳이다
+        prev = [place("(주)행복카페_37.5_127.0", "(주)행복카페", 37.5, 127.0),
+                place("멍멍약국_37.6_127.1", "멍멍약국", 37.6, 127.1, "PHARMACY")]
+        cur = [place("행복카페_37.5000000_127.0000000", "행복카페", 37.5, 127.0),
+               place("멍멍약국_37.6007_127.1", "멍멍약국", 37.6007, 127.1, "PHARMACY")]  # 약 78m 이동
+        mapping, stats = self.run_cf(cur, prev)
+        self.assertEqual("(주)행복카페_37.5_127.0", mapping["행복카페_37.5000000_127.0000000"])
+        self.assertEqual("멍멍약국_37.6_127.1", mapping["멍멍약국_37.6007_127.1"])
+        self.assertEqual(2, stats["near"])
+
+    def test_far_move_with_same_address_keeps_id(self):
+        prev = [place("p", "행복카페", 37.5, 127.0, road="서울특별시 강남구 테헤란로 1, 2층")]
+        cur = [place("c", "행복카페", 37.51, 127.0, road="서울특별시 강남구 테헤란로 1")]  # 약 1.1km
+        mapping, stats = self.run_cf(cur, prev)
+        self.assertEqual("p", mapping["c"])
+        self.assertEqual(1, stats["address"])
+
+    def test_hospital_label_change_in_same_building_keeps_id(self):
+        prev = [place("p", "24시 루시드 동물메디컬센터", 37.5, 127.0, "HOSPITAL")]
+        cur = [place("c", "루시드 동물메디컬센터", 37.5001, 127.0, "HOSPITAL")]  # 약 11m
+        mapping, stats = self.run_cf(cur, prev)
+        self.assertEqual("p", mapping["c"])
+        self.assertEqual(1, stats["building"])
+
+    def test_building_rule_is_only_for_hospitals_and_pharmacies(self):
+        prev = [place("p", "24시 루시드카페", 37.5, 127.0, "CAFE")]
+        cur = [place("c", "루시드카페", 37.5001, 127.0, "CAFE")]
+        mapping, _ = self.run_cf(cur, prev)
+        self.assertEqual("c", mapping["c"])
+
+    def test_previous_id_is_given_to_the_closest_only(self):
+        prev = [place("p", "행복카페", 37.5, 127.0)]
+        cur = [place("far", "행복카페", 37.5010, 127.0),   # 약 111m
+               place("close", "행복카페", 37.5002, 127.0)]  # 약 22m
+        mapping, stats = self.run_cf(cur, prev)
+        self.assertEqual("p", mapping["close"])
+        self.assertEqual("far", mapping["far"])
+        self.assertEqual(1, stats["new"])
+
+    def test_different_place_with_same_name_gets_new_id(self):
+        prev = [place("p", "행복카페", 37.5, 127.0, road="서울 A로 1")]
+        cur = [place("c", "행복카페", 35.1, 129.0, road="부산 B로 2")]
+        mapping, stats = self.run_cf(cur, prev)
+        self.assertEqual("c", mapping["c"])
+        self.assertEqual(1, stats["new"])
+
+
+class BuildMainIdStabilityTest(unittest.TestCase):
+    """CSV → DB 를 두 번 만든다: 두 번째는 상호 표기와 좌표가 바뀌었어도 덮어쓰는 이전 DB 의 id 를 유지한다."""
+
+    HEADER = ["시설명", "카테고리1", "카테고리3", "위도", "경도", "도로명주소", "지번주소", "반려동물 동반 가능정보"]
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.out = os.path.join(self.dir, "out.db")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.dir)
+
+    def write_csv(self, rows):
+        path = os.path.join(self.dir, "in.csv")
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(self.HEADER)
+            w.writerows(rows)
+        return path
+
+    def build(self, rows, *extra):
+        argv = ["build_db.py", "--data-date=2026-11-01", *extra, self.write_csv(rows), self.out]
+        old, sys.argv = sys.argv, argv
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                b.main()
+        finally:
+            sys.argv = old
+        with sqlite3.connect(self.out) as db:
+            ids = dict(db.execute("SELECT name, id FROM places"))
+            fts = db.execute("SELECT COUNT(*) FROM places JOIN places_fts ON places.rowid = places_fts.docid").fetchone()[0]
+        return ids, fts
+
+    def test_rebuild_keeps_ids_of_same_places(self):
+        first, _ = self.build([
+            ["(주)행복카페", "", "카페", "37.5", "127.0", "서울특별시 강남구 테헤란로 1", "", "Y"],
+            ["멍멍공원", "", "공원", "37.6", "127.1", "서울특별시 노원구 공원로 2", "", "Y"],
+        ])
+        second, fts = self.build([
+            ["행복카페", "", "카페", "37.50001", "127.00001", "서울특별시 강남구 테헤란로 1", "", "Y"],  # 정제·재지오코딩
+            ["멍멍공원", "", "공원", "37.6", "127.1", "서울특별시 노원구 공원로 2", "", "Y"],
+            ["새로생긴카페", "", "카페", "37.7", "127.2", "서울특별시 도봉구 새길 3", "", "Y"],
+        ])
+        self.assertEqual(first["행복카페"], second["행복카페"])
+        self.assertEqual(first["멍멍공원"], second["멍멍공원"])
+        self.assertEqual("새로생긴카페_37.7_127.2", second["새로생긴카페"])
+        self.assertEqual(3, fts)  # FTS 색인도 바뀐 id 의 행과 그대로 붙어 있다
+
+    def test_previous_none_disables_carry_forward(self):
+        self.build([["(주)행복카페", "", "카페", "37.5", "127.0", "", "", "Y"]])
+        second, _ = self.build([["행복카페", "", "카페", "37.50001", "127.0", "", "", "Y"]], "--previous=none")
+        self.assertEqual("행복카페_37.50001_127.0", second["행복카페"])
 
 if __name__ == "__main__":
     unittest.main()

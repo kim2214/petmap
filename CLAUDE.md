@@ -39,6 +39,7 @@ python3 tools/verify_db.py          # 에셋 DB ↔ Room 스키마 동기화 오
 - **데이터 갱신 전략(앱 업데이트) = DB 버전 업 → 파괴적 재생성.** 마이그레이션은 쓰지 않는다. `PetMapDatabase.VERSION`을 올리고 직전 버전을 `RECREATED_FROM`에 추가하면 Room이 기존 파일을 지우고 에셋을 재복사한다. 즐겨찾기는 `FavoriteBackup` 미러가 재생성 직전에 보존(`preserveLegacyDatabase`, `DatabaseModule`)하고 `ensureSeeded`가 복원한다. 앱 업데이트로 전달하려면 **장소 데이터만 바뀌어도 버전을 올려야 한다** (원격 게시로 보낼 땐 불필요).
 - 검색은 FTS4 유니그램 색인(`data/local/PlaceFts.kt`). 색인은 에셋에 동봉되며(`build_db.py`의 `fts_index`가 `PlaceFts.index`와 동일 로직이어야 함).
 - **DB를 새 CSV로 재생성할 때는 `/rebuild-db` 스킬을 사용한다** (`tools/build_db.py`의 identity_hash/버전 주의사항이 얽혀 있음). 원본 CSV 는 리포에 없다 — 공공데이터포털에서 받는다(다운로드 URL 은 스킬 참고). 식약처 "반려동물 동반출입 음식점"(약 2,700곳, 좌표 없음)은 `tools/fetch_restaurants.py`(네이버 Geocoding, `naver.map.clientSecret`)로 CSV 를 만들어 세 번째 입력으로, 지방행정 인허가 "동물병원"·"동물약국"은 `tools/fetch_hospitals.py [--dataset=animal_pharmacies]`(키 불필요, EPSG:5174→WGS84 변환)로 만들어 네 번째·다섯 번째(마지막) 입력으로 넘긴다. 폐업 목록은 `tools/fetch_closures.py` → `build_db.py --closed=tools/data/closed.csv`. 좌표 캐시 `tools/data/`는 git 제외.
+- **장소 id 는 재생성해도 유지된다**: `build_db.py` 가 덮어쓸 에셋(또는 `--previous=`)에서 같은 장소의 id 를 물려받는다(`carry_forward_ids`). 즐겨찾기·최근 본 장소·공유 링크가 id 로 묶여 있으므로 다른 출력 경로로 만들 때도 이전 DB 를 지정할 것.
 - 엔티티(`PlaceEntity`/`FavoriteEntity`/`MetaEntity`) 스키마를 바꾸면 identity_hash가 달라진다. 기준값은 `app/schemas/**/<version>.json`의 `identityHash`이며 `tools/build_db.py`의 `ROOM_IDENTITY_HASH`를 함께 갱신해야 한다. 동기화가 어긋나면 androidTest `PetMapDatabaseAssetTest`가 실패한다. 재생성·즐겨찾기 보존 계약은 `LegacyDatabaseRecreateTest`.
 
 ## 비밀 키 (git 제외)
