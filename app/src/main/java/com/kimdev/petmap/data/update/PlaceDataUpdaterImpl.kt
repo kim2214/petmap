@@ -85,6 +85,8 @@ class PlaceDataUpdaterImpl @Inject constructor(
     }
 
     private fun runUpdate(workDir: File): DataUpdateResult {
+        // 백그라운드 작업이 콜드 프로세스에서 먼저 돌면 이 직접 접근이 DB 의 첫 open 이다 → 구버전 즐겨찾기 보존 먼저
+        database.prepareForOpen()
         val live = database.openHelper.writableDatabase
         val identityHash = live.queryString("SELECT identity_hash FROM room_master_table WHERE id = 42")
             ?: throw IllegalStateException("room_master_table 에 identity_hash 없음")

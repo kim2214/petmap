@@ -1,8 +1,9 @@
 package com.kimdev.petmap.data.local
 
+import kotlinx.coroutines.flow.first
+import androidx.test.platform.app.InstrumentationRegistry
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.kimdev.petmap.data.repository.PlaceRepositoryImpl
@@ -24,7 +25,9 @@ import java.io.File
  *  1) FavoriteBackup.preserveLegacyDatabase 가 파일 안의 즐겨찾기를 미러에 건져 두고,
  *  2) Room 이 파일을 지우고 에셋을 재복사해 최신 장소 데이터(meta 포함)를 받으며,
  *  3) ensureSeeded 가 빈 favorites 를 미러에서 복원한다.
- * DatabaseModule.provideDatabase 와 동일한 순서·빌더 구성이어야 한다(계약 대상).
+ * 앱과 같은 [PetMapDatabase.build] 로 연다 — 보존은 생성 시점이 아니라 Room 이 DB 를 처음 여는 백그라운드
+ * 실행기에서 돈다. 그 순서(보존 → Room 의 삭제·재복사)가 쿼리·Flow·직접 접근 어느 경로로 먼저 열려도 지켜지는지가
+ * 이 테스트의 핵심이다.
  */
 @RunWith(AndroidJUnit4::class)
 class LegacyDatabaseRecreateTest {
@@ -64,14 +67,52 @@ class LegacyDatabaseRecreateTest {
         }
     }
 
-    private fun openLikeApp(backup: FavoriteBackup): PetMapDatabase {
-        backup.preserveLegacyDatabase(dbFile, PetMapDatabase.VERSION)
-        return Room.databaseBuilder(context, PetMapDatabase::class.java, TEST_DB)
-            .createFromAsset("petmap.db")
-            .fallbackToDestructiveMigrationFrom(dropAllTables = true, *PetMapDatabase.RECREATED_FROM)
-            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
-            .build()
-            .also { db = it }
+    private fun openLikeApp(backup: FavoriteBackup): PetMapDatabase =
+        PetMapDatabase.build(context, TEST_DB, backup).also { db = it }
+
+    @Test
+    fun build_onMainThread_doesNoFileIo() {
+        createLegacyV3Database()
+        val backup = FavoriteBackup(mirrorFile)
+        // 앱에선 ViewModel 주입(메인 스레드) 중에 만들어진다 — 여기서 파일을 건드리면 안 된다
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { openLikeApp(backup) }
+
+        assertTrue("생성만으로 미러를 썼다", !mirrorFile.exists())
+        assertEquals(3, SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY).use { it.version })
+    }
+
+    @Test
+    fun firstOpenViaFlow_preservesLegacyFavoritesBeforeRecreate() = runBlocking {
+        createLegacyV3Database()
+        val backup = FavoriteBackup(mirrorFile)
+        val opened = openLikeApp(backup)
+
+        // ViewModel 이 가장 먼저 구독하는 즐겨찾기 Flow 가 첫 open 인 경우
+        assertEquals(emptyList<String>(), opened.favoriteDao().observeIds().first())
+
+        assertEquals(listOf("legacy-1"), backup.read().map { it.id })
+        assertTrue("에셋이 재복사되지 않음", opened.placeDao().count() > 10_000)
+    }
+
+    @Test
+    fun firstOpenViaDirectAccess_preservesLegacyFavorites() {
+        createLegacyV3Database()
+        val backup = FavoriteBackup(mirrorFile)
+        val opened = openLikeApp(backup)
+
+        // 원격 갱신 작업이 콜드 프로세스에서 먼저 도는 경우 (Room 실행기를 거치지 않는 직접 접근)
+        opened.prepareForOpen()
+        opened.openHelper.writableDatabase.query("SELECT COUNT(*) FROM places").use { it.moveToFirst() }
+
+        assertEquals(listOf("legacy-1"), backup.read().map { it.id })
+    }
+
+    @Test
+    fun journalMode_isWal() = runBlocking {
+        val opened = openLikeApp(FavoriteBackup(mirrorFile))
+        opened.placeDao().count()
+        val mode = opened.openHelper.writableDatabase.query("PRAGMA journal_mode").use { it.moveToFirst(); it.getString(0) }
+        assertEquals("wal", mode.lowercase())
     }
 
     @Test
