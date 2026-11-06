@@ -170,16 +170,25 @@ private fun PetMapApp(tabReselectBus: TabReselectBus, activity: ComponentActivit
     // handleDeepLink 를 쓰지 않는다: 브라우저·메신저가 붙이는 FLAG_ACTIVITY_NEW_TASK 를 보면 CLEAR_TASK 로
     // Activity 를 재시작해 검색어·카메라·ViewModel 이 전부 사라지고, 아니어도 백스택을 지도→상세 합성 스택으로
     // 바꿔 보던 화면으로 돌아갈 수 없었다. 직접 navigate 하면 뒤로가기로 원래 화면에 복귀한다.
-    DisposableEffect(navController) {
+    //
+    // 받은 링크는 바로 navigate 하지 않고 보관했다가 그래프가 준비된 뒤(백스택이 생긴 뒤) 연다. NavHost 는 Scaffold
+    // 안쪽이라 첫 레이아웃에서야 그래프가 설정되는데, 리스너는 그보다 먼저 등록된다 — 잠금 화면 뒤에서 실행돼 아직
+    // 한 번도 그려지지 않은 Activity 에 링크가 오면 "Navigation graph has not been set" 으로 죽었다.
+    var pendingDeepLink by rememberSaveable { mutableStateOf<String?>(null) }
+    DisposableEffect(activity) {
         val listener = Consumer<Intent> { intent ->
-            val placeId = intent.data?.toString()?.let(Routes::placeIdFromDeepLink) ?: return@Consumer
-            val current = navController.currentBackStackEntry
-            val alreadyOpen = current?.destination?.route == Routes.DETAIL_PATTERN &&
-                current.arguments?.getString(Routes.DETAIL_ARG_ID) == placeId
-            if (!alreadyOpen) navController.navigate(Routes.detail(placeId)) { launchSingleTop = true }
+            intent.data?.toString()?.let(Routes::placeIdFromDeepLink)?.let { pendingDeepLink = it }
         }
         activity.addOnNewIntentListener(listener)
         onDispose { activity.removeOnNewIntentListener(listener) }
+    }
+    LaunchedEffect(pendingDeepLink, backStackEntry != null) {
+        val placeId = pendingDeepLink ?: return@LaunchedEffect
+        val current = navController.currentBackStackEntry ?: return@LaunchedEffect // 그래프 아직 — 준비되면 다시 돈다
+        pendingDeepLink = null
+        val alreadyOpen = current.destination.route == Routes.DETAIL_PATTERN &&
+            current.arguments?.getString(Routes.DETAIL_ARG_ID) == placeId
+        if (!alreadyOpen) navController.navigate(Routes.detail(placeId)) { launchSingleTop = true }
     }
 
     // 상세·라이선스·"지도에서 보기"로 push 된 포커스 지도(별도 라우트) 등에서는 하단탭을 숨긴다.
